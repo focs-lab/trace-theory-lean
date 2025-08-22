@@ -13,6 +13,22 @@ def str_double (w : List α) : List α :=
   | [] => []
   | a :: u => a :: a :: str_double u
 
+theorem str_double_injective (u : List α) (v : List α) :
+  str_double u = str_double v -> u = v := by
+  induction u generalizing v with
+  | nil =>
+    cases v with
+    | nil => simp [str_double]
+    | cons b v' => simp [str_double]
+  | cons a u' IH =>
+    cases v with
+    | nil => simp [str_double]
+    | cons b v' =>
+      simp [str_double]
+      intro h
+      simp [h]
+      apply IH
+
 namespace Language
 
 def double (L : Language α) : Language α := {str_double w | w ∈ L}
@@ -20,6 +36,10 @@ def double (L : Language α) : Language α := {str_double w | w ∈ L}
 end Language
 
 namespace NFA
+
+/-
+ Lemmas for Theorem 1
+-/
 
 variable (M) in
 /-- If [M] recognizes a language [L], [M.double] is an NFA constructed
@@ -76,7 +96,7 @@ lemma double_eval_equal {w : List α} :
   rw [double_steps_equal]
 
 /-- [M.double] accepts [double w] iff [M] accepts [w]. -/
-lemma mem_iff_double_in_double_lang {w : List α} :
+lemma mem_iff_double_in_doubleNFA_lang {w : List α} :
   (w ∈ M.accepts) <-> (str_double w ∈ M.double.accepts) := by
   simp [accepts]
   repeat rw [Set.mem_setOf]
@@ -139,7 +159,7 @@ theorem stepSets_empty (x : List α) :
 variable (M) in
 /-- If [S] consists only of states in [M], taking two steps [a, a] in [M.double]
  leads only to states also in [M]. -/
-lemma even_two_steps_to_even {S : Set σ} (a : α) :
+lemma even_two_steps_leads_to_even {S : Set σ} (a : α) :
   ∃ T : Set σ, Sum.inl '' T = M.double.stepSet (M.double.stepSet (Sum.inl '' S) a) a := by
   rw [<- double_step_equal]
   use M.stepSet S a
@@ -168,7 +188,7 @@ lemma even_to_accepted_is_double {w : List α} :
       obtain ⟨h_ex1, ⟨h_ex2, h⟩⟩ := h
       have ex : (∃ T : Set σ, Sum.inl '' T
       = (M.double.stepSet (M.double.stepSet (Sum.inl '' h_ex1) a) a)) := by
-        simp [even_two_steps_to_even]
+        simp [even_two_steps_leads_to_even]
       obtain ⟨T, ex⟩ := ex
       rw [<- ex] at h
       have rh := by exact IH ⟨T, h_ex2, h⟩
@@ -180,7 +200,7 @@ lemma even_to_accepted_is_double {w : List α} :
       simp [Ne.symm h_ab]
 
 /-- If [w] is accepted by [M.double], [w] must be the double of a string. -/
-lemma mem_of_double_lang_is_double {w : List α} :
+lemma mem_of_doubleNFA_lang_is_double {w : List α} :
   w ∈ M.double.accepts → ∃ j : List α, w = str_double j := by
   simp [accepts, eval]
   intro h
@@ -196,9 +216,9 @@ lemma mem_of_double_lang_is_double {w : List α} :
     use a
   · simp [double] at h -- impossible case
 
-/-- The language accepted by [M.double] is the double of the language
- accepted by [M]. -/
-theorem lang_of_double_is_double_of_lang {L : Language α} : -- Theorem-1
+/-- The language recognized by [M.double] is the double of the language
+ recognized by [M]. -/
+theorem lang_of_doubleNFA_is_double_of_lang {L : Language α} : -- Theorem-1
   L = M.accepts -> L.double = M.double.accepts := by
   intro h
   ext x
@@ -209,32 +229,94 @@ theorem lang_of_double_is_double_of_lang {L : Language α} : -- Theorem-1
     rw [Set.mem_setOf, h]
     intro h
     obtain ⟨w, ⟨h_w, h_d⟩⟩ := h
-    rw [mem_iff_double_in_double_lang, h_d] at h_w
+    rw [mem_iff_double_in_doubleNFA_lang, h_d] at h_w
     exact h_w
   · -- x ∈ M.double.accepts → x ∈ L.double
     /- use [mem_of_double_lang_is_double] to prove
      that [M.double.accepts] contains only doubled-strings -/
     intro h_x
     have h_xd : ∃ j, x = str_double j := by
-      apply mem_of_double_lang_is_double at h_x
+      apply mem_of_doubleNFA_lang_is_double at h_x
       exact h_x
     obtain ⟨j, h_xd⟩ := h_xd
     /- then use [mem_iff_double_in_double_lang] to prove those
      strings have halves accepted by [M] -/
-    rw [h_xd, <- mem_iff_double_in_double_lang] at h_x
+    rw [h_xd, <- mem_iff_double_in_doubleNFA_lang] at h_x
     rw [h]
     simp [Language.double]
     rw [Set.mem_setOf]
     use j
     simp [h_x, h_xd]
 
--- Todo: Theorem 2
+/-
+ Lemmas for Theorem 2
+-/
 
 variable (M) in
-def lang_half : (NFA α σ) where
+/-- If [M] recognizes a language-double [double L], [M.half] is an NFA constructed
+ such that it should recognize exactly [L]. -/
+def half : (NFA α σ) where
   step := fun (s : σ) (a : α) => ⋃ x ∈ (M.step s a), M.step x a
-  start := M.accept
-  accept := M.start
+  start := M.start
+  accept := M.accept
+
+/-- Taking one steps [a] in [M.half] should lead to the same set of states
+ as taking two step [a, a] in [M] (starting from any set of states). -/
+lemma half_step_equal (a : α) (S : Set σ) :
+  M.half.stepSet S a = M.stepSet (M.stepSet S a) a := by
+  simp [stepSet]
+  simp [half]
+
+/-- Following [w] in [M.half] should lead to the same set of states
+ as following [double w] in [M] (starting from any set of states). -/
+lemma half_steps_equal {w : List α} :
+  ∀ S : Set σ,
+    M.half.evalFrom S w
+    = M.evalFrom S (str_double w) := by
+  induction w with
+  | nil =>
+    simp [str_double]
+  | cons a u IH =>
+    simp [str_double]
+    intro s
+    rw [<- M.half_step_equal a s]
+    rw [IH]
+
+/-- Evaluating [w] in [M.half] should lead to the same set of states
+ as evaluating [double w] in [M]. -/
+lemma half_eval_equal {w : List α} :
+  M.half.eval w = M.eval (str_double w) := by
+  simp [eval]
+  nth_rw 2 [half]
+  simp
+  rw [half_steps_equal]
+
+/-- [M.half] accepts [w] iff [M] accepts [double w]. -/
+lemma mem_halfNFA_iff_double_in_lang {w : List α} :
+  (w ∈ M.half.accepts) <-> (str_double w ∈ M.accepts) := by
+  simp [accepts]
+  repeat rw [Set.mem_setOf]
+  rw [<- half_eval_equal]
+  simp [half]
+
+/-- If [M] accepts the double-language [double L], [M.half]
+ accepted by [M]. -/
+theorem lang_is_double_of_halfNFA_lang {L : Language α} : -- Theorem-2
+  L.double = M.accepts -> L = M.half.accepts := by
+  intro h
+  ext x
+  simp [mem_halfNFA_iff_double_in_lang]
+  rw [<- h]
+  simp [Language.double]
+  rw [Set.mem_setOf]
+  constructor
+  · intro h
+    use x
+  · intro h
+    obtain ⟨w, ⟨h1, h2⟩⟩ := h
+    apply str_double_injective at h2
+    rw [<- h2]
+    exact h1
 
 end NFA
 
@@ -255,8 +337,29 @@ protected theorem IsRegular.double {α : Type} [hf_α : Fintype α]
     exact ⟨Fintype.ofFinite (Set (σ ⊕ σ × α))⟩
   use h_dirsum, M.toNFA.double.toDFA
   simp
-  rw [NFA.lang_of_double_is_double_of_lang]
+  rw [NFA.lang_of_doubleNFA_is_double_of_lang]
   simp
   rw [hAcc]
+
+-- Theorem-2
+-- If language [double L] is regular, the language [L] is regular.
+protected theorem IsRegular.half {α : Type} {L : Language α} (h : L.double.IsRegular) :
+  L.IsRegular := by
+  simp [IsRegular] at h
+  simp [IsRegular]
+  obtain ⟨σ, hNe, M, hAcc⟩ := h
+  use Set σ
+  -- prove (Set σ) is nonempty & finite, so that it can
+  -- be used as the state set of a DFA/NFA
+  have h_set : Nonempty (Fintype (Set σ)) := by
+    have h_mem_σ : Fintype σ := Classical.choice hNe
+    exact ⟨Fintype.ofFinite (Set σ)⟩
+  use h_set, M.toNFA.half.toDFA
+  -- convert the DFA [M] into a NFA in h_eqAcc so we can apply
+  -- [NFA.lang_is_double_of_halfNFA_lang] to it
+  have h_eqAcc : M.accepts = M.toNFA.accepts := by simp
+  rw [h_eqAcc, eq_comm] at hAcc
+  apply NFA.lang_is_double_of_halfNFA_lang at hAcc
+  simp [hAcc]
 
 end Language
