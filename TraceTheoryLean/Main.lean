@@ -33,6 +33,8 @@ inductive String (α : Type*) where
 notation "ε" => String.nil
 infixl:67 " :: " => String.snoc
 
+variable {w : String α}
+
 def proj (S : Alphabet α) (w : String α) : String α :=
   match w with
   | ε => ε
@@ -43,7 +45,7 @@ def cancel (w : String α) (a : α) :=
   | ε => ε
   | u :: b => if a = b then u else (cancel u a) :: b
 
--- Lemma for [proj_cancel_comm]:
+-- Extra lemma for [proj_cancel_comm]:
 -- Cancelling with an element not in the set S does not change the projection
 lemma cancelling_proj_mem_is_id (S : Finset α) (w : String α) (a : α) :
   (a ∉ S) -> (cancel (proj S w) a = proj S w) := by
@@ -87,13 +89,16 @@ lemma proj_cancel_comm (S : Finset α) (w : String α) (a : α) : -- (1.3)
         simp [proj, h_bs]
         exact IH
 
-/-- Auxiliary for `List.reverse`. `List.reverseAux l r = l.reverse ++ r`,
+/-- Todo:
+Auxiliary for `List.reverse`. `List.reverseAux l r = l.reverse ++ r`,
 but it is defined directly. -/
+@[simp]
 def reverseAux : String α → String α → String α
-  | ε, r      => r
-  | u :: a, r => reverseAux u (r :: a)
+  | r, ε      => r
+  | r, u :: a => reverseAux (r :: a) u
 
-def reverse (w : String α) : String α := reverseAux w ε
+variable (w) in
+def reverse : String α := reverseAux ε w
 
 -- protected def concat
 def concat : (xs ys : String α) → String α
@@ -107,10 +112,58 @@ def appendTR (as bs : List α) : List α :=
 
 infixl:100 " ∘ " => concat
 
+omit [DecidableEq α] in
+@[simp]
+lemma concat_left_id (w : String α) : ε ∘ w = w := by
+  induction w with
+  | nil => rw [concat]
+  | snoc u a IH => simp [concat]; exact IH
+
+omit [DecidableEq α] in
+@[simp]
+lemma concat_assoc (u v w : String α) : (u ∘ v) ∘ w = u ∘ (v ∘ w) := by
+  induction w with
+  | nil => rfl
+  | snoc w a IH => simp [concat]; exact IH
+
+omit [DecidableEq α] in
+lemma reverseAux_eq_concat (u v : String α) : reverseAux u v = u ∘ (reverseAux ε v) := by
+  induction v generalizing u with
+  | nil => simp [reverseAux, concat]
+  | snoc v a IH =>
+    simp [reverseAux]
+    rw [IH (u := u :: a), IH (u := (ε :: a)), <- concat_assoc]
+    rfl
+
+omit [DecidableEq α] in
+@[simp]
+lemma reverse_snoc (w : String α) (a : α) : reverse (w :: a) = (ε :: a) ∘ reverse w := by
+  simp [reverse, reverseAux]
+  rw [← reverseAux_eq_concat]
+
+omit [DecidableEq α] in
+@[simp]
+lemma reverse_concat_commutation (u v : String α) :
+    reverse (u ∘ v) = reverse v ∘ reverse u := by
+  induction v with
+  | nil => simp [reverse, concat]
+  | snoc v a IH =>
+    rw [reverse_snoc]
+    simp [<- IH, concat]
+
+-- Todo: Make [w.length] syntax work
 def length : String α → Nat
   | ε => 0
   | u :: _ => Nat.succ (length u)
 
+omit [DecidableEq α] in
+@[simp]
+lemma length_concat {u v : String α} : length (u ∘ v) = length u + length v := by
+  induction v with
+  | nil => simp [length, concat]
+  | snoc v _ IH => simp [concat, length, <- Nat.add_assoc]; exact IH
+
+@[simp]
 def occurs (w : String α) (a : α) : Bool :=
   match w with
   | ε => False
@@ -173,12 +226,24 @@ structure Independency (α) [Fintype α] where
   irrefl : ∀ x, ¬r x x
   symm : ∀ {x y}, r x y → r y x
 
+/- Todo-?: Might want to define a structure capturing a trace equivalence
+ instead of relying on Independency.trace_equiv
+
 structure TraceEquivalence (α) [Fintype α] where
   r : String α → String α → Prop
   refl : ∀ x, r x x
   symm : ∀ {x y}, r x y → r y x
   trans : ∀ {x y z}, r x y ∧ r y z → r x z
   monoid : ∀ {x x' y y'}, r x x' ∧ r y y' → r (x ∘ y) (x' ∘ y')
+
+variable (I) in
+def tr_eq : TraceEquivalence α where
+  r := I.gen_tr
+  refl := gen_tr.refl
+  symm := gen_tr.symm
+  trans := fun ⟨h1, h2⟩ => gen_tr.trans h1 h2
+  monoid := fun ⟨h1, h2⟩ => gen_tr.cong h1 h2
+-/
 
 namespace Dependency
 
@@ -205,23 +270,283 @@ end Dependency
 
 namespace Independency
 
-variable {α : Type} [Fintype α] {I : Independency α}
+variable {α : Type} [Fintype α] [DecidableEq α] {I : Independency α}
 
 variable (I) in
-inductive gen_tr : String α → String α → Prop
-| refl (s : String α) : gen_tr s s
-| symm {l₁ l₂} (h : gen_tr l₁ l₂) : gen_tr l₂ l₁
-| trans {l₁ l₂ l₃} (h₁ : gen_tr l₁ l₂) (h₂ : gen_tr l₂ l₃) : gen_tr l₁ l₃
-| cong {l₁ l₂ l₃ l₄} (h₁ : gen_tr l₁ l₂) (h₂ : gen_tr l₃ l₄) : gen_tr (l₁ ∘ l₃) (l₂ ∘ l₄)
-| swap (a b : α) (h : I.r a b) : gen_tr ((ε :: a) :: b) ((ε :: b) :: a)
+inductive trace_equiv : String α → String α → Prop
+| refl (s : String α) : trace_equiv s s
+| symm {l₁ l₂} (h : trace_equiv l₁ l₂) : trace_equiv l₂ l₁
+| trans {l₁ l₂ l₃} (h₁ : trace_equiv l₁ l₂) (h₂ : trace_equiv l₂ l₃) : trace_equiv l₁ l₃
+| cong {l₁ l₂ l₃ l₄} (h₁ : trace_equiv l₁ l₂) (h₂ : trace_equiv l₃ l₄) :
+  trace_equiv (l₁ ∘ l₃) (l₂ ∘ l₄)
+| swap (a b : α) (h : I.r a b) : trace_equiv ((ε :: a) :: b) ((ε :: b) :: a)
+-- Todo-?: "(ε :: a) :: b" is a bit clunky, consider better notation
+
+-- infixl:100 " ≡ " => trace_equiv
+-- Todo: Figure out how to make this notation work
+
+-- Todo-?: Define Permutation congruence & prove properties
+
+-- Todo: Define traces as equivalence classes
+-- Todo-?: Define the [monoid of strings] and the [trace monoid]
+-- Todo-?: Define the natural homomorphism (of strings to their traces)
+
+omit [DecidableEq α] in
+variable (I) in
+lemma trace_equiv_length : ∀ {l₁ l₂ : String α}, I.trace_equiv l₁ l₂ → length l₁ = length l₂ := by
+  intro l1 l2 h
+  induction h with
+  | refl _ => rfl
+  | symm h IH => rw [IH]
+  | trans h1 h2 ih1 ih2 => exact Eq.trans ih1 ih2
+  | cong h1 h2 ih1 ih2 => simp [ih1, ih2]
+  | swap _ _ _ => rfl
 
 variable (I) in
-def tr_eq : TraceEquivalence α where
-  r := gen_tr I
-  refl := gen_tr.refl
-  symm := gen_tr.symm
-  trans := fun ⟨h1, h2⟩ => gen_tr.trans h1 h2
-  monoid := fun ⟨h1, h2⟩ => gen_tr.cong h1 h2
+lemma swap_exact (a b : α) (hne : a ≠ b)
+    (h : I.trace_equiv ((ε :: a) :: b) ((ε :: b) :: a)) : I.r a b := by sorry
+
+/- Todo?: Prove that ab ≡ ba -> (a, b) ∈ I.
+ Might be related with proving that I.trace_equiv is the least congruence.
+ LLM brute-force proof suggestion below: -/
+
+/-
+variable (I) in
+lemma reverse_imply (a b : α) (hne : a ≠ b)
+    (h : I.trace_equiv ((ε :: a) :: b) ((ε :: b) :: a)) : I.r a b := by
+  induction h with
+  | refl l =>
+      have : [a, b] = [b, a] := by assumption
+      have : a = b ∧ b = a := by
+        injection this with h1 h2
+        injection h2 with h3
+        exact ⟨h1, h3⟩
+      exfalso
+      exact hne this.1
+  | symm h' ih =>
+      exact I.symm (ih hne)
+  | trans h1 h2 ih1 ih2 =>
+      have len1 := gen_tr_length I h1
+      have len2 := gen_tr_length I h2
+      simp at len1 len2
+      -- Intermediate list must be [a,b] or [b,a]
+      cases' Classical.em (I.gen_tr [a, b] [b, a]) with h3 h3
+      · exact ih2 hne
+      · have : I.gen_tr [a, b] [a, b] := gen_tr.refl I [a, b]
+        have := gen_tr.trans this h1
+        contradiction
+  | cong h1 h2 =>
+      have : [a, b] = [a] ++ [b] := by rfl
+      have : [b, a] = [b] ++ [a] := by rfl
+      -- Length preservation forces component lists to match
+      have len1 := gen_tr_length I h1
+      have len2 := gen_tr_length I h2
+      simp at len1 len2
+      -- The only possible splits are trivial due to length constraints
+      exfalso
+      exact hne rfl
+  | swap a' b' h' =>
+      have h1 : a = a' ∧ b = b' := by
+        injection ‹[a, b] = [a', b']› with h1 h2
+        injection h2 with h3
+        exact ⟨h1, h3⟩
+      have h2 : b = b' ∧ a = a' := by
+        injection ‹[b, a] = [b', a']› with h1 h2
+        injection h2 with h3
+        exact ⟨h1, h3⟩
+      rcases h1 with ⟨rfl, rfl⟩
+      exact h'
+-/
+
+variable (I) in
+omit [DecidableEq α] in
+lemma reverse_preserves_congruence :
+    ∀ {u v : String α}, I.trace_equiv u v → I.trace_equiv (reverse u) (reverse v) := by
+  intro u v h
+  induction h with
+  | refl l => exact trace_equiv.refl (reverse l)
+  | symm _ ih => exact trace_equiv.symm ih
+  | trans h1 h2 ih1 ih2 => exact trace_equiv.trans ih1 ih2
+  | cong h1 h2 ih1 ih2 =>
+    repeat rw [reverse_concat_commutation]
+    exact trace_equiv.cong ih2 ih1
+  | swap a b h =>
+    simp [reverse]
+    exact trace_equiv.swap b a (I.symm h)
+
+@[simp]
+lemma cancels_on_concat_suffix_iff_occurs {α} [DecidableEq α] (u v : String α) (a : α) :
+    cancel (u ∘ v) a = if occurs v a then u ∘ (cancel v a) else cancel u a ∘ v := by
+  by_cases h : occurs v a
+  · simp [h]
+    induction v with
+    | nil => simp [occurs] at h
+    | snoc v b IH =>
+      by_cases h_ab : a = b
+      -- Case where a = b
+      · simp [h_ab, concat, cancel]
+      -- Case where a ≠ b
+      · simp [h_ab, concat, cancel]
+        simp [occurs, h_ab] at h
+        simp [h] at IH
+        exact IH
+  · simp [h]
+    induction v with
+    | nil => simp [concat]
+    | snoc v b IH =>
+      simp [occurs] at h
+      obtain ⟨h1, h2⟩ := h
+      simp [h2] at IH
+      simp [concat, cancel, h1]
+      exact IH
+
+@[simp]
+lemma concat_adds_occurs {α} [DecidableEq α] (u v : String α) (a : α) :
+    occurs (u ∘ v) a = (occurs u a ∨ occurs v a) := by
+  induction v with
+  | nil => simp [occurs, concat]
+  | snoc v b IH =>
+    by_cases h_ab : a = b
+    · simp [h_ab, occurs, concat]
+    · simp [h_ab, occurs, concat]
+      rw [IH]
+
+
+variable (I) in
+@[simp]
+lemma equivalence_preserves_occurs (u v : String α) (a : α) :
+    I.trace_equiv u v → occurs u a = occurs v a := by
+  intro h
+  induction h with
+  | refl l => rfl
+  | symm _ ih => symm; exact ih
+  | trans h1 h2 ih1 ih2 => rw [ih1, ih2]
+  | cong h1 h2 ih1 ih2 =>
+    rw [Bool.eq_iff_iff]
+    simp [concat_adds_occurs]
+    rw [ih1, ih2]
+  | swap b c h =>
+    simp [occurs]
+    apply Bool.or_comm
+
+variable (I) in
+lemma cancel_preserves_congruence (a : α) :
+    ∀ {u v : String α}, I.trace_equiv u v → I.trace_equiv (cancel u a) (cancel v a) := by
+  intro u v h
+  induction h with
+  | refl l => exact trace_equiv.refl (cancel l a)
+  | symm _ ih => exact trace_equiv.symm ih
+  | trans h1 h2 ih1 ih2 => exact trace_equiv.trans ih1 ih2
+  | cong h1 h2 ih1 ih2 =>
+    rename_i l1 l2 l3 l4
+    by_cases h_occ : occurs l3 a
+    · apply equivalence_preserves_occurs at h2
+      rw [h_occ] at h2
+      simp [h_occ, h2]
+      exact trace_equiv.cong h1 ih2
+    · have h_occ_l3 : occurs l4 a = false := by
+        apply equivalence_preserves_occurs at h2
+        simp at h_occ
+        rw [h_occ] at h2
+        rw [h2]
+      simp [h_occ, h_occ_l3]
+      exact trace_equiv.cong ih1 h2
+  | swap b c h =>
+    by_cases h_ab : a = b
+    · by_cases h_ac : a = c
+      · simp [<- h_ab, <- h_ac, cancel]
+        exact trace_equiv.refl (ε :: a)
+      · simp [<- h_ab, cancel, h_ac]
+        exact trace_equiv.refl (ε :: c)
+    · by_cases h_ac : a = c
+      · simp [h_ab, <- h_ac, cancel]
+        exact trace_equiv.refl (ε :: b)
+      · simp [h_ab, cancel, h_ac]
+        exact trace_equiv.swap b c h
+
+omit [Fintype α] in
+@[simp]
+lemma proj_concat_comm (S : Finset α) (u v : String α) :
+    proj S (u ∘ v) = proj S u ∘ proj S v := by
+  induction v with
+  | nil => simp [proj, concat]
+  | snoc v a IH =>
+    by_cases h_a : a ∈ S
+    · simp [proj, concat, h_a]
+      exact IH
+    · simp [proj, concat, h_a]
+      exact IH
+
+variable (I) in
+lemma proj_preserves_congruence (S : Alphabet α) :
+    ∀ {u v : String α}, I.trace_equiv u v → I.trace_equiv (proj S u) (proj S v) := by
+  intro u v h
+  induction h with
+  | refl l => exact trace_equiv.refl (proj S l)
+  | symm _ ih => exact trace_equiv.symm ih
+  | trans h1 h2 ih1 ih2 => exact trace_equiv.trans ih1 ih2
+  | cong h1 h2 ih1 ih2 =>
+    simp
+    exact trace_equiv.cong ih1 ih2
+  | swap b c h =>
+    by_cases h_b : b ∈ S
+    · by_cases h_c : c ∈ S
+      · simp [h_b, h_c, proj]
+        exact trace_equiv.swap b c h
+      · simp [h_b, h_c, proj]
+        exact trace_equiv.refl (ε :: b)
+    · by_cases h_c : c ∈ S
+      · simp [h_b, h_c, proj]
+        exact trace_equiv.refl (ε :: c)
+      · simp [h_b, h_c, proj]
+        exact trace_equiv.refl ε
+
+variable (I) in
+lemma tail_swap_rev {w : String α} {a b : α} :
+    (I.trace_equiv (((ε :: a) :: b) ∘ w) (((ε :: b) :: a) ∘ w)) →
+    (I.trace_equiv ((ε :: a) :: b) ((ε :: b) :: a)) := by
+  induction w with
+  | nil => simp [concat]
+  | snoc u c IH =>
+    intro h
+    apply cancel_preserves_congruence I c at h
+    simp [cancel] at h
+    exact IH h
+
+variable (I) in
+@[simp]
+lemma tail_swap_lemma (w : String α) (a b : α) :
+    (I.trace_equiv ((w :: a) :: b) ((w :: b) :: a)) →
+    (I.trace_equiv ((ε :: a) :: b) ((ε :: b) :: a)) := by
+  intro h
+  apply reverse_preserves_congruence at h
+  repeat rw [reverse_snoc] at h
+  repeat rw [<- concat_assoc] at h
+  simp [concat] at h
+  exact (I.tail_swap_rev (trace_equiv.symm h))
+
+variable (I) in
+theorem tail_lemma (u v : String α) (a b : α) :
+    (I.trace_equiv (u :: a) (v :: b) ∧ a ≠ b) →
+    (I.r a b ∧ ∃ w, I.trace_equiv u (w :: b) ∧ I.trace_equiv v (w :: a)) := by
+  intro ⟨h_eq, h_ab⟩
+  have h_u_wb : I.trace_equiv u (cancel v a :: b) := by
+    apply (cancel_preserves_congruence I a) at h_eq
+    simp [cancel, h_ab] at h_eq
+    exact h_eq
+  have h_v_wa : I.trace_equiv v (cancel u b :: a) := by
+    apply (cancel_preserves_congruence I b) at h_eq
+    symm at h_ab
+    simp [cancel, h_ab] at h_eq
+    exact trace_equiv.symm h_eq
+  have h_w : I.trace_equiv (cancel v a) (cancel u b) := by
+    apply (cancel_preserves_congruence I a) at h_eq
+    apply (cancel_preserves_congruence I b) at h_eq
+    simp [cancel, h_ab] at h_eq
+    exact trace_equiv.symm h_eq
+
+
+
 
 end Independency
 
