@@ -26,12 +26,15 @@ namespace RString
 
 -- def Alph w : Alphabet α := {x | x ∈ w}
 
+-- Largely the same as List
 inductive String (α : Type*) where
   | nil : String α
   | snoc (s : String α) (a : α) : String α
+-- snoc: reverse cons
 
 notation "ε" => String.nil
 infixl:67 " :: " => String.snoc
+-- " ∘ " in particular does not work?
 
 variable {w : String α}
 
@@ -163,11 +166,21 @@ lemma length_concat {u v : String α} : length (u ∘ v) = length u + length v :
   | nil => simp [length, concat]
   | snoc v _ IH => simp [concat, length, <- Nat.add_assoc]; exact IH
 
+/-
+@[simp]
+def occurs (a : α) (w : String α) : Bool :=
+  match w with
+  | ε => False
+  | u :: b => if a = b then True else occurs a u
+-/
+
 @[simp]
 def occurs (w : String α) (a : α) : Bool :=
   match w with
   | ε => False
   | u :: b => if a = b then True else occurs u a
+
+-- infixl:50 " ∈ " => occurs
 
 instance : Membership α (String α) := ⟨fun w a => occurs w a⟩
 
@@ -185,6 +198,8 @@ def Lang (α) :=
   Set (String α)
 
 namespace Lang
+
+-- Todo: dependency morphism φ : Σ* -> [trace monoid]
 
 instance : Membership (String α) (Lang α) := ⟨Set.Mem⟩
 
@@ -291,9 +306,28 @@ inductive trace_equiv : String α → String α → Prop
 -- Todo-?: Define the [monoid of strings] and the [trace monoid]
 -- Todo-?: Define the natural homomorphism (of strings to their traces)
 
+/-
+We have that l₁ ≡ l₂.
+The ≡ has to be derived from one of the 5 constructors above,
+1. refl
+2. symm
+3. trans
+4. cong
+5. swap
+
+(+ other cases, same as below)
+
+Supposing it was [trans], this means that ∃s₁, s₂, s₃ such that
+l₁ = s₁, l₂ = s₃,
+s₁ ≡ s₂, s₂ ≡ s₃,
+and by induction; IH : length s₁ = length s₂, length s₂ = length s₃
+
+and WTS length l₁ = length l₂ to close the induction.
+-/
 omit [DecidableEq α] in
 variable (I) in
-lemma trace_equiv_length : ∀ {l₁ l₂ : String α}, I.trace_equiv l₁ l₂ → length l₁ = length l₂ := by
+lemma trace_equiv_length :
+    ∀ {l₁ l₂ : String α}, I.trace_equiv l₁ l₂ → length l₁ = length l₂ := by
   intro l1 l2 h
   induction h with
   | refl _ => rfl
@@ -477,6 +511,7 @@ lemma proj_concat_comm (S : Finset α) (u v : String α) :
     · simp [proj, concat, h_a]
       exact IH
 
+--Todo: Use [Sigma] in place of [S] (everywhere)
 variable (I) in
 lemma proj_preserves_congruence (S : Alphabet α) :
     ∀ {u v : String α}, I.trace_equiv u v → I.trace_equiv (proj S u) (proj S v) := by
