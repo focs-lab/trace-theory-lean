@@ -154,6 +154,17 @@ lemma reverse_concat_commutation (u v : String α) :
     rw [reverse_snoc]
     simp [<- IH, concat]
 
+omit [DecidableEq α] in
+@[simp]
+lemma reverse_reverse (u : String α) :
+    reverse (reverse u) = u := by
+  induction u with
+  | nil => simp [reverse]
+  | snoc v a IH =>
+    rw [reverse_snoc, reverse_concat_commutation]
+    rw [IH]
+    simp [reverse, concat]
+
 -- Todo: Make [w.length] syntax work
 def length : String α → Nat
   | ε => 0
@@ -180,15 +191,27 @@ def occurs (w : String α) (a : α) : Bool :=
   | ε => False
   | u :: b => if a = b then True else occurs u a
 
--- infixl:50 " ∈ " => occurs
+-- Todo: infixl:50 " ∈ " => occurs
 
 instance : Membership α (String α) := ⟨fun w a => occurs w a⟩
 
+@[simp]
 def Alph (w : String α) : Alphabet α :=
   match w with
   | ε => Finset.empty
   | u :: b => (Alph u) ∪ {b}
 
+lemma mem_alph_occurs {w : String α} {a : α} : a ∈ Alph w ↔ occurs w a := by
+  induction w with
+  | nil =>
+    simp
+    exact Finset.notMem_empty a
+  | snoc w b IH =>
+    simp
+    by_cases h_ab : a = b
+    · simp [h_ab]
+    · simp [h_ab]
+      exact IH
 
 end RString
 
@@ -394,6 +417,24 @@ lemma reverse_imply (a b : α) (hne : a ≠ b)
 
 variable (I) in
 omit [DecidableEq α] in
+@[simp]
+lemma snoc_preserves_congruence {u v : String α} (a : α) :
+    I.trace_equiv u v → I.trace_equiv (u :: a) (v :: a) := by
+  intro h
+  induction h with
+  | refl l => exact trace_equiv.refl (l :: a)
+  | symm _ ih => exact trace_equiv.symm ih
+  | trans h1 h2 ih1 ih2 => exact trace_equiv.trans ih1 ih2
+  | cong h1 h2 ih1 ih2 =>
+    exact trace_equiv.cong h1 ih2
+  | swap b c h =>
+    have h_bc := trace_equiv.swap b c h
+    have h_bca := trace_equiv.cong h_bc (trace_equiv.refl (ε :: a))
+    simp [concat] at h_bca
+    exact h_bca
+
+variable (I) in
+omit [DecidableEq α] in
 lemma reverse_preserves_congruence :
     ∀ {u v : String α}, I.trace_equiv u v → I.trace_equiv (reverse u) (reverse v) := by
   intro u v h
@@ -445,10 +486,18 @@ lemma concat_adds_occurs {α} [DecidableEq α] (u v : String α) (a : α) :
     · simp [h_ab, occurs, concat]
       rw [IH]
 
+@[simp]
+lemma concat_adds_alph {α} [DecidableEq α] (u v : String α) :
+    Alph (u ∘ v) = Alph u ∪ Alph v := by
+  induction v with
+  | nil =>
+    simp [Alph, concat]
+    apply Finset.empty_subset
+  | snoc v b IH => simp [Alph, concat, IH]
 
 variable (I) in
 @[simp]
-lemma equivalence_preserves_occurs (u v : String α) (a : α) :
+lemma equivalence_preserves_occurs {u v : String α} (a : α) :
     I.trace_equiv u v → occurs u a = occurs v a := by
   intro h
   induction h with
@@ -537,6 +586,28 @@ lemma proj_preserves_congruence (S : Alphabet α) :
         exact trace_equiv.refl ε
 
 variable (I) in
+lemma str_cancel_preserves_cong {u v w : String α} (h : I.trace_equiv (u ∘ w) (v ∘ w)) :
+    I.trace_equiv u v := by
+  induction w with
+  | nil =>
+    simp [concat] at h
+    exact h
+  | snoc w c IH =>
+    apply cancel_preserves_congruence I c at h
+    simp [cancel] at h
+    exact IH h
+
+variable (I) in
+lemma left_cancel_preserves_cong {u v w : String α} (h : I.trace_equiv (w ∘ u) (w ∘ v)) :
+    I.trace_equiv u v := by
+  apply I.reverse_preserves_congruence at h
+  simp [reverse_concat_commutation] at h
+  apply str_cancel_preserves_cong at h
+  apply I.reverse_preserves_congruence at h
+  simp [reverse_reverse] at h
+  exact h
+
+variable (I) in
 lemma tail_swap_rev {w : String α} {a b : α} :
     (I.trace_equiv (((ε :: a) :: b) ∘ w) (((ε :: b) :: a) ∘ w)) →
     (I.trace_equiv ((ε :: a) :: b) ((ε :: b) :: a)) := by
@@ -579,6 +650,283 @@ theorem tail_lemma (u v : String α) (a b : α) :
     apply (cancel_preserves_congruence I b) at h_eq
     simp [cancel, h_ab] at h_eq
     exact trace_equiv.symm h_eq
+  apply (I.snoc_preserves_congruence b) at h_w
+  have h_u_wb := trace_equiv.trans h_u_wb h_w
+  have h_w : I.trace_equiv u (cancel u b :: b) ∧ I.trace_equiv v (cancel u b :: a)
+    := ⟨h_u_wb, h_v_wa⟩
+  apply (I.snoc_preserves_congruence a) at h_u_wb
+  apply (I.snoc_preserves_congruence b) at h_v_wa
+  have h_eq := trace_equiv.trans h_eq h_v_wa
+  have h_eq := trace_equiv.trans (trace_equiv.symm h_eq) h_u_wb
+  apply I.tail_swap_lemma (cancel u b) a b at h_eq
+  use (I.swap_exact a b h_ab h_eq)
+  use cancel u b
+
+variable (I) in
+@[simp]
+def indep (u v : String α) := ∀ a ∈ Alph u, ∀ b ∈ Alph v, I.r a b
+
+variable (I) in
+@[simp]
+lemma indep_commutative {u v : String α} : I.indep u v = I.indep v u := by
+  simp
+  constructor
+  · intro h a ha b hb
+    have hI := h b hb a ha
+    exact I.symm hI
+  · intro h a ha b hb
+    have hI := h b hb a ha
+    exact I.symm hI
+
+variable (I) in
+omit [DecidableEq α] in
+@[simp]
+lemma relation_empty {a : α} : ∀ b ∈ Finset.empty, I.r a b := by
+  intro b hb
+  exfalso
+  exact Finset.notMem_empty b hb
+
+variable (I) in
+@[simp]
+lemma indep_empty {u : String α} : I.indep u ε := by
+  simp [Alph]
+  intro a ha b
+  exact I.relation_empty b
+
+variable (I) in
+@[simp]
+lemma indep_snoc {u v : String α} (a : α) :
+    I.indep u (v :: a) ↔ I.indep u v ∧ I.indep u (ε :: a) := by
+  constructor
+  · intro h
+    simp
+    simp at h
+    have h1 : (∀ a ∈ Alph u, ∀ b ∈ Alph v, I.r a b) := by
+      intro a ha b hb
+      have ⟨_, h⟩ := h a ha
+      exact h b hb
+    use h1
+    intro a' ha'
+    have ⟨h, _⟩ := h a' ha'
+    use h
+    intro a ha
+    exfalso
+    exact Finset.notMem_empty a ha
+  · intro h
+    simp
+    simp at h
+    intro a' ha'
+    have ⟨h1, h2⟩ := h
+    have ⟨h2, _⟩ := h2 a' ha'
+    use h2
+    exact h1 a' ha'
+
+variable (I) in
+@[simp]
+lemma concat_adds_indep (u v w : String α) :
+    I.indep w (u ∘ v) ↔ (I.indep w u ∧ I.indep w v) := by
+  simp [indep]
+  constructor
+  · intro h
+    constructor
+    · intro a ha b hb
+      exact h a ha b (Or.inl hb)
+    · intro a ha b hb
+      exact h a ha b (Or.inr hb)
+  · intro ⟨h1, h2⟩ a ha b hb
+    cases hb with
+    | inl hb => exact h1 a ha b hb
+    | inr hb => exact h2 a ha b hb
+
+variable (I) in
+lemma commute_indep_symbol_preserves_cong {u : String α} {a : α} (h : I.indep u (ε :: a)) :
+    I.trace_equiv (u :: a) ((ε :: a) ∘ u) := by
+  induction u with
+  | nil => simp [concat, trace_equiv.refl]
+  | snoc u b IH =>
+    rw [I.indep_commutative, I.indep_snoc b] at h
+    have ⟨ih, h⟩ := h
+    rw [I.indep_commutative] at ih
+    apply IH at ih
+    apply I.snoc_preserves_congruence b at ih
+    simp [concat]
+    apply trace_equiv.symm
+    apply trace_equiv.trans (trace_equiv.symm ih)
+    have h_ab : I.trace_equiv (u ∘ ((ε :: a) :: b)) (u ∘ ((ε :: b) :: a)) := by
+      simp at h
+      have ⟨⟨h_ab, _⟩, _⟩ := h
+      exact trace_equiv.cong (trace_equiv.refl u) (trace_equiv.swap a b h_ab)
+    simp [concat] at h_ab
+    exact h_ab
+
+variable (I) in
+lemma commute_indep_concat_preserves_cong {u v : String α} (h : I.indep u v) :
+    I.trace_equiv (u ∘ v) (v ∘ u) := by
+  induction v with
+  | nil => simp [concat, trace_equiv.refl]
+  | snoc v a IH =>
+    rw [I.indep_snoc a] at h
+    have ⟨ih, h⟩ := h
+    apply IH at ih
+    apply I.snoc_preserves_congruence a at ih
+    simp [concat]
+    apply trace_equiv.trans ih
+    have h := I.commute_indep_symbol_preserves_cong h
+    have h := trace_equiv.cong (trace_equiv.refl v) h
+    simp [concat, <- concat_assoc] at h
+    exact h
+
+variable (I) in
+theorem commutation_lemma (u v w : String α) (a : α) (h_av : a ∉ Alph v) :
+    I.trace_equiv ((u :: a) ∘ v) (w :: a) → I.indep (ε :: a) v := by
+  intro h
+  induction v generalizing w with
+  | nil =>
+    simp [Alph]
+    constructor
+    · intro b hb
+      exfalso
+      exact Finset.notMem_empty b hb
+    · intro a ha
+      exfalso
+      exact Finset.notMem_empty a ha
+  | snoc x b IH =>
+    have hs : (u :: a) ∘ (x :: b) = ((u ∘ (ε :: a)) ∘ x) :: b := by simp [concat]
+    rw [hs] at h
+    simp at h_av
+    obtain ⟨h_ab, h_av⟩ := h_av
+    have h_tail := I.tail_lemma ((u ∘ (ε :: a)) ∘ x) w b a
+    have h_tcond : (I.trace_equiv ((u ∘ (ε :: a)) ∘ x :: b) (w :: a) ∧ b ≠ a) := by
+      use h
+      exact mt Eq.symm h_ab
+    apply h_tail at h_tcond
+    have h_eq := I.cancel_preserves_congruence b h
+    simp [cancel, mt Eq.symm h_ab, concat] at h_eq
+    have h_ax := IH (cancel w b) h_av h_eq
+    rw [indep_snoc]
+    use IH (cancel w b) h_av h_eq
+    simp [indep]
+    have ⟨h_abr, _⟩ := h_tcond
+    use ⟨I.symm h_abr, I.relation_empty⟩
+    intro ea h_ea
+    exfalso
+    exact Finset.notMem_empty ea h_ea
+
+omit [Fintype α] in
+lemma occur_lemma {w : String α} {a : α} (h : occurs w a) :
+    ∃ w' w'', w = (w' ∘ (ε :: a)) ∘ w'' ∧ ¬ occurs w'' a := by
+  induction w with
+  | nil => simp at h
+  | snoc w b IH =>
+    by_cases h_ab : a = b
+    · use w; use ε
+      simp [concat, h_ab]
+    · simp [occurs, h_ab] at h
+      apply IH at h
+      have ⟨w', w'', h⟩ := h
+      use w'; use (w'' :: b)
+      have ⟨h_w, h_wa⟩ := h
+      rw [h_w]
+      simp [concat, h_ab, h_wa]
+
+/- The book's proof of Levi Lemma seems to have a mistake stemming from the
+ choices of z1', ..., z4'. It can be salvaged by using the following choices
+ instead:
+
+ For case (1),
+ u ≡ z1' ∘ z2', v' ∘ v'' ≡ z3' ∘ z4', x ≡ z1' ∘ z3', y ≡ z2' ∘ z4'
+ and
+ z1 = z1', z2 = z2', z3 = z3', z4 = z4' :: e
+
+ For case (2),
+ u' ∘ u'' ≡ z1' ∘ z2', v ≡ z3' ∘ z4', x ≡ z1' ∘ z3', y ≡ z2' ∘ z4'
+ and
+ z1 = z1', z2 = z2' :: e, z3 = z3', z4 = z4'
+-/
+variable (I) in
+theorem levi_lemma {u v x y : String α} (h : I.trace_equiv (u ∘ v) (x ∘ y)) :
+    ∃ z1 z2 z3 z4, I.indep z2 z3
+    ∧ I.trace_equiv u (z1 ∘ z2) ∧ I.trace_equiv v (z3 ∘ z4)
+    ∧ I.trace_equiv x (z1 ∘ z3) ∧ I.trace_equiv y (z2 ∘ z4) := by
+  induction y generalizing u v with
+  | nil =>
+    use u; use ε; use v; use ε
+    simp [trace_equiv.refl, concat]
+    have h1 : (∀ a ∈ Finset.empty, ∀ b ∈ Alph v, I.r a b) := by
+      intro a ha
+      exfalso
+      exact Finset.notMem_empty a ha
+    use h1
+    simp [concat] at h
+    apply trace_equiv.symm at h
+    exact h
+  | snoc w e IH =>
+    by_cases h_ve : occurs v e
+    · have ⟨v', v'', h_v, h_ve⟩ := occur_lemma h_ve
+      have h' := h
+      have h : I.trace_equiv (u ∘ (v' ∘ v'')) (x ∘ w) := by
+        rw [h_v] at h
+        have h := I.cancel_preserves_congruence e h
+        simp [concat, h_ve, cancel] at h
+        exact h
+      apply IH at h
+      have ⟨z1', z2', z3', z4', h_ind, h⟩ := h
+      use z1'; use z2'; use z3'; use z4' :: e; use h_ind
+      simp [h, concat]
+      rw [h_v]
+      simp [concat]
+      have ⟨h_iu, h_iv, h_ix, h_iy⟩ := h
+      have h_iuv : I.trace_equiv ((z1' ∘ z2') ∘ ((v' ∘ (ε :: e)) ∘ v'')) (u ∘ v) := by
+        have h : I.trace_equiv ((v' ∘ (ε :: e)) ∘ v'') v := by simp [h_v, trace_equiv.refl]
+        exact trace_equiv.cong (trace_equiv.symm h_iu) h
+      have h_ixw : I.trace_equiv ((z1' ∘ z3') ∘ ((z2' ∘ z4') :: e)) (x ∘ (w :: e)) := by
+        exact trace_equiv.symm (trace_equiv.cong h_ix (I.snoc_preserves_congruence e h_iy))
+      have h := trace_equiv.trans (trace_equiv.trans h_iuv h') (trace_equiv.symm h_ixw)
+      have h_z2_z3 : I.trace_equiv
+          ((z1' ∘ z3') ∘ (z2' ∘ z4' :: e))
+          ((z1' ∘ z2') ∘ (z3' ∘ z4' :: e)) := by
+        simp [concat_assoc, concat]
+        nth_rw 2 [<- concat_assoc]
+        nth_rw 3 [<- concat_assoc]
+        apply I.commute_indep_concat_preserves_cong at h_ind
+        apply snoc_preserves_congruence
+        apply trace_equiv.cong (trace_equiv.refl z1')
+        exact trace_equiv.cong (trace_equiv.symm h_ind) (trace_equiv.refl z4')
+      apply trace_equiv.trans h at h_z2_z3
+      apply left_cancel_preserves_cong at h_z2_z3
+      exact h_z2_z3
+    · have h_ue : occurs u e := by
+        have h_xwe : occurs (x ∘ (w :: e)) e := by simp
+        apply equivalence_preserves_occurs at h
+        rw [h_xwe] at h
+        simp [concat_adds_occurs, h_ve] at h
+        exact h
+      have ⟨u', u'', h_u, h_ue⟩ := occur_lemma h_ue
+      have h' := h
+      have h : I.trace_equiv ((u' ∘ u'') ∘ v) (x ∘ w) := by
+        rw [h_u] at h
+        have h := I.cancel_preserves_congruence e h
+        simp [concat, h_ue, h_ve, cancel] at h
+        simp [concat_assoc]
+        exact h
+      apply IH at h
+      have ⟨z1', z2', z3', z4', h_ind, h⟩ := h
+      have ⟨h_iu, h_iv, h_ix, h_iy⟩ := h
+      have h_ind : I.indep (z2' :: e) z3' := by
+        rw [I.indep_commutative, I.indep_snoc e, I.indep_commutative]
+        use h_ind
+        have h_uve : e ∉ Alph (u'' ∘ v) := by
+          simp [mem_alph_occurs, h_ve, h_ue]
+        have h_ind := I.commutation_lemma u' (u'' ∘ v) (x ∘ w) e h_uve
+        simp [h_u, concat] at h'
+        apply h_ind at h'
+        rw [concat_adds_indep] at h'
+        have ⟨_, h'⟩ := h'
+        sorry
+      use z1'; use z2' :: e; use z3'; use z4'; use h_ind
+      simp [h, concat]
+      rw [h_u]
+      sorry
 
 
 
