@@ -16,6 +16,18 @@ instance : Membership α (Alphabet α) := Finset.instMembership
 instance (a : α) (S : Alphabet α) : Decidable (a ∈ S) := Finset.decidableMem a S
 -/
 
+/-
+
+Right-end inductive [String]s, in accordance with the book's tendency
+to induct on strings on their rightmost symbols.
+Compare and contrast with left-end inductive [List]s.
+
+Existing language & computability libraries are written for [List]s.
+We should establish an equivalence between [String]s and [List]s so that
+we can utilize these libraries, and in turn so that future projects
+using [List]s can interface with our results.
+
+-/
 namespace RString
 
 -- Implement string structure w/ lists as underlying
@@ -92,6 +104,13 @@ lemma proj_cancel_comm (S : Finset α) (w : String α) (a : α) : -- (1.3)
         simp [proj, h_bs]
         exact IH
 
+/-
+
+Definitions of [Reverse] & [Concat], and some foundational lemmas about
+Reverse & Concat.
+
+-/
+
 /-- Todo:
 Auxiliary for `List.reverse`. `List.reverseAux l r = l.reverse ++ r`,
 but it is defined directly. -/
@@ -165,6 +184,12 @@ lemma reverse_reverse (u : String α) :
     rw [IH]
     simp [reverse, concat]
 
+/-
+
+Definition of [length].
+
+-/
+
 -- Todo: Make [w.length] syntax work
 def length : String α → Nat
   | ε => 0
@@ -176,6 +201,17 @@ lemma length_concat {u v : String α} : length (u ∘ v) = length u + length v :
   induction v with
   | nil => simp [length, concat]
   | snoc v _ IH => simp [concat, length, <- Nat.add_assoc]; exact IH
+
+/-
+
+Definitions of [occurs] & [Alph].
+
+Occurs & Alph are closely related, but Lean seems to have more trouble
+simplifying [Alph] (sets & set membership) than [occurs] (raw propositions).
+It may be helpful to simplify [Alph] expressions to [occurs] expressions
+automatically.
+
+-/
 
 /-
 @[simp]
@@ -217,6 +253,13 @@ end RString
 
 open RString
 
+/-
+
+Some placeholder definitions for [Lang]uages on [String]s.
+Consider implementing this as a wrapper over Mathlib's [Language]s.
+
+-/
+
 def Lang (α) :=
   Set (String α)
 
@@ -240,9 +283,14 @@ infixl:100 " * " => concat
 
 end Lang
 
--- see [Preorder] class
+-- see [Preorder] class on how to write & handle algebraic objects in Lean
+-- abbrev _temp α := Preorder α
 
-abbrev _temp α := Preorder α
+/-
+
+Dependencies and Independencies.
+
+-/
 
 -- [Fintype α] is sufficient to ensure finiteness since dependencies are reflexive.
 structure Dependency (α) [Fintype α] where
@@ -306,6 +354,22 @@ def independency : Independency α where
 
 end Dependency
 
+/-
+
+We define the [trace_equiv]alence of an independency as its closure under the
+following properties. Foundational lemmas about trace equivalence are then
+proven using this inductive structure.
+
+This differs from the book's main definition of a trace equivalence
+(least congruence), but the book later states offhand that this is an
+equivalent formulation.
+
+We should prove the two definitions are equivalent (in any case,
+one lemma in this section essentially depends on it (and is currently
+left unproven)).
+
+-/
+
 namespace Independency
 
 variable {α : Type} [Fintype α] [DecidableEq α] {I : Independency α}
@@ -330,15 +394,18 @@ inductive trace_equiv : String α → String α → Prop
 -- Todo-?: Define the natural homomorphism (of strings to their traces)
 
 /-
-We have that l₁ ≡ l₂.
-The ≡ has to be derived from one of the 5 constructors above,
+Lemmas using the inductive structure of [trace_equiv] follow a certain
+style which is logically straightforward but has a slightly tricky syntax.
+
+We will explain it in this lemma as an example.
+
+Suppose that we have l₁ ≡ l₂.
+Then the ≡ has to be derived from one of the definition's 5 constructors,
 1. refl
 2. symm
 3. trans
 4. cong
 5. swap
-
-(+ other cases, same as below)
 
 Supposing it was [trans], this means that ∃s₁, s₂, s₃ such that
 l₁ = s₁, l₂ = s₃,
@@ -353,11 +420,31 @@ lemma trace_equiv_length :
     ∀ {l₁ l₂ : String α}, I.trace_equiv l₁ l₂ → length l₁ = length l₂ := by
   intro l1 l2 h
   induction h with
+  -- The first possibility is that l₁ ≡ l₂ because of [refl].
+  -- That is, l₁ = l₂. In this case it is clear that length l₁ = length l₂.
   | refl _ => rfl
+  /- The second possibility is that l₁ ≡ l₂ because of [symm];
+     that is, because l₂ ≡ l₁.
+
+     Because the definition of [trace_equiv] was inductive, we can extract
+     an inductive hypothesis (that length l₂ = length l₁).
+  -/
   | symm h IH => rw [IH]
+  /- The third possiblity is that l₁ ≡ l₂ because of [trans];
+     that is, because ∃s₁, s₂, s₃ such that
+     l₁ = s₁, l₂ = s₃,
+     s₁ ≡ s₂, s₂ ≡ s₃.
+
+     Again we can extract an IH
+     (that length s₁ = length s₂ ∧ length s₂ = length s₃).
+  -/
   | trans h1 h2 ih1 ih2 => exact Eq.trans ih1 ih2
+  -- etc. for [cong]
   | cong h1 h2 ih1 ih2 => simp [ih1, ih2]
+  -- and etc. for [swap]
   | swap _ _ _ => rfl
+  -- and by definition one of these 5 cases must hold for l₁ ≡ l₂,
+  -- so proving the goal given each of the 5 closes the proof.
 
 variable (I) in
 lemma swap_exact (a b : α) (hne : a ≠ b)
@@ -448,6 +535,13 @@ lemma reverse_preserves_congruence :
   | swap a b h =>
     simp [reverse]
     exact trace_equiv.swap b a (I.symm h)
+
+/-
+
+Additional lemmas that were deemed necessary to close the Levi Lemma.
+We should refactor to group them with their respective definitions.
+
+-/
 
 @[simp]
 lemma cancels_on_concat_suffix_iff_occurs {α} [DecidableEq α] (u v : String α) (a : α) :
@@ -869,7 +963,10 @@ lemma occur_lemma {w : String α} {a : α} (h : occurs w a) :
       rw [h_w]
       simp [concat, h_ab, h_wa]
 
-/- The book's proof of Levi Lemma seems to have a mistake stemming from the
+/-
+ Levi Lemma (p10).
+
+ The book's proof of Levi Lemma seems to have a mistake stemming from the
  choices of z1', ..., z4'. It can be salvaged by using the following choices
  instead:
 
@@ -882,6 +979,9 @@ lemma occur_lemma {w : String α} {a : α} (h : occurs w a) :
  u' ∘ u'' ≡ z1' ∘ z2', v ≡ z3' ∘ z4', x ≡ z1' ∘ z3', y ≡ z2' ∘ z4'
  and
  z1 = z1', z2 = z2' :: e, z3 = z3', z4 = z4'
+
+ We follow the book's proof here (but it is somewhat vague in the body of
+ cases (1) and (2); we need to fill in some details ourselves.)
 -/
 variable (I) in
 theorem levi_lemma {u v x y : String α} (h : I.trace_equiv (u ∘ v) (x ∘ y)) :
@@ -889,6 +989,7 @@ theorem levi_lemma {u v x y : String α} (h : I.trace_equiv (u ∘ v) (x ∘ y))
     ∧ I.trace_equiv u (z1 ∘ z2) ∧ I.trace_equiv v (z3 ∘ z4)
     ∧ I.trace_equiv x (z1 ∘ z3) ∧ I.trace_equiv y (z2 ∘ z4) := by
   induction y generalizing u v with
+  -- Per the book we either have y = ε,
   | nil =>
     use u; use ε; use v; use ε
     simp [trace_equiv.refl, concat]
@@ -900,8 +1001,11 @@ theorem levi_lemma {u v x y : String α} (h : I.trace_equiv (u ∘ v) (x ∘ y))
     simp [concat] at h
     apply trace_equiv.symm at h
     exact h
+  -- or we have y = w ∘ e, in which case we can induct.
   | snoc w e IH =>
     by_cases h_ve : occurs v e
+    -- And then either the rightmost occurrence of [e] in (u ∘ v) is in [v],
+    -- leading to case (1): u ∘ v = u ∘ v' ∘ e ∘ v'',
     · have ⟨v', v'', h_v, h_ve⟩ := occur_lemma h_ve
       have h' := h
       have h : I.trace_equiv (u ∘ (v' ∘ v'')) (x ∘ w) := by
@@ -916,6 +1020,20 @@ theorem levi_lemma {u v x y : String α} (h : I.trace_equiv (u ∘ v) (x ∘ y))
       rw [h_v]
       simp [concat]
       have ⟨h_iu, h_iv, h_ix, h_iy⟩ := h
+      /- (The rest of this case boils down to using the fact that (v'', e) ∈ I.
+        Unfortunately it currently takes a lot of boilerplate to extract
+        and use this fact; to do e.g.
+
+        I.trace_equiv u v ∧ I.trace_equiv v w → I.trace_equiv u w
+
+        or
+
+        I.trace_equiv u v → I.trace.equiv (w ∘ u) (w ∘ v)
+
+        we need to manually cite [trans] or [cong].
+        It would be nice if we could instead use [simp] to normalize
+        these.)
+      -/
       have h_iuv : I.trace_equiv ((z1' ∘ z2') ∘ ((v' ∘ (ε :: e)) ∘ v'')) (u ∘ v) := by
         have h : I.trace_equiv ((v' ∘ (ε :: e)) ∘ v'') v := by simp [h_v, trace_equiv.refl]
         exact trace_equiv.cong (trace_equiv.symm h_iu) h
@@ -935,6 +1053,7 @@ theorem levi_lemma {u v x y : String α} (h : I.trace_equiv (u ∘ v) (x ∘ y))
       apply trace_equiv.trans h at h_z2_z3
       apply left_cancel_preserves_cong at h_z2_z3
       exact h_z2_z3
+    -- or it is in [u], leading to case (2): u ∘ v = u' ∘ e ∘ u'' ∘ v
     · have h_ue : occurs u e := by
         have h_xwe : occurs (x ∘ (w :: e)) e := by simp
         apply equivalence_preserves_occurs at h
@@ -952,6 +1071,8 @@ theorem levi_lemma {u v x y : String α} (h : I.trace_equiv (u ∘ v) (x ∘ y))
       apply IH at h
       have ⟨z1', z2', z3', z4', h_ind, h⟩ := h
       have ⟨h_iu, h_iv, h_ix, h_iy⟩ := h
+      -- (Again, the rest is boilerplate to extract and use the
+      -- fact that (u'' ∘ v, e) ∈ I).
       have h_ind : I.indep (z2' :: e) z3' := by
         rw [I.indep_commutative, I.indep_snoc e, I.indep_commutative]
         use h_ind
