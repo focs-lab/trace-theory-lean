@@ -1,3 +1,4 @@
+import Mathlib.Algebra.FreeMonoid.Basic
 import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.List.Basic
@@ -31,6 +32,8 @@ using [List]s can interface with our results.
 
 namespace List
 
+/- An induction tactic which recurses on a list as w → w' ++ [a],
+ contrasting with the usual w → a :: w'. -/
 theorem right_induction {α} {motive : List α → Prop} (nil : motive [])
     (cons : ∀ (l : List α) (a : α), motive l → motive (l ++ [a])) : ∀ l, motive l := by
   intro l
@@ -210,24 +213,13 @@ structure Independency (α) [Fintype α] where
   irrefl : ∀ x, ¬r x x
   symm : ∀ {x y}, r x y → r y x
 
-/- Todo-?: Might want to define a structure capturing a trace equivalence
- instead of relying on Independency.trace_equiv
-
 structure TraceEquivalence (α) [Fintype α] where
-  r : String α → String α → Prop
+  r : List α → List α → Prop
   refl : ∀ x, r x x
   symm : ∀ {x y}, r x y → r y x
   trans : ∀ {x y z}, r x y ∧ r y z → r x z
-  monoid : ∀ {x x' y y'}, r x x' ∧ r y y' → r (x ∘ y) (x' ∘ y')
+  monoid : ∀ {x x' y y'}, r x x' ∧ r y y' → r (x ++ y) (x' ++ y')
 
-variable (I) in
-def tr_eq : TraceEquivalence α where
-  r := I.gen_tr
-  refl := gen_tr.refl
-  symm := gen_tr.symm
-  trans := fun ⟨h1, h2⟩ => gen_tr.trans h1 h2
-  monoid := fun ⟨h1, h2⟩ => gen_tr.cong h1 h2
--/
 
 namespace Dependency
 
@@ -258,13 +250,8 @@ We define the [trace_equiv]alence of an independency as its closure under the
 following properties. Foundational lemmas about trace equivalence are then
 proven using this inductive structure.
 
-This differs from the book's main definition of a trace equivalence
-(least congruence), but the book later states offhand that this is an
-equivalent formulation.
-
-We should prove the two definitions are equivalent (in any case,
-one lemma in this section essentially depends on it (and is currently
-left unproven)).
+This is (implicitly) equivalent to the book's main definition of a
+trace equivalence (least congruence derived from the independency I).
 
 -/
 
@@ -352,19 +339,19 @@ variable (I) in
 omit [DecidableEq α] in
 @[simp]
 lemma trace_equiv_refl_prop {w : List α} :
-    I.trace_equiv w w := by exact trace_equiv.refl w
+    I.trace_equiv w w := trace_equiv.refl w
 
 variable (I) in
 omit [DecidableEq α] in
 @[simp]
 lemma trq_symm {u v : List α} :
-    I.trace_equiv u v → I.trace_equiv v u := by exact trace_equiv.symm
+    I.trace_equiv u v → I.trace_equiv v u := trace_equiv.symm
 
 variable (I) in
 omit [DecidableEq α] in
 @[simp]
 lemma trace_equiv_trans_prop {u v w : List α} (h1 : I.trace_equiv u w) (h2 : I.trace_equiv w v) :
-    I.trace_equiv u v := by exact trace_equiv.trans h1 h2
+    I.trace_equiv u v := trace_equiv.trans h1 h2
 
 variable (I) in
 omit [DecidableEq α] in
@@ -393,7 +380,7 @@ omit [DecidableEq α] in
 @[simp]
 lemma trace_equiv_cong_prop {l₁ l₂ l₃ l₄ : List α}
     (h₁ : I.trace_equiv l₁ l₂) (h₂ : I.trace_equiv l₃ l₄) :
-    I.trace_equiv (l₁ ++ l₃) (l₂ ++ l₄) := by exact trace_equiv.cong h₁ h₂
+    I.trace_equiv (l₁ ++ l₃) (l₂ ++ l₄) := trace_equiv.cong h₁ h₂
 
 variable (I) in
 omit [DecidableEq α] in
@@ -411,7 +398,7 @@ variable (I) in
 omit [DecidableEq α] in
 @[simp]
 lemma trace_equiv_swap_prop {a b : α} (h : I.r a b) :
-    I.trace_equiv [a, b] [b, a] := by exact trace_equiv.swap a b h
+    I.trace_equiv [a, b] [b, a] := trace_equiv.swap a b h
 
 
 variable (I) in
@@ -854,9 +841,9 @@ lemma right_tail_swap_lemma (w : List α) (a b : α) :
 
 variable (I) in
 theorem tail_lemma (u v : List α) (a b : α) :
-    (I.trace_equiv (u ++ [a]) (v ++ [b]) ∧ a ≠ b) →
+    (I.trace_equiv (u ++ [a]) (v ++ [b])) → (a ≠ b) →
     (I.r a b ∧ ∃ w, I.trace_equiv u (w ++ [b]) ∧ I.trace_equiv v (w ++ [a])) := by
-  intro ⟨h_eq, h_ab⟩
+  intro h_eq h_ab
   have h_u_wb : I.trace_equiv u (v.cancelRight a ++ [b]) := by
     apply (I.cancelRight_preserves_congruence a) at h_eq
     simp [h_ab] at h_eq
@@ -1019,10 +1006,7 @@ theorem commutation_lemma (u v w : List α) (a : α) (h_av : a ∉ v) :
     obtain ⟨h_av, h_ab⟩ := h_av
     simp only [<- List.append_assoc] at h
     have h_tail := I.tail_lemma (u ++ [a] ++ x) w b a
-    have h_tcond : (I.trace_equiv (u ++ [a] ++ x ++ [b]) (w ++ [a]) ∧ b ≠ a) := by
-      use h
-      exact mt Eq.symm h_ab
-    apply h_tail at h_tcond
+    have h_tcond := h_tail h (mt Eq.symm h_ab)
     have h_eq := I.cancelRight_preserves_congruence b h
     rw [List.append_assoc] at h_eq
     simp [<- List.append_assoc, mt Eq.symm h_ab] at h_eq
@@ -1195,12 +1179,96 @@ theorem levi_lemma {u v x y : List α} (h : I.trace_equiv (u ++ v) (x ++ y)) :
         exact I.trq_left_concat z2' (I.commute_indep_symbol_preserves_cong h_iz4e)
 
 
-end Independency
+/-
 
--- def trace_equivalence (D) :
--- such that
-  -- {([x], [y]) | (x, y) ∈ I_D}
-  -- follows monoid structure (axioms)
-  -- transitively closed
-  --
-  -- -> (optional? prove is least congruence)
+some inspiration for
+Traces / Monoids / Dependency Morphisms
+
+-/
+
+def tr_eq : TraceEquivalence α where
+  r := I.trace_equiv
+  refl := trace_equiv.refl
+  symm := trace_equiv.symm
+  trans := fun ⟨h1, h2⟩ => trace_equiv.trans h1 h2
+  monoid := fun ⟨h1, h2⟩ => trace_equiv.cong h1 h2
+
+instance setoid : Setoid (List α) :=
+  ⟨(I.tr_eq).r,
+   ⟨(I.tr_eq).refl,
+    (I.tr_eq).symm,
+    fun h1 h2 => (I.tr_eq).trans ⟨h1, h2⟩⟩⟩
+
+def Trace := Quotient (I.setoid)
+
+instance : Monoid (I.Trace) where
+  mul a b := Quotient.liftOn₂ a b (fun l₁ l₂ => ⟦l₁ ++ l₂⟧)
+    (by
+      intro a b a' b' hab hab'
+      apply Quotient.sound
+      exact (I.tr_eq).monoid ⟨hab, hab'⟩
+    )
+  one := ⟦[]⟧
+  mul_assoc := by
+    intro a b c
+    refine Quotient.inductionOn₃ a b c (fun l₁ l₂ l₃ => ?_)
+    apply Quotient.sound
+    simp [List.append_assoc]
+    exact (I.tr_eq).refl _
+  one_mul := by
+    intro a
+    refine Quotient.inductionOn a (fun l => ?_)
+    apply Quotient.sound
+    simp
+    exact (I.tr_eq).refl l
+  mul_one := by
+    intro a
+    refine Quotient.inductionOn a (fun l => ?_)
+    apply Quotient.sound
+    simp
+    exact (I.tr_eq).refl l
+
+def toTrace : FreeMonoid α →* I.Trace where
+  toFun := Quotient.mk''
+  map_one' := rfl
+  map_mul' _ _ := rfl
+
+structure DependencyMorphism (M : Type) [Monoid M] where
+  toHom : FreeMonoid α →* M
+  prop1 : ∀ s, toHom s = toHom 1 → s = 1
+  prop2 : ∀ a b, I.r a b →
+        toHom (FreeMonoid.of a * FreeMonoid.of b) = toHom (FreeMonoid.of b * FreeMonoid.of a)
+  prop3 : ∀ (a : α) (u v : FreeMonoid α), toHom (u * FreeMonoid.of a) = toHom v →
+        toHom u = toHom (v.cancelRight a)
+  prop4 : ∀ (a b : α) (u v : FreeMonoid α), a ≠ b →
+        toHom (u * FreeMonoid.of a) = toHom (v * FreeMonoid.of b) → I.r a b
+
+def toDependencyMorphism : I.DependencyMorphism (I.Trace) where
+  toHom := I.toTrace
+  prop1 := by
+    intro s h
+    have : (I.toTrace) s = (I.toTrace) 1 := h
+    simp [toTrace] at this
+    have hrel : I.trace_equiv s [] := Quotient.exact this
+    have hlen : s.length = ([] : List α).length := I.trace_equiv_length hrel
+    cases s with
+    | h0 => rfl
+    | ih a s' => simp at hlen
+  prop2 := by
+    intro a b h
+    simp
+    apply Quotient.sound
+    exact trace_equiv.swap a b h
+  prop3 := by
+    intro a u v h
+    have hrel : I.trace_equiv ((u.toList ++ [a]).cancelRight a) (v.cancelRight a) :=
+      I.cancelRight_preserves_congruence a (Quotient.exact h)
+    simp at hrel
+    exact Quotient.sound hrel
+  prop4 := by
+    intro a b u v hne h
+    have hrel : I.trace_equiv (u.toList ++ [a]) (v.toList ++ [b]) := Quotient.exact h
+    exact (I.tail_lemma u v a b hrel hne).left
+
+
+end Independency
