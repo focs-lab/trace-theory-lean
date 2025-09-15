@@ -65,6 +65,12 @@ example (l : List Nat) : l.length = l.length := by
 example (a : α) : a ∈ [a] := by
   simp
 
+/-
+
+Projections and Cancellations.
+
+-/
+
 /- Left-recursive, as opposed to right-recursive in the book. May need to prove
 the two are equal. -/
 def proj (w : List α) (S : Alphabet α) : List α :=
@@ -181,7 +187,7 @@ lemma toFinset_mem_iff_mem (w : List α) (a : α) :
 end List
 
 namespace Language
--- ...
+-- Add contents to [Computability.Language] if necessary
 end Language
 
 -- see [Preorder] class on how to write & handle algebraic objects in Lean
@@ -199,26 +205,10 @@ structure Dependency (α) [Fintype α] where
   refl : ∀ x, r x x
   symm : ∀ {x y}, r x y → r y x
 
-/-
-structure Dependency (α) where
-  elems : List α
-  complete : ∀ x : α, x ∈ elems
-  r : α → α → Prop
-  refl : ∀ x, r x x
-  symm : ∀ {x y}, r x y → r y x
--/
-
 structure Independency (α) [Fintype α] where
   r : α → α → Prop
   irrefl : ∀ x, ¬r x x
   symm : ∀ {x y}, r x y → r y x
-
-structure TraceEquivalence (α) [Fintype α] where
-  r : List α → List α → Prop
-  refl : ∀ x, r x x
-  symm : ∀ {x y}, r x y → r y x
-  trans : ∀ {x y z}, r x y ∧ r y z → r x z
-  monoid : ∀ {x x' y y'}, r x x' ∧ r y y' → r (x ++ y) (x' ++ y')
 
 
 namespace Dependency
@@ -839,6 +829,7 @@ lemma right_tail_swap_lemma (w : List α) (a b : α) :
     simp [List.cancelLeft] at h
     exact IH h
 
+-- Fact (1.9). (Pg. 9)
 variable (I) in
 theorem tail_lemma (u v : List α) (a b : α) :
     (I.trace_equiv (u ++ [a]) (v ++ [b])) → (a ≠ b) →
@@ -995,6 +986,7 @@ lemma commute_indep_concat_preserves_cong {u v : List α} (h : I.indep u v) :
     simp at h
     exact h
 
+-- Proposition 1.3.3. (Pg. 9)
 variable (I) in
 theorem commutation_lemma (u v w : List α) (a : α) (h_av : a ∉ v) :
     I.trace_equiv (u ++ [a] ++ v) (w ++ [a]) → I.indep [a] v := by
@@ -1034,7 +1026,7 @@ lemma occur_lemma {w : List α} {a : α} (h : a ∈ w) :
       simp [h, h_ab]
 
 /-
- Levi Lemma (p10).
+ Levi Lemma. (Pg. 10).
 
  The book's proof of Levi Lemma seems to have a mistake stemming from the
  choices of z1', ..., z4'. It can be salvaged by using the following choices
@@ -1181,10 +1173,17 @@ theorem levi_lemma {u v x y : List α} (h : I.trace_equiv (u ++ v) (x ++ y)) :
 
 /-
 
-some inspiration for
 Traces / Monoids / Dependency Morphisms
 
 -/
+
+
+structure TraceEquivalence (α) [Fintype α] where
+  r : List α → List α → Prop
+  refl : ∀ x, r x x
+  symm : ∀ {x y}, r x y → r y x
+  trans : ∀ {x y z}, r x y ∧ r y z → r x z
+  monoid : ∀ {x x' y y'}, r x x' ∧ r y y' → r (x ++ y) (x' ++ y')
 
 def tr_eq : TraceEquivalence α where
   r := I.trace_equiv
@@ -1234,17 +1233,18 @@ def toTrace : FreeMonoid α →* I.Trace where
   map_mul' _ _ := rfl
 
 structure DependencyMorphism (M : Type) [Monoid M] where
-  toHom : FreeMonoid α →* M
-  prop1 : ∀ s, toHom s = toHom 1 → s = 1
+  hom : FreeMonoid α →* M
+  prop1 : ∀ s, hom s = hom 1 → s = 1
   prop2 : ∀ a b, I.r a b →
-        toHom (FreeMonoid.of a * FreeMonoid.of b) = toHom (FreeMonoid.of b * FreeMonoid.of a)
-  prop3 : ∀ (a : α) (u v : FreeMonoid α), toHom (u * FreeMonoid.of a) = toHom v →
-        toHom u = toHom (v.cancelRight a)
+        hom (FreeMonoid.of a * FreeMonoid.of b) = hom (FreeMonoid.of b * FreeMonoid.of a)
+  prop3 : ∀ {a : α} {u v : FreeMonoid α}, hom (u * FreeMonoid.of a) = hom v →
+        hom u = hom (v.cancelRight a)
   prop4 : ∀ (a b : α) (u v : FreeMonoid α), a ≠ b →
-        toHom (u * FreeMonoid.of a) = toHom (v * FreeMonoid.of b) → I.r a b
+        hom (u * FreeMonoid.of a) = hom (v * FreeMonoid.of b) → I.r a b
 
+-- Theorem 1.3.9. (Pg. 13)
 def toDependencyMorphism : I.DependencyMorphism (I.Trace) where
-  toHom := I.toTrace
+  hom := I.toTrace
   prop1 := by
     intro s h
     have : (I.toTrace) s = (I.toTrace) 1 := h
@@ -1269,6 +1269,86 @@ def toDependencyMorphism : I.DependencyMorphism (I.Trace) where
     intro a b u v hne h
     have hrel : I.trace_equiv (u.toList ++ [a]) (v.toList ++ [b]) := Quotient.exact h
     exact (I.tail_lemma u v a b hrel hne).left
+
+variable {M : Type} [Monoid M]
+
+@[simp]
+lemma morphism_concat_dist {φ : I.DependencyMorphism M} {u v : List α} :
+    (φ.hom u * φ.hom v = φ.hom (u ++ v)) := by
+  rw [show u ++ v = FreeMonoid.ofList u * FreeMonoid.ofList v from rfl]
+  simp
+  rfl
+
+-- Lemma 1.3.6. (Pg. 12)
+theorem tail_lemma_homomorphic {φ : I.DependencyMorphism M} {u v : List α} {a b : α} :
+    (φ.hom (u ++ [a]) = φ.hom (v ++ [b])) → (a ≠ b) →
+    (∃ w, φ.hom u = φ.hom (w ++ [b]) ∧ φ.hom v = φ.hom (w ++ [a])) := by
+  intro h h_ab
+  have h_uv_ab : φ.hom (u.cancelRight b) = φ.hom (v.cancelRight a) := by
+    have := φ.prop3 h
+    simp [h_ab] at this
+    symm at this
+    have := φ.prop3 this
+    symm at this
+    exact this
+  use (u.cancelRight b)
+  constructor
+  · have : φ.hom (u.cancelRight b ++ [b]) = φ.hom (v.cancelRight a ++ [b]) := by
+      rw [show u.cancelRight b ++ [b]
+               = FreeMonoid.ofList (u.cancelRight b) * (FreeMonoid.of b) from rfl]
+      rw [show v.cancelRight a ++ [b]
+               = FreeMonoid.ofList (v.cancelRight a) * (FreeMonoid.of b) from rfl]
+      rw [MonoidHom.map_mul φ.hom, MonoidHom.map_mul φ.hom]
+      -- simp [FreeMonoid.ofList] doesn't help?
+      have h_uv_ab : φ.hom (FreeMonoid.ofList (u.cancelRight b))
+                   = φ.hom (FreeMonoid.ofList (v.cancelRight a)) := h_uv_ab
+      rw [h_uv_ab]
+    rw [this]
+    have : v.cancelRight a ++ [b] = (v ++ [b]).cancelRight a := by simp [h_ab]
+    rw [this]
+    exact φ.prop3 h
+  · have : u.cancelRight b ++ [a] = (u ++ [a]).cancelRight b := by
+      symm at h_ab
+      simp [h_ab]
+    rw [this]
+    symm at h
+    exact φ.prop3 h
+
+-- Lemma 1.3.7. (Pg. 13)
+theorem arbitrary_morphism_finer {φ ψ : I.DependencyMorphism M} {x y : List α} :
+    φ.hom x = φ.hom y → ψ.hom x = ψ.hom y := by
+  induction x using List.right_induction generalizing y with
+  | nil =>
+    intro h
+    symm at h
+    apply DependencyMorphism.prop1 at h
+    simp [h]
+    simp [show [] = (1 : FreeMonoid α) from rfl]
+  | cons u a IH =>
+    induction y using List.right_induction generalizing u a with
+    | nil =>
+      intro h
+      apply DependencyMorphism.prop1 at h
+      rw [show (1 : FreeMonoid α) = [] from rfl] at h
+      have h_len := congrArg List.length h
+      simp at h_len
+    | cons v b IH2 =>
+      by_cases h_ab : a = b
+      · rw [<- h_ab]
+        intro h
+        apply φ.prop3 at h
+        rw [List.cancelRight_prop] at h
+        simp at h
+        apply IH at h
+        simp [<- morphism_concat_dist]
+        rw [h]
+      · intro h
+        apply tail_lemma_homomorphic at h
+        simp [h_ab] at h
+        have ⟨w, h_uw, h_vw⟩ := h
+        apply IH at h_uw
+        -- apply IH2 w a at h_vw
+        sorry
 
 
 end Independency
