@@ -1,0 +1,6 @@
+name = "TraceTheory"
+version = "0.1.0"
+defaultTargets = ["TraceTheory"]
+
+[[lean_lib]]
+name = "TraceTheory"
