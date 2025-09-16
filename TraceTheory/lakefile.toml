@@ -2,5 +2,9 @@ name = "TraceTheory"
 version = "0.1.0"
 defaultTargets = ["TraceTheory"]
 
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+
 [[lean_lib]]
 name = "TraceTheory"
