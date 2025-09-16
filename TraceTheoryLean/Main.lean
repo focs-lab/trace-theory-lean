@@ -1234,17 +1234,22 @@ def toTrace : FreeMonoid α →* I.Trace where
 
 structure DependencyMorphism (M : Type) [Monoid M] where
   hom : FreeMonoid α →* M
+  surj : Function.Surjective hom
   prop1 : ∀ s, hom s = hom 1 → s = 1
-  prop2 : ∀ a b, I.r a b →
+  prop2 : ∀ {a b}, I.r a b →
         hom (FreeMonoid.of a * FreeMonoid.of b) = hom (FreeMonoid.of b * FreeMonoid.of a)
   prop3 : ∀ {a : α} {u v : FreeMonoid α}, hom (u * FreeMonoid.of a) = hom v →
         hom u = hom (v.cancelRight a)
-  prop4 : ∀ (a b : α) (u v : FreeMonoid α), a ≠ b →
+  prop4 : ∀ {a b : α} {u v : FreeMonoid α}, a ≠ b →
         hom (u * FreeMonoid.of a) = hom (v * FreeMonoid.of b) → I.r a b
 
 -- Theorem 1.3.9. (Pg. 13)
 def toDependencyMorphism : I.DependencyMorphism (I.Trace) where
   hom := I.toTrace
+  surj := by
+    intro t
+    refine Quotient.inductionOn t (fun l => ?_)
+    exact ⟨l, rfl⟩
   prop1 := by
     intro s h
     have : (I.toTrace) s = (I.toTrace) 1 := h
@@ -1270,7 +1275,7 @@ def toDependencyMorphism : I.DependencyMorphism (I.Trace) where
     have hrel : I.trace_equiv (u.toList ++ [a]) (v.toList ++ [b]) := Quotient.exact h
     exact (I.tail_lemma u v a b hrel hne).left
 
-variable {M : Type} [Monoid M]
+variable {M N : Type} [Monoid M] [Monoid N]
 
 @[simp]
 lemma morphism_concat_dist {φ : I.DependencyMorphism M} {u v : List α} :
@@ -1315,7 +1320,8 @@ theorem tail_lemma_homomorphic {φ : I.DependencyMorphism M} {u v : List α} {a 
     exact φ.prop3 h
 
 -- Lemma 1.3.7. (Pg. 13)
-theorem arbitrary_morphism_finer {φ ψ : I.DependencyMorphism M} {x y : List α} :
+theorem arbitrary_morphism_finer
+{φ : I.DependencyMorphism M} {ψ : I.DependencyMorphism N} {x y : List α} :
     φ.hom x = φ.hom y → ψ.hom x = ψ.hom y := by
   induction x using List.right_induction generalizing y with
   | nil =>
@@ -1324,7 +1330,7 @@ theorem arbitrary_morphism_finer {φ ψ : I.DependencyMorphism M} {x y : List α
     apply DependencyMorphism.prop1 at h
     simp [h]
     simp [show [] = (1 : FreeMonoid α) from rfl]
-  | cons u a IH =>
+  | cons u a IH_x =>
     induction y using List.right_induction generalizing u a with
     | nil =>
       intro h
@@ -1332,23 +1338,139 @@ theorem arbitrary_morphism_finer {φ ψ : I.DependencyMorphism M} {x y : List α
       rw [show (1 : FreeMonoid α) = [] from rfl] at h
       have h_len := congrArg List.length h
       simp at h_len
-    | cons v b IH2 =>
+    | cons v b IH_y =>
       by_cases h_ab : a = b
       · rw [<- h_ab]
         intro h
         apply φ.prop3 at h
         rw [List.cancelRight_prop] at h
         simp at h
-        apply IH at h
+        apply IH_x at h
         simp [<- morphism_concat_dist]
         rw [h]
       · intro h
+        have h_iab := ψ.prop2 (φ.prop4 h_ab h)
         apply tail_lemma_homomorphic at h
         simp [h_ab] at h
         have ⟨w, h_uw, h_vw⟩ := h
-        apply IH at h_uw
-        -- apply IH2 w a at h_vw
-        sorry
+        have h_w : (∀ {z : List α}, φ.hom w = φ.hom z → ψ.hom w = ψ.hom z) := by
+          intro z hz
+          have h_uz := by
+            rw [<- morphism_concat_dist, hz, morphism_concat_dist] at h_uw
+            exact h_uw
+          apply IH_x at h_uw
+          apply IH_x at h_uz
+          rw [h_uw] at h_uz
+          apply DependencyMorphism.prop3 at h_uz
+          rw [List.cancelRight_prop] at h_uz
+          simp at h_uz
+          exact h_uz
+        apply IH_x at h_uw
+        symm at h_vw
+        apply IH_y w a h_w at h_vw
+        simp [<- morphism_concat_dist]
+        rw [h_uw, <- h_vw]
+        simp [morphism_concat_dist]
+        rw [List.append_assoc]
+        simp
+        have h_iab : ψ.hom [a, b] = ψ.hom [b, a] := h_iab
+        simp [<- morphism_concat_dist]
+        simp [h_iab]
+
+/-
+
+Generated block for proving Theorem 1.3.8,
+on uniqueness (up to isomorphism) of dependency morphism image.
+
+-/
+
+section
+
+open Function
+
+variable {L M N : Type}
+variable [Monoid L] [Monoid M] [Monoid N]
+variable (f : L →* M) (g : L →* N)
+variable (hf : Surjective f) (hg : Surjective g)
+variable (h1 : ∀ x y, f x = f y → g x = g y) (h2 : ∀ x y, g x = g y → f x = f y)
+
+noncomputable def φ : M → N := fun m => g (Classical.choose (hf m))
+
+noncomputable def ψ : N → M := fun n => f (Classical.choose (hg n))
+
+lemma preimage_spec_f (m : M) : f (Classical.choose (hf m)) = m :=
+  Classical.choose_spec (hf m)
+
+lemma preimage_spec_g (n : N) : g (Classical.choose (hg n)) = n :=
+  Classical.choose_spec (hg n)
+
+include h1 in
+lemma φ_eq (m : M) (a : L) (ha : f a = m) : φ f g hf m = g a := by
+  unfold φ
+  exact h1 (Classical.choose (hf m)) a (by rw [preimage_spec_f f hf m, ha])
+
+include h2 in
+lemma ψ_eq (n : N) (a : L) (ha : g a = n) : ψ f g hg n = f a := by
+  unfold ψ
+  exact h2 (Classical.choose (hg n)) a (by rw [preimage_spec_g g hg n, ha])
+
+include h1 in
+lemma φ_map_mul (m₁ m₂ : M) : φ f g hf (m₁ * m₂) = φ f g hf m₁ * φ f g hf m₂ := by
+  set a₁ := Classical.choose (hf m₁)
+  set a₂ := Classical.choose (hf m₂)
+  set a₁₂ := Classical.choose (hf (m₁ * m₂))
+  have ha₁ : f a₁ = m₁ := preimage_spec_f f hf m₁
+  have ha₂ : f a₂ = m₂ := preimage_spec_f f hf m₂
+  have ha₁₂ : f a₁₂ = m₁ * m₂ := preimage_spec_f f hf (m₁ * m₂)
+  have H : f (a₁ * a₂) = f a₁₂ := by
+    rw [f.map_mul, ha₁, ha₂, ha₁₂]
+  have hg_eq : g (a₁ * a₂) = g a₁₂ := h1 (a₁ * a₂) a₁₂ H
+  calc
+    φ f g hf (m₁ * m₂) = g a₁₂ := rfl
+    _ = g (a₁ * a₂) := by rw [hg_eq]
+    _ = g a₁ * g a₂ := g.map_mul a₁ a₂
+    _ = φ f g hf m₁ * φ f g hf m₂ := rfl
+
+include h1 h2 in
+lemma left_inv : LeftInverse (ψ f g hg) (φ f g hf) := by
+  intro m
+  let a := Classical.choose (hf m)
+  have ha : f a = m := preimage_spec_f f hf m
+  calc
+    ψ f g hg (φ f g hf m) = ψ f g hg (g a) := by rw [φ_eq f g hf h1 m a ha]
+    _ = f a := ψ_eq f g hg h2 (g a) a rfl
+    _ = m := ha
+
+include h1 h2 in
+lemma right_inv : RightInverse (ψ f g hg) (φ f g hf) := by
+  intro n
+  let b := Classical.choose (hg n)
+  have hb : g b = n := preimage_spec_g g hg n
+  calc
+    φ f g hf (ψ f g hg n) = φ f g hf (f b) := by rw [ψ_eq f g hg h2 n b hb]
+    _ = g b := φ_eq f g hf h1 (f b) b rfl
+    _ = n := hb
+
+noncomputable def monoidEquiv : M ≃* N :=
+  { toFun := φ f g hf
+    invFun := ψ f g hg
+    left_inv := left_inv f g hf hg h1 h2
+    right_inv := right_inv f g hf hg h1 h2
+    map_mul' := φ_map_mul f g hf h1 }
+
+end
+
+-- Theorem 1.3.8 (Pg. 13)
+theorem morphism_images_isomorphic (φ : I.DependencyMorphism M) (ψ : I.DependencyMorphism N) :
+    Nonempty (M ≃* N) := by
+  have hM : ∀ (x y : FreeMonoid α), φ.hom x = φ.hom y → ψ.hom x = ψ.hom y := by
+    intro x y
+    exact arbitrary_morphism_finer
+  have hN : ∀ (x y : FreeMonoid α), ψ.hom x = ψ.hom y → φ.hom x = φ.hom y := by
+    intro x y
+    exact arbitrary_morphism_finer
+  exact ⟨monoidEquiv φ.hom ψ.hom φ.surj ψ.surj hM hN⟩
+
 
 
 end Independency
