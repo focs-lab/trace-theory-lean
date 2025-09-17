@@ -1,3 +1,4 @@
+import Mathlib.Computability.Language
 import Mathlib.Data.Finset.Basic
 
 variable {α : Type*} [DecidableEq α]
@@ -317,4 +318,32 @@ lemma proj_commutes_with_cancel_right (Sigma : Alphabet α) (w : List α) (a : �
   -- Since proj and reverse commute (by proj_and_reverse_commute), the operations can be swapped.
   simp [cancel_right, proj_commutes_with_reverse]
 
+/--
+  The set of all prefixes of a word.
+-/
+def pref (w : List α) : Set (List α) :=
+  { w' | List.IsPrefix w' w }
+
 end List
+
+namespace Language
+
+/--
+  The projection of a language onto an alphabet is the set of all projections of words in the language.
+-/
+def proj (Sigma : Alphabet α) (L : Language α) : Language α :=
+  { w | w ∈ Set.image (List.proj Sigma) L }
+
+/--
+  The prefix closure of a language is the set of all prefixes of words in the language.
+-/
+def pref (L : Language α) : Language α :=
+  ⋃ w ∈ L, List.pref w
+
+/--
+  A language is prefix-closed if it equals its prefix closure.
+-/
+def is_prefix_closed (L : Language α) : Prop :=
+  L = pref L
+
+end Language
