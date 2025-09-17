@@ -16,8 +16,8 @@ namespace List
     - if it holds for a list `l`, then it holds for `l ++ [a]` for any `a`.
 -/
 theorem induction_right {α} {P : List α → Prop}
-    (h_nil : P [])
-    (h_snoc : ∀ (l : List α) (a : α), P l → P (l ++ [a])) :
+    (nil : P [])
+    (snoc : ∀ (l : List α) (a : α), P l → P (l ++ [a])) :
     ∀ l : List α, P l := by
   /-
     We want to prove P l for all lists l, using right induction.
@@ -47,7 +47,7 @@ theorem induction_right {α} {P : List α → Prop}
       By the induction hypothesis (IH), from P (k ++ [a]) we get P ((k ++ [a]) ++ l').
       Thus, we chain these two steps to get the result.
     -/
-    have hka : P (k ++ [a]) := h_snoc k a hk
+    have hka : P (k ++ [a]) := snoc k a hk
     have : k ++ (a :: l') = (k ++ [a]) ++ l' := by simp [append_assoc]
     rw [this]
     exact IH (k ++ [a]) hka
@@ -58,13 +58,34 @@ theorem induction_right {α} {P : List α → Prop}
     | nil => exact h_base
     | cons a l'' IH => exact h_step a l'' IH
   -- Finally, to recover the original goal, specialize to k = [] and use h_nil : P [].
-  exact hQ l [] h_nil
+  exact hQ l [] nil
 
+/--
+  Every nonempty list `w` can be written as `w' ++ [a]` for some `w'` and `a`.
+  This is a canonical example where right induction is natural:
+  at each step, we peel off the last element, reducing the problem to a shorter list.
+-/
+example (w : List α) (h : w ≠ []) : ∃ (w' : List α) (a : α), w = w' ++ [a] := by
+  induction w using induction_right with
+  | nil =>
+    -- Base case: contradiction, since w = [].
+    contradiction
+  | snoc w' a IH =>
+    -- Inductive step: w = w' ++ [a]
+    use w', a
+
+/--
+  The projection of a word onto an alphabet: remove all symbols not in the alphabet.
+  This is a standard operation in trace theory.
+-/
 def proj (Sigma : Alphabet α) (w : List α) : List α :=
   match w with
   | [] => []
   | a :: w' => if a ∈ Sigma then a :: proj Sigma w' else proj Sigma w'
 
+/--
+  Projection distributes over concatenation: projecting a concatenation is the same as concatenating the projections.
+-/
 @[simp]
 lemma proj_distrib_over_concat (Sigma : Alphabet α) (w₁ w₂ : List α) :
     proj Sigma (w₁ ++ w₂) = proj Sigma w₁ ++ proj Sigma w₂ :=
@@ -88,8 +109,11 @@ lemma proj_distrib_over_concat (Sigma : Alphabet α) (w₁ w₂ : List α) :
         -- By induction, this is proj Sigma w₁' ++ proj Sigma w₂
         simp [proj, h, IH]
 
+/--
+  Projection commutes with reversal: projecting then reversing is the same as reversing then projecting.
+-/
 @[simp]
-lemma proj_and_reverse_commute (Sigma : Alphabet α) (w : List α) :
+lemma proj_commutes_with_reverse (Sigma : Alphabet α) (w : List α) :
     reverse (proj Sigma w) = proj Sigma (reverse w) := by
   -- We proceed by induction on w.
   induction w with
@@ -116,13 +140,37 @@ lemma proj_and_reverse_commute (Sigma : Alphabet α) (w : List α) :
       -- Since a ∉ Sigma, proj Sigma [a] = [], so right side is proj Sigma (reverse w')
       simp [proj, h, IH]
 
+/--
+  Cancel the first occurrence of a symbol from the left of a word.
+  If the symbol is not present, the word is unchanged.
+-/
 def cancel_left (w : List α) (a : α) : List α :=
   match w with
   | [] => []
   | b :: w' => if a = b then w' else b :: cancel_left w' a
 
+/--
+  Left-cancelling from an empty list yields an empty list.
+-/
 @[simp]
-lemma cancel_left_proj_eq_proj_when_a_notin_sigma (Sigma : Alphabet α) (w : List α) (a : α) :
+lemma cancel_left_nil (a : α) : cancel_left [] a = [] := by
+  -- By definition, cancel_left [] a = []
+  rfl
+
+/--
+  Left-cancelling from a nonempty list: if the head matches the target, remove it; otherwise, cancellation recurses on the tail and preserves the head.
+-/
+@[simp]
+lemma cancel_left_cons (w : List α) (a b : α) :
+    cancel_left (b :: w) a = if a = b then w else b :: cancel_left w a := by
+  -- By definition, cancel_left (b :: w) a = if a = b then w else b :: cancel_left w a
+  rfl
+
+/--
+  If the symbol `a` is not in the alphabet, then projecting and then cancelling `a` from the left does nothing.
+-/
+@[simp]
+lemma cancel_left_proj_eq_self_when_symb_notin_alph (Sigma : Alphabet α) (w : List α) (a : α) :
     a ∉ Sigma → cancel_left (proj Sigma w) a = proj Sigma w := by
   intro h
   -- We proceed by induction on w.
@@ -138,8 +186,8 @@ lemma cancel_left_proj_eq_proj_when_a_notin_sigma (Sigma : Alphabet α) (w : Lis
     · -- If a = b, then in proj Sigma w, b will only appear if b ∈ Sigma.
       -- But since a ∉ Sigma, b ∉ Sigma, so proj Sigma (b :: w') = proj Sigma w'.
       -- cancel_left (proj Sigma w') a = proj Sigma w' by induction.
-      rw [h_ab] at h
-      simp [proj, h]
+      have h_bS : b ∉ Sigma := h_ab ▸ h
+      simp [proj, h_bS]
       exact IH
     · -- If a ≠ b, consider whether b ∈ Sigma.
       by_cases h_bS : b ∈ Sigma
@@ -147,15 +195,18 @@ lemma cancel_left_proj_eq_proj_when_a_notin_sigma (Sigma : Alphabet α) (w : Lis
         -- cancel_left (b :: proj Sigma w') a = b :: cancel_left (proj Sigma w') a
         -- By induction, cancel_left (proj Sigma w') a = proj Sigma w', so both sides match.
         simp [proj, h_bS]
-        simp [cancel_left, h_ab]
+        simp [h_ab]
         exact IH
       · -- If b ∉ Sigma, then proj Sigma (b :: w') = proj Sigma w'.
         -- cancel_left (proj Sigma w') a = proj Sigma w' by induction.
         simp [proj, h_bS]
         exact IH
 
+/--
+  Projection commutes with left-cancellation: projecting then cancelling is the same as cancelling then projecting.
+-/
 @[simp]
-lemma proj_and_cancel_left_commute (Sigma : Alphabet α) (w : List α) (a : α) :
+lemma proj_commutes_with_cancel_left (Sigma : Alphabet α) (w : List α) (a : α) :
     cancel_left (proj Sigma w) a = proj Sigma (cancel_left w a) := by
   -- We prove by induction on w.
   induction w with
@@ -173,11 +224,11 @@ lemma proj_and_cancel_left_commute (Sigma : Alphabet α) (w : List α) (a : α) 
       by_cases h_ab : a = b
       · -- If a = b, then cancel_left (b :: proj Sigma w') a = proj Sigma w'.
         -- On the right, cancel_left (b :: w') a = w', so proj Sigma w' = proj Sigma w'.
-        simp [cancel_left, h_ab]
+        simp [h_ab]
       · -- If a ≠ b, then cancel_left (b :: proj Sigma w') a = b :: cancel_left (proj Sigma w') a
         -- By induction, cancel_left (proj Sigma w') a = proj Sigma (cancel_left w' a)
         -- On the right, cancel_left (b :: w') a = b :: cancel_left w' a, so proj Sigma (b :: cancel_left w' a) = b :: proj Sigma (cancel_left w' a)
-        simp [cancel_left, h_ab]
+        simp [h_ab]
         simp [proj, h_bS]
         exact IH
     · -- If b ∉ Sigma, then proj Sigma (b :: w') = proj Sigma w'.
@@ -191,14 +242,79 @@ lemma proj_and_cancel_left_commute (Sigma : Alphabet α) (w : List α) (a : α) 
         simp [proj, h_bS]
         exact IH
 
+/--
+  Cancel the first occurrence of a symbol from the right of a word.
+-/
 def cancel_right (w : List α) (a : α) : List α :=
   reverse (cancel_left (reverse w) a)
 
+/--
+  Right-cancelling from an empty list yields an empty list.
+-/
 @[simp]
-lemma proj_and_cancel_right_commute (Sigma : Alphabet α) (w : List α) (a : α) :
+lemma cancel_right_nil (a : α) : cancel_right [] a = [] := by
+  -- By definition, cancel_right [] a = reverse (cancel_left (reverse []) a) = reverse (cancel_left [] a) = reverse [] = []
+  simp [cancel_right]
+
+/--
+  Right-cancelling from a nonempty list: if the last element matches the target, remove it; otherwise, cancellation recurses on the prefix and preserves the last element.
+-/
+@[simp]
+lemma cancel_right_snoc (w : List α) (a b : α) :
+    cancel_right (w ++ [b]) a = if a = b then w else cancel_right w a ++ [b] := by
+  by_cases h : a = b
+  · -- If a = b, then cancel_right (w ++ [b]) a = reverse (cancel_left (reverse (w ++ [b])) a)
+    -- = reverse (cancel_left (reverse [b] ++ reverse w) a) = reverse (cancel_left ([b] ++ reverse w) a)
+    -- = reverse (cancel_left (b :: reverse w) a) = reverse (reverse w) = w
+    simp [cancel_right, h]
+  · -- If a ≠ b, then cancel_right (w ++ [b]) a = reverse (cancel_left (reverse (w ++ [b])) a)
+    -- = reverse (cancel_left (reverse [b] ++ reverse w) a) = reverse (cancel_left ([b] ++ reverse w) a)
+    -- = reverse (cancel_left (b :: reverse w) a) = reverse (b :: cancel_left (reverse w) a) = reverse (cancel_left (reverse w) a) ++ [b] = cancel_right w a ++ [b]
+    simp [cancel_right, h]
+
+/--
+  If the symbol `a` is not in the alphabet, then projecting and then cancelling `a` from the right does nothing.
+-/
+@[simp]
+lemma cancel_right_proj_eq_self_when_symb_notin_alph (Sigma : Alphabet α) (w : List α) (a : α) :
+    a ∉ Sigma → cancel_right (proj Sigma w) a = proj Sigma w := by
+  induction w using induction_right with
+  | nil =>
+    -- Base case: w = [].
+    -- Both sides are cancel_right [] a = [] and proj Sigma [] = [], so equality holds.
+    simp [cancel_right, proj]
+  | snoc w' b IH =>
+    intro h
+    by_cases h_ab : a = b
+    · -- Case 1: a = b. Since a ∉ Sigma, b ∉ Sigma as well.
+      -- The projection removes b, so proj Sigma (w' ++ [b]) = proj Sigma w'.
+      -- Right-cancelling a from proj Sigma w is the same as right-cancelling from proj Sigma w',
+      -- which by the induction hypothesis is just proj Sigma w'.
+      have h_bS : b ∉ Sigma := h_ab ▸ h
+      simp [proj, h_bS]
+      exact IH h
+    · -- Case 2: a ≠ b. Now consider whether b ∈ Sigma.
+      by_cases h_bS : b ∈ Sigma
+      · -- Subcase: b ∈ Sigma. Then proj Sigma (w' ++ [b]) = proj Sigma w' ++ [b].
+        -- Right-cancelling a from proj Sigma w is cancel_right (proj Sigma w') a ++ [b].
+        -- By the induction hypothesis, cancel_right (proj Sigma w') a = proj Sigma w', so both sides match.
+        simp [proj, h_bS]
+        simp [h_ab]
+        exact IH h
+      · -- Subcase: b ∉ Sigma. Then proj Sigma (w' ++ [b]) = proj Sigma w'.
+        -- Right-cancelling a from proj Sigma w is the same as right-cancelling from proj Sigma w',
+        -- which by the induction hypothesis is just proj Sigma w'.
+        simp [proj, h_bS]
+        exact IH h
+
+/--
+  Projection commutes with right-cancellation: projecting then cancelling is the same as cancelling then projecting.
+-/
+@[simp]
+lemma proj_commutes_with_cancel_right (Sigma : Alphabet α) (w : List α) (a : α) :
     cancel_right (proj Sigma w) a = proj Sigma (cancel_right w a) := by
   -- The right-cancellation is defined as reversing, left-cancelling, then reversing again.
   -- Since proj and reverse commute (by proj_and_reverse_commute), the operations can be swapped.
-  simp [cancel_right, proj_and_reverse_commute]
+  simp [cancel_right, proj_commutes_with_reverse]
 
 end List
