@@ -2,9 +2,9 @@ import Mathlib.Algebra.FreeMonoid.Basic
 import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.List.Basic
+import Mathlib.Data.Set.Basic
 import Mathlib.Computability.Language
 import Mathlib.Logic.Relation
-import Mathlib.Data.Set.Basic
 
 variable {α : Type*} [DecidableEq α]
 -- An alphabet is a finite set of symbols / letters
@@ -1471,6 +1471,134 @@ theorem morphism_images_isomorphic (φ : I.DependencyMorphism M) (ψ : I.Depende
     exact arbitrary_morphism_finer
   exact ⟨monoidEquiv φ.hom ψ.hom φ.surj ψ.surj hM hN⟩
 
-
-
 end Independency
+
+namespace Dependency
+
+variable {α : Type} [Fintype α] {D : Dependency α}
+variable {V : Type} [Fintype V]
+
+structure DependencyGraph (V) where
+  adj : V → V → Prop
+  φ : V → α
+  acyclic : ∀ x, ¬ Relation.TransGen adj x x
+  dep : ∀ x y, (adj x y ∨ adj y x ↔ D.r (φ x) (φ y))
+
+/- lemma subdependency_generates_subgraph {D' D'' : Dependency α}
+{G' : D'.DependencyGraph V} {G'' : D''.DependencyGraph V} {hp : G'.φ = G''.φ} :
+    (∀ x y, D'.r x y → D''.r x y) → (∀ u v, G'.adj u v → G''.adj u v) := by
+  intro h u v hg
+  sorry
+-/
+
+variable {V₁ V₂ : Type} [Fintype V₁] [Fintype V₂] in
+def compose (G₁ : D.DependencyGraph V₁) (G₂ : D.DependencyGraph V₂) :
+    D.DependencyGraph (V₁ ⊕ V₂) where
+  adj := fun u v =>
+    match u, v with
+    | Sum.inl u, Sum.inl v => G₁.adj u v
+    | Sum.inl u, Sum.inr v => D.r (G₁.φ u) (G₂.φ v)
+    | Sum.inr u, Sum.inl v => False
+    | Sum.inr u, Sum.inr v => G₂.adj u v
+  φ := fun v =>
+    match v with
+    | Sum.inl v => G₁.φ v
+    | Sum.inr v => G₂.φ v
+  acyclic := by
+    intro x h
+    /- Invariant: x ∈ G₁ has descendants in G₁ (+ path is contained in G₁) and G₂,
+                  x ∈ G₂ has only descendants in G₂ -/
+    have H : ∀ (x y : V₁ ⊕ V₂), Relation.TransGen (fun u v =>
+        match u, v with
+        | Sum.inl u, Sum.inl v => G₁.adj u v
+        | Sum.inl u, Sum.inr v => D.r (G₁.φ u) (G₂.φ v)
+        | Sum.inr u, Sum.inl v => False
+        | Sum.inr u, Sum.inr v => G₂.adj u v) x y →
+        (∀ u, x = Sum.inl u →
+         (∃ v, y = Sum.inl v ∧ Relation.TransGen (G₁.adj) u v) ∨ (∃ w, y = Sum.inr w)) ∧
+        (∀ u, x = Sum.inr u →
+         ∃ v, y = Sum.inr v ∧ Relation.TransGen (G₂.adj) u v) := by
+      intro x y hxy
+      induction hxy with
+      | single h =>
+        rename_i b
+        constructor
+        · intro u ha
+          subst ha
+          cases b with
+          | inl b => left; exists b; constructor; rfl; exact Relation.TransGen.single h
+          | inr b => right; exists b
+        · intro u ha
+          subst ha
+          cases b with
+          | inl b => contradiction
+          | inr b => exists b; constructor; rfl; exact Relation.TransGen.single h
+      | tail hab hbc ih =>
+          rename_i b c
+          rcases ih with ⟨ih_left, ih_right⟩
+          constructor
+          · intro u ha
+            subst ha
+            specialize ih_left u rfl
+            cases ih_left with
+            | inl h1 =>
+              rcases h1 with ⟨v, hb, hab_seq⟩
+              subst b
+              cases c with
+              | inl w => left; exists w; constructor; rfl; exact Relation.TransGen.tail hab_seq hbc
+              | inr w => right; exists w
+            | inr h2 =>
+              rcases h2 with ⟨w, hb⟩
+              subst b
+              cases c with
+              | inl z => contradiction
+              | inr z => right; exists z
+          · intro u ha
+            subst ha
+            specialize ih_right u rfl
+            rcases ih_right with ⟨v, hb, hab_seq⟩
+            subst b
+            cases c with
+            | inl w => contradiction
+            | inr w => exists w; constructor; rfl; exact Relation.TransGen.tail hab_seq hbc
+
+    -- Apply invariant to derive contradiction
+    cases x with
+    | inl u =>
+        have := H (Sum.inl u) (Sum.inl u) h
+        rcases this with ⟨left_part, _⟩
+        specialize left_part u rfl
+        cases left_part with
+        | inl hc =>
+            rcases hc with ⟨v, heq, hcycle⟩
+            injection heq with heq'
+            subst v
+            exact G₁.acyclic u hcycle
+        | inr hc =>
+            rcases hc with ⟨w, heq⟩
+            contradiction
+    | inr u =>
+        have := H (Sum.inr u) (Sum.inr u) h
+        rcases this with ⟨_, right_part⟩
+        specialize right_part u rfl
+        rcases right_part with ⟨v, heq, hcycle⟩
+        injection heq with heq'
+        subst v
+        exact G₂.acyclic u hcycle
+  dep := by
+    intro u v
+    cases u with
+    | inl u =>
+      cases v with
+      | inl v => simp; exact G₁.dep u v
+      | inr v => simp
+    | inr u =>
+      cases v with
+      | inl v =>
+        simp
+        apply Iff.intro
+        · exact D.symm
+        · exact D.symm
+      | inr v => simp; exact G₂.dep u v
+
+end Dependency
