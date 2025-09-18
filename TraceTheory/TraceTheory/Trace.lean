@@ -38,9 +38,9 @@ variable (I) in
 inductive TraceEquiv : List α → List α → Prop
   | swap : ∀ a b, I.rel a b → TraceEquiv [a, b] [b, a]
   | refl : ∀ t₁, TraceEquiv t₁ t₁
-  | symm : ∀ t₁ t₂, TraceEquiv t₁ t₂ → TraceEquiv t₂ t₁
-  | trans : ∀ t₁ t₂ t₃, TraceEquiv t₁ t₂ → TraceEquiv t₂ t₃ → TraceEquiv t₁ t₃
-  | compat : ∀ t₁ t₂ t₃ t₄, TraceEquiv t₁ t₂ → TraceEquiv t₃ t₄ → TraceEquiv (t₁ ++ t₃) (t₂ ++ t₄)
+  | symm : ∀ {t₁ t₂}, TraceEquiv t₁ t₂ → TraceEquiv t₂ t₁
+  | trans : ∀ {t₁ t₂ t₃}, TraceEquiv t₁ t₂ → TraceEquiv t₂ t₃ → TraceEquiv t₁ t₃
+  | compat : ∀ {t₁ t₂ t₃ t₄}, TraceEquiv t₁ t₂ → TraceEquiv t₃ t₄ → TraceEquiv (t₁ ++ t₃) (t₂ ++ t₄)
 
 omit [DecidableEq α] [Fintype α] in
 variable (I) in
@@ -53,11 +53,11 @@ lemma trace_equiv_length_eq {t₁ t₂ : List α} :
     rfl
   | refl _ =>
     rfl
-  | symm _ _ _ IH =>
+  | symm _ IH =>
     exact Eq.symm IH
-  | trans _ _ _ _ _ IH₁ IH₂ =>
+  | trans _ _ IH₁ IH₂ =>
     exact Eq.trans IH₁ IH₂
-  | compat _ _ _ _ _ _ IH₁ IH₂ =>
+  | compat _ _ IH₁ IH₂ =>
     simp [IH₁, IH₂]
 
 end Trace
