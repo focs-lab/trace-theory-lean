@@ -19,14 +19,11 @@ instance (a : α) (S : Alphabet α) : Decidable (a ∈ S) := Finset.decidableMem
 
 /-
 
-Right-end inductive [String]s, in accordance with the book's tendency
-to induct on strings on their rightmost symbols.
-Compare and contrast with left-end inductive [List]s.
+The book prefers to induct on strings on their rightmost symbols,
+as opposed to Lean's (by-default) left-end inductive [List]s.
 
-Existing language & computability libraries are written for [List]s.
-We should establish an equivalence between [String]s and [List]s so that
-we can utilize these libraries, and in turn so that future projects
-using [List]s can interface with our results.
+We introduce a tactic to induct on a list's right-end to allow us to
+follow the book's proofs cleanly:
 
 -/
 
@@ -1475,25 +1472,29 @@ end Independency
 
 namespace Dependency
 
-variable {α : Type} [Fintype α] {D : Dependency α}
-variable {V : Type} [Fintype V]
+universe u
 
-structure DependencyGraph (V) where
+variable {α : Type} [Fintype α] {D : Dependency α}
+variable {V : Type u} [Fintype V]
+
+structure DependenceGraph (V : Type u) where
   adj : V → V → Prop
   φ : V → α
   acyclic : ∀ x, ¬ Relation.TransGen adj x x
-  dep : ∀ x y, (adj x y ∨ adj y x ↔ D.r (φ x) (φ y))
+  dep : ∀ x y, (adj x y ∨ adj y x ↔ x ≠ y ∧ D.r (φ x) (φ y))
 
 /- lemma subdependency_generates_subgraph {D' D'' : Dependency α}
-{G' : D'.DependencyGraph V} {G'' : D''.DependencyGraph V} {hp : G'.φ = G''.φ} :
+{G' : D'.DependenceGraph V} {G'' : D''.DependenceGraph V} {hp : G'.φ = G''.φ} :
     (∀ x y, D'.r x y → D''.r x y) → (∀ u v, G'.adj u v → G''.adj u v) := by
   intro h u v hg
   sorry
 -/
 
+variable {V₁ V₂ V₃ : Type u} [Fintype V₁] [Fintype V₂] [Fintype V₃]
+
 variable {V₁ V₂ : Type} [Fintype V₁] [Fintype V₂] in
-def compose (G₁ : D.DependencyGraph V₁) (G₂ : D.DependencyGraph V₂) :
-    D.DependencyGraph (V₁ ⊕ V₂) where
+def compose (G₁ : D.DependenceGraph V₁) (G₂ : D.DependenceGraph V₂) :
+    D.DependenceGraph (V₁ ⊕ V₂) where
   adj := fun u v =>
     match u, v with
     | Sum.inl u, Sum.inl v => G₁.adj u v
@@ -1600,5 +1601,310 @@ def compose (G₁ : D.DependencyGraph V₁) (G₂ : D.DependencyGraph V₂) :
         · exact D.symm
         · exact D.symm
       | inr v => simp; exact G₂.dep u v
+
+structure DepGraphIso (G₁ : D.DependenceGraph V₁) (G₂ : D.DependenceGraph V₂) where
+  map : V₁ ≃ V₂
+  label : ∀ v, G₁.φ v = G₂.φ (map v)
+  arcs : ∀ u v, G₁.adj u v ↔ G₂.adj (map u) (map v)
+
+namespace DepGraphIso
+
+def refl (G : D.DependenceGraph V) : D.DepGraphIso G G where
+  map := Equiv.refl V
+  label := fun _ => by simp
+  arcs := fun _ _ => by simp
+
+def symm {G₁ : D.DependenceGraph V₁} {G₂ : D.DependenceGraph V₂} (φ : D.DepGraphIso G₁ G₂) :
+    D.DepGraphIso G₂ G₁ where
+  map := φ.map.symm
+  label := by simp [φ.label]
+  arcs := by simp [φ.arcs]
+
+def trans {G₁ : D.DependenceGraph V₁} {G₂ : D.DependenceGraph V₂} {G₃ : D.DependenceGraph V₃}
+    (φ : D.DepGraphIso G₁ G₂) (ψ : D.DepGraphIso G₂ G₃) :
+    D.DepGraphIso G₁ G₃ where
+  map := φ.map.trans ψ.map
+  label := by simp [φ.label, ψ.label]
+  arcs := by simp [φ.arcs, ψ.arcs]
+
+end DepGraphIso
+
+structure DepGraphRep where
+  V : Type u
+  [fintypeV : Fintype V]
+  graph : D.DependenceGraph V
+
+namespace DepGraphRep
+
+@[simp]
+def empty : D.DepGraphRep where
+  V := Empty
+  fintypeV := by infer_instance
+  graph :=
+    { adj := fun u v => False
+      φ := Empty.elim
+      acyclic := by simp
+      dep := by simp }
+
+def mul (A B : D.DepGraphRep) : D.DepGraphRep where
+  V := A.V ⊕ B.V
+  fintypeV := by
+    have := A.fintypeV
+    have := B.fintypeV
+    infer_instance
+  graph := compose A.graph B.graph
+
+end DepGraphRep
+
+instance DepGraphRepSetoid : Setoid D.DepGraphRep where
+  r A B := Nonempty (D.DepGraphIso A.graph B.graph)
+  iseqv := by
+    constructor
+    · intro A
+      exact ⟨DepGraphIso.refl A.graph⟩
+    · intro A B ⟨f⟩
+      exact ⟨f.symm⟩
+    · intro A B C ⟨f⟩ ⟨g⟩
+      exact ⟨f.trans g⟩
+
+def DepGraphMonoid : Type (u + 1) := Quotient D.DepGraphRepSetoid
+
+namespace DepGraphMonoid
+
+def emptyGraph : D.DepGraphMonoid := Quotient.mk _ DepGraphRep.empty
+
+def mul : D.DepGraphMonoid → D.DepGraphMonoid → D.DepGraphMonoid :=
+  Quotient.lift₂ (fun A B : DepGraphRep => Quotient.mk _ (A.mul B)) (by
+    intro A₁ A₂ B₁ B₂ ⟨f⟩ ⟨g⟩
+    apply Quotient.sound
+    refine ⟨?_, ?_, ?_⟩
+    · exact Equiv.sumCongr f.map g.map
+    · intro v
+      simp [DepGraphRep.mul]
+      simp [compose]
+      cases v
+      · simp [f.label]
+      · simp [g.label]
+    · intro u v
+      cases u <;> cases v
+      · simp [DepGraphRep.mul, compose, f.arcs]
+      · simp [DepGraphRep.mul, compose, f.label, g.label]
+      · simp [DepGraphRep.mul, compose]
+      · simp [DepGraphRep.mul, compose, g.arcs])
+
+theorem mul_assoc (a b c : D.DepGraphMonoid) : mul (mul a b) c = mul a (mul b c) := by
+  refine Quotient.inductionOn₃ a b c (fun A B C => ?_)
+  apply Quotient.sound
+  refine ⟨?_, ?_, ?_⟩
+  · exact Equiv.sumAssoc A.V B.V C.V
+  · intro v
+    simp [DepGraphRep.mul, compose]
+    cases v with
+    | inl v =>
+      cases v with
+      | inl v => simp [Equiv.sumAssoc]
+      | inr v => simp [Equiv.sumAssoc]
+    | inr v => simp [Equiv.sumAssoc]
+  · intro u v
+    cases u <;> cases v
+    · case a.refine_3.inl.inl u v =>
+        cases u <;> cases v
+        all_goals simp [DepGraphRep.mul, compose, Equiv.sumAssoc]
+    · case a.refine_3.inl.inr u v =>
+        cases u
+        all_goals simp [DepGraphRep.mul, compose, Equiv.sumAssoc]
+    · case a.refine_3.inr.inl u v =>
+        cases v
+        all_goals simp [DepGraphRep.mul, compose, Equiv.sumAssoc]
+    · case a.refine_3.inr.inr u v =>
+        simp [DepGraphRep.mul, compose, Equiv.sumAssoc]
+
+theorem one_mul (a : D.DepGraphMonoid) : mul emptyGraph a = a := by
+  refine Quotient.inductionOn a (fun A => ?_)
+  apply Quotient.sound
+  refine ⟨?_, ?_, ?_⟩
+  · simp [DepGraphRep.mul]
+    apply Equiv.emptySum
+  · intro v
+    cases v with
+    | inl v => cases v
+    | inr v => simp [DepGraphRep.mul, compose]
+  · intro u v
+    cases u <;> cases v
+    · case a.refine_3.inl.inl u v =>
+        cases u
+    · case a.refine_3.inl.inr u v =>
+        cases u
+    · case a.refine_3.inr.inl u v =>
+        cases v
+    · case a.refine_3.inr.inr u v =>
+        simp [DepGraphRep.mul, compose]
+
+theorem mul_one (a : D.DepGraphMonoid) : mul a emptyGraph = a := by
+  refine Quotient.inductionOn a (fun A => ?_)
+  apply Quotient.sound
+  refine ⟨?_, ?_, ?_⟩
+  · simp [DepGraphRep.mul]
+    apply Equiv.sumEmpty
+  · intro v
+    cases v with
+    | inl v => simp [DepGraphRep.mul, compose]
+    | inr v => cases v
+  · intro u v
+    cases u <;> cases v
+    · case a.refine_3.inl.inl u v =>
+        simp [DepGraphRep.mul, compose]
+    · case a.refine_3.inl.inr u v =>
+        cases v
+    · case a.refine_3.inr.inl u v =>
+        cases u
+    · case a.refine_3.inr.inr u v =>
+        cases u
+
+instance : Monoid D.DepGraphMonoid where
+  one := emptyGraph
+  mul := mul
+  mul_assoc := mul_assoc
+  one_mul := one_mul
+  mul_one := mul_one
+
+structure DependenceGraph (V : Type u) where
+  adj : V → V → Prop
+  φ : V → α
+  acyclic : ∀ x, ¬ Relation.TransGen adj x x
+  dep : ∀ x y, (adj x y ∨ adj y x ↔ D.r (φ x) (φ y))
+
+def toDepGraphIndiv (w : List α) : D.DependenceGraph (Fin w.length) where
+  adj := fun i j =>
+    if i < j then D.r (w.get i) (w.get j) else False
+  φ := fun i => w.get i
+  acyclic := by
+    intro x h
+    -- Invariant: If there exists a path x -> y, then x < y (as integers).
+    have H : ∀ (x y), Relation.TransGen (fun i j =>
+      if i < j then D.r (w.get i) (w.get j) else False) x y →
+        x < y := by
+      intro x y hxy
+      induction hxy with
+      | single h =>
+        rename_i y
+        apply by_contradiction
+        intro hy
+        simp [hy] at h
+      | tail hxy hyz ih =>
+          rename_i y z
+          have hyz : y < z := by
+            apply by_contradiction
+            intro hy
+            simp [hy] at hyz
+          exact LT.lt.trans ih hyz
+
+    -- Apply invariant to derive contradiction
+    have := H x x h
+    simp at this
+  dep := by
+    intro x y
+    by_cases h_eq : x = y
+    · simp [h_eq]
+    · simp [h_eq]
+      by_cases h_xy : x < y
+      · simp [h_xy, LT.lt.le]
+      · simp [h_xy, lt_of_le_of_ne (le_of_not_gt h_xy) (Ne.symm h_eq)]
+        constructor
+        all_goals exact D.symm
+
+def toRep (G : D.DependenceGraph V) : D.DepGraphRep where
+  V := V
+  graph := G
+
+def toDepGraph : FreeMonoid α →* D.DepGraphMonoid where
+  toFun := fun w => Quotient.mk'' (toRep (toDepGraphIndiv w))
+  map_one' := by
+    simp [Quotient.mk'']
+    apply Quotient.sound
+    constructor
+    apply DepGraphIso.symm
+    refine ⟨?_, ?_, ?_⟩
+    /- write the trivial map between the empty string and empty graph,
+     and prove it is (vacuously) a bijection -/
+    · refine ⟨Empty.elim, (fun i => nomatch i), ?_, ?_⟩
+      · intro v
+        cases v
+      · intro v
+        have : List.length (1 : FreeMonoid α) = 0 := by rfl
+        simp [toRep, this] at v
+        cases v
+        omega
+    -- then prove it (vacuously) preserves labels & arcs i.e. is an isomorphism
+    · simp
+    · simp
+  map_mul' s t := by
+    simp [Quotient.mk'']
+    apply Quotient.sound
+    constructor
+    simp [DepGraphRep.mul, toRep]
+    refine ⟨?_, ?_, ?_⟩
+    · have : List.length (s * t) = List.length s + List.length t := by
+        simp [<- List.length_append]
+        rfl
+      rw [this]
+      /- write the bijection between graph of string concat
+       <-> compose of string graphs -/
+      refine ⟨(fun n =>
+        if h : n.val < s.length then
+          Sum.inl ⟨n.val, h⟩
+        else
+          have h' : n.val - s.length < t.length := by
+            rw [Nat.sub_lt_iff_lt_add]
+            · have : s.length = List.length s := by rfl
+              rw [this]
+              have : t.length = List.length t := by rfl
+              rw [this]
+              have : List.length t + List.length s = List.length s + List.length t := by
+                rw [Nat.add_comm]
+              rw [this]
+              exact n.2
+            · exact Nat.le_of_not_lt h
+          Sum.inr ⟨n.val - s.length, h'⟩),
+      (fun n =>
+        match n with
+        | Sum.inl n =>
+          have h : ↑n < List.length s + List.length t := by
+            have ⟨n, h⟩ := n
+            simp [h, Nat.lt_add_right]
+          ⟨n, h⟩
+        | Sum.inr n =>
+          have h : ↑n + List.length s < List.length s + List.length t := by
+            have ⟨n, h⟩ := n
+            simp
+            rw [Nat.add_comm]
+            simp
+            exact h
+          ⟨n + s.length, h⟩), ?_, ?_⟩
+      · simp [Function.LeftInverse]
+        intro n
+        by_cases hn : n < s.length
+        · simp [hn]
+        · simp [hn]
+          simp at hn
+          -- rw [Nat.sub_add_cancel hn]
+          sorry
+      · simp [Function.RightInverse, Function.LeftInverse]
+        intro ⟨n, hn⟩
+        simp
+        have : s.length = List.length s := by rfl
+        rw [this]
+        exact hn
+    -- prove it preserves labels
+    · simp [compose]
+      intro n
+      sorry
+      -- by_cases hn : n < s.length
+      -- · simp [hn]
+      -- · simp [hn]
+    -- and prove it preserves arcs
+    · sorry
+
+end DepGraphMonoid
 
 end Dependency
