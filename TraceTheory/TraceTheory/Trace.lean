@@ -111,13 +111,11 @@ lemma mirror_rule {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂) : -- (1.6)
     simp
     exact ih₂.compat ih₁
 
+infixl:65 " ÷ " => List.cancel_right
+
 @[simp]
 lemma cancel_right_over_concat {w₁ w₂ : List α} (a : α) :
-    (w₁ ++ w₂).cancel_right a =
-      if (a ∈ w₂) then
-        w₁ ++ w₂.cancel_right a
-      else
-        w₁.cancel_right a ++ w₂ := by
+    (w₁ ++ w₂) ÷ a = if (a ∈ w₂) then w₁ ++ (w₂ ÷ a) else (w₁ ÷ a) ++ w₂ := by
   induction w₂ using List.induction_right with
   | nil =>
     simp
@@ -133,7 +131,7 @@ lemma cancel_right_over_concat {w₁ w₂ : List α} (a : α) :
 
 variable (I) in
 lemma cancellation_property {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) : -- (1.7)
-    TraceEquiv I (w₁.cancel_right a) (w₂.cancel_right a) := by
+    TraceEquiv I (w₁ ÷ a) (w₂ ÷ a) := by
   induction h with
   | swap b c hbc =>
     by_cases hab : a = b <;> by_cases hac : a = c
@@ -186,7 +184,7 @@ lemma projection_rule {w₁ w₂ : List α} (Sigma : Alphabet α) (h : TraceEqui
     exact ih₁.compat ih₂
 
 @[simp] -- TODO: move this to basic
-lemma singleton_cancel_right {a : α} : [a].cancel_right a = [] := by
+lemma singleton_cancel_right {a : α} : [a] ÷ a = [] := by
   rw [← List.nil_append [a], List.cancel_right_snoc]
   simp
 
@@ -334,30 +332,30 @@ variable (I) in
 lemma tail_lemma {u v : List α} {a b : α}
     (h_ua_vb : TraceEquiv I (u ++ [a]) (v ++ [b])) (hne : a ≠ b) : -- (1.9)
     I.rel a b ∧ ∃ w, TraceEquiv I u (w ++ [b]) ∧ TraceEquiv I v (w ++ [a]) := by
-  have h_ub_va : TraceEquiv I (u.cancel_right b) (v.cancel_right a) := by
+  have h_ub'_va' : TraceEquiv I (u ÷ b) (v ÷ a) := by
     have h_cancel := cancellation_property I b (cancellation_property I a h_ua_vb)
     simp [hne] at h_cancel
     exact h_cancel
-  have h_u_wb : TraceEquiv I u (v.cancel_right a ++ [b]) := by
+  have h_u_va'b : TraceEquiv I u ((v ÷ a) ++ [b]) := by
     have h_cancel := cancellation_property I a h_ua_vb
     simp [hne] at h_cancel
     exact h_cancel
-  have h_v_wa : TraceEquiv I v (u.cancel_right b ++ [a]) := by
+  have h_v_ub'a : TraceEquiv I v ((u ÷ b) ++ [a]) := by
     have h_cancel := cancellation_property I b h_ua_vb
     simp [hne.symm] at h_cancel
     exact h_cancel.symm
-  have hu : TraceEquiv I u (u.cancel_right b ++ [b]) :=
-    h_u_wb.trans (h_ub_va.compat (TraceEquiv.refl [b])).symm
-  have h_ua : TraceEquiv I (u ++ [a]) (u.cancel_right b ++ [b] ++ [a]) :=
-    hu.compat (TraceEquiv.refl [a])
-  have h_vb : TraceEquiv I (v ++ [b]) (u.cancel_right b ++ [a] ++ [b]) :=
-    h_v_wa.compat (TraceEquiv.refl [b])
-  have h_tail : TraceEquiv I (u.cancel_right b ++ [a, b]) (u.cancel_right b ++ [b, a]) := by
-    have h' := h_vb.symm.trans (h_ua_vb.symm.trans h_ua)
+  have h_u_ub'b : TraceEquiv I u ((u ÷ b) ++ [b]) :=
+    h_u_va'b.trans (h_ub'_va'.compat (TraceEquiv.refl [b])).symm
+  have h_ua_ub'ba : TraceEquiv I (u ++ [a]) ((u ÷ b) ++ [b] ++ [a]) :=
+    h_u_ub'b.compat (TraceEquiv.refl [a])
+  have h_vb_ub'ab : TraceEquiv I (v ++ [b]) ((u ÷ b) ++ [a] ++ [b]) :=
+    h_v_ub'a.compat (TraceEquiv.refl [b])
+  have h_tail : TraceEquiv I ((u ÷ b) ++ [a, b]) ((u ÷ b) ++ [b, a]) := by
+    have h' := h_vb_ub'ab.symm.trans (h_ua_vb.symm.trans h_ua_ub'ba)
     simp at h'
     exact h'
   have h_ab_ba : TraceEquiv I [a, b] [b, a] :=
     equiv_of_swapping_tail_implies_tail_is_equiv I h_tail
-  exact ⟨equiv_and_ne_implies_independence I h_ab_ba hne, ⟨u.cancel_right b, ⟨hu, h_v_wa⟩⟩⟩
+  exact ⟨equiv_and_ne_implies_independence I h_ab_ba hne, ⟨u ÷ b, ⟨h_u_ub'b, h_v_ub'a⟩⟩⟩
 
 end Trace
