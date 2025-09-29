@@ -183,11 +183,6 @@ lemma projection_rule {w₁ w₂ : List α} (Sigma : Alphabet α) (h : TraceEqui
     simp
     exact ih₁.compat ih₂
 
-@[simp] -- TODO: move this to basic
-lemma singleton_cancel_right {a : α} : [a] ÷ a = [] := by
-  rw [← List.nil_append [a], List.cancel_right_snoc]
-  simp
-
 variable (I) in
 lemma equiv_of_length_two {a b : α} {w : List α} (h : TraceEquiv I [a, b] w) :
     w = [a, b] ∨ w = [b, a] := by

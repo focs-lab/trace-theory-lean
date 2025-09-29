@@ -308,6 +308,11 @@ lemma cancel_right_proj_eq_self_when_symb_notin_alph (Sigma : Alphabet α) (w : 
         simp [proj, h_bS]
         exact IH h
 
+@[simp]
+lemma singleton_cancel_right {a : α} : [a].cancel_right a = [] := by
+  rw [← List.nil_append [a], List.cancel_right_snoc]
+  simp
+
 /--
   Projection commutes with right-cancellation: projecting then cancelling is the same as cancelling then projecting.
 -/
