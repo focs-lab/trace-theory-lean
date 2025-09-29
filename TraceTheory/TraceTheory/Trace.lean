@@ -310,7 +310,7 @@ lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, 
       exact ih₁ hne hx hy
 
 variable (I) in
-lemma equiv_of_swapping_tail_implies_tail_is_equiv {w : List α} {a b : α}
+lemma equiv_of_swap_tail_implies_tail_equiv {w : List α} {a b : α}
     (h : TraceEquiv I (w ++ [a, b]) (w ++ [b, a])) :
     TraceEquiv I [a, b] [b, a] := by
   induction w with
@@ -349,8 +349,7 @@ lemma tail_lemma {u v : List α} {a b : α}
     have h' := h_vb_ub'ab.symm.trans (h_ua_vb.symm.trans h_ua_ub'ba)
     simp at h'
     exact h'
-  have h_ab_ba : TraceEquiv I [a, b] [b, a] :=
-    equiv_of_swapping_tail_implies_tail_is_equiv I h_tail
+  have h_ab_ba : TraceEquiv I [a, b] [b, a] := equiv_of_swap_tail_implies_tail_equiv I h_tail
   exact ⟨equiv_and_ne_implies_independence I h_ab_ba hne, ⟨u ÷ b, ⟨h_u_ub'b, h_v_ub'a⟩⟩⟩
 
 end Trace
