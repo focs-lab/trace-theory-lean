@@ -378,9 +378,8 @@ lemma commutation_lemma {u v w : List α} {a : α}
     rw [← List.append_assoc] at h
     have hr := (tail_lemma I h hab).left
     replace h := cancellation_rule I b h
-    simp only [List.cancel_right_snoc, hab, ↓reduceIte] at h
-    replace h := ih h hax
-    simp at h
+    replace h := by simpa only [List.cancel_right_snoc, hab, ↓reduceIte] using h
+    replace h := by simpa using ih h hax
     rcases hb' with hb'x | hb'b
     · exact h b' hb'x
     · rw [← hb'b] at hr
