@@ -57,9 +57,8 @@ inductive TraceEquiv : List α → List α → Prop
 omit [DecidableEq α] in
 variable (I) in
 @[simp]
-lemma equiv_implies_length_eq {w₁ w₂ : List α} :
-    TraceEquiv I w₁ w₂ → w₁.length = w₂.length := by
-  intro h
+lemma equiv_implies_length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
+    w₁.length = w₂.length := by
   induction h with
   | swap _ _ _ =>
     rfl
@@ -75,9 +74,8 @@ lemma equiv_implies_length_eq {w₁ w₂ : List α} :
 omit [DecidableEq α] in
 variable (I) in
 @[simp]
-lemma equiv_implies_alph_eq {w₁ w₂ : List α} (a : α) :
-    TraceEquiv I w₁ w₂ → (a ∈ w₁ ↔ a ∈ w₂) := by
-  intro h
+lemma equiv_implies_alph_eq {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) :
+    (a ∈ w₁ ↔ a ∈ w₂) := by
   induction h with
   | swap _ _ _ =>
     simp
@@ -310,17 +308,18 @@ lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, 
       exact ih₁ hne hx hy
 
 variable (I) in
-lemma equiv_of_swap_tail_implies_tail_equiv {w : List α} {a b : α}
-    (h : TraceEquiv I (w ++ [a, b]) (w ++ [b, a])) :
-    TraceEquiv I [a, b] [b, a] := by
+@[simp]
+lemma equiv_of_head_eq_implies_tail_equiv {u v w : List α}
+    (h : TraceEquiv I (w ++ u) (w ++ v)) :
+    TraceEquiv I u v := by
   induction w with
   | nil =>
     simp at h
     exact h
-  | cons c w' ih =>
+  | cons a w' ih =>
     simp at h
-    have h' := mirror_rule I (cancellation_property I c (mirror_rule I h))
-    simp [List.cancel_right] at h'
+    have h' := mirror_rule I (cancellation_property I a (mirror_rule I h))
+    simp at h'
     exact ih h'
 
 variable (I) in
@@ -349,7 +348,18 @@ lemma tail_lemma {u v : List α} {a b : α}
     have h' := h_vb_ub'ab.symm.trans (h_ua_vb.symm.trans h_ua_ub'ba)
     simp at h'
     exact h'
-  have h_ab_ba : TraceEquiv I [a, b] [b, a] := equiv_of_swap_tail_implies_tail_equiv I h_tail
+  have h_ab_ba : TraceEquiv I [a, b] [b, a] := equiv_of_head_eq_implies_tail_equiv I h_tail
   exact ⟨equiv_and_ne_implies_independence I h_ab_ba hne, ⟨u ÷ b, ⟨h_u_ub'b, h_v_ub'a⟩⟩⟩
+
+variable (I) in
+lemma equiv_of_head_eq_tail_implies_mid_equiv {u v x y : List α}
+    (h : TraceEquiv I (x ++ u ++ y) (x ++ v ++ y)) : -- (1.10)
+    TraceEquiv I u v := by
+  rw [List.append_assoc, List.append_assoc] at h
+  have h₁ := mirror_rule I (equiv_of_head_eq_implies_tail_equiv I h)
+  simp at h₁
+  have h₂ := mirror_rule I (equiv_of_head_eq_implies_tail_equiv I h₁)
+  simp at h₂
+  exact h₂
 
 end Trace
