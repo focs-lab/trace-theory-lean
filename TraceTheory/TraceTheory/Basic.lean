@@ -273,6 +273,10 @@ lemma cancel_right_snoc (w : List α) (a b : α) :
     -- = reverse (cancel_left (b :: reverse w) a) = reverse (b :: cancel_left (reverse w) a) = reverse (cancel_left (reverse w) a) ++ [b] = cancel_right w a ++ [b]
     simp [cancel_right, h]
 
+lemma cancel_left_eq_rev_cancel_right_rev (w : List α) (a : α) :
+    cancel_left w a = reverse (cancel_right (reverse w) a) := by
+  simp [cancel_right]
+
 /--
   If the symbol `a` is not in the alphabet, then projecting and then cancelling `a` from the right does nothing.
 -/

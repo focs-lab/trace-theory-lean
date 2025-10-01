@@ -56,7 +56,6 @@ inductive TraceEquiv : List α → List α → Prop
 
 omit [DecidableEq α] in
 variable (I) in
-@[simp]
 lemma equiv_implies_length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
     w₁.length = w₂.length := by
   induction h with
@@ -73,7 +72,6 @@ lemma equiv_implies_length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂)
 
 omit [DecidableEq α] in
 variable (I) in
-@[simp]
 lemma equiv_implies_alph_eq {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) :
     (a ∈ w₁ ↔ a ∈ w₂) := by
   induction h with
@@ -92,7 +90,6 @@ lemma equiv_implies_alph_eq {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w�
 
 omit [DecidableEq α] in
 variable (I) in
-@[simp]
 lemma mirror_rule {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂) : -- (1.6)
     TraceEquiv I w₁.reverse w₂.reverse := by
   induction h with
@@ -128,7 +125,7 @@ lemma cancel_right_over_concat {w₁ w₂ : List α} (a : α) :
         simp [ha, heq, ih]
 
 variable (I) in
-lemma cancellation_property {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) : -- (1.7)
+lemma cancellation_rule {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) : -- (1.7)
     TraceEquiv I (w₁ ÷ a) (w₂ ÷ a) := by
   induction h with
   | swap b c hbc =>
@@ -160,7 +157,12 @@ lemma cancellation_property {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w�
       exact ih₁.compat t₂
 
 variable (I) in
-@[simp]
+lemma cancellation_rule_left {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) :
+    TraceEquiv I (w₁.cancel_left a) (w₂.cancel_left a) := by
+  rw [List.cancel_left_eq_rev_cancel_right_rev, List.cancel_left_eq_rev_cancel_right_rev]
+  exact mirror_rule I (cancellation_rule I a (mirror_rule I h))
+
+variable (I) in
 lemma projection_rule {w₁ w₂ : List α} (Sigma : Alphabet α) (h : TraceEquiv I w₁ w₂) : -- (1.8)
     TraceEquiv I (w₁.proj Sigma) (w₂.proj Sigma) := by
   induction h with
@@ -308,7 +310,6 @@ lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, 
       exact ih₁ hne hx hy
 
 variable (I) in
-@[simp]
 lemma equiv_of_head_eq_implies_tail_equiv {u v w : List α}
     (h : TraceEquiv I (w ++ u) (w ++ v)) :
     TraceEquiv I u v := by
@@ -318,48 +319,65 @@ lemma equiv_of_head_eq_implies_tail_equiv {u v w : List α}
     exact h
   | cons a w' ih =>
     simp at h
-    have h' := mirror_rule I (cancellation_property I a (mirror_rule I h))
-    simp at h'
-    exact ih h'
+    replace h := cancellation_rule_left I a h
+    simp at h
+    exact ih h
+
+variable (I) in
+lemma equiv_of_tail_eq_implies_head_equiv {u v w : List α}
+    (h : TraceEquiv I (u ++ w) (v ++ w)) :
+    TraceEquiv I u v := by
+  replace h := mirror_rule I h
+  simp at h
+  replace h := mirror_rule I (equiv_of_head_eq_implies_tail_equiv I h)
+  simp at h
+  exact h
 
 variable (I) in
 lemma tail_lemma {u v : List α} {a b : α}
-    (h_ua_vb : TraceEquiv I (u ++ [a]) (v ++ [b])) (hne : a ≠ b) : -- (1.9)
+    (h : TraceEquiv I (u ++ [a]) (v ++ [b])) (hne : a ≠ b) : -- (1.9)
     I.rel a b ∧ ∃ w, TraceEquiv I u (w ++ [b]) ∧ TraceEquiv I v (w ++ [a]) := by
-  have h_ub'_va' : TraceEquiv I (u ÷ b) (v ÷ a) := by
-    have h_cancel := cancellation_property I b (cancellation_property I a h_ua_vb)
-    simp [hne] at h_cancel
-    exact h_cancel
-  have h_u_va'b : TraceEquiv I u ((v ÷ a) ++ [b]) := by
-    have h_cancel := cancellation_property I a h_ua_vb
-    simp [hne] at h_cancel
-    exact h_cancel
-  have h_v_ub'a : TraceEquiv I v ((u ÷ b) ++ [a]) := by
-    have h_cancel := cancellation_property I b h_ua_vb
-    simp [hne.symm] at h_cancel
-    exact h_cancel.symm
-  have h_u_ub'b : TraceEquiv I u ((u ÷ b) ++ [b]) :=
-    h_u_va'b.trans (h_ub'_va'.compat (TraceEquiv.refl [b])).symm
-  have h_ua_ub'ba : TraceEquiv I (u ++ [a]) ((u ÷ b) ++ [b] ++ [a]) :=
-    h_u_ub'b.compat (TraceEquiv.refl [a])
-  have h_vb_ub'ab : TraceEquiv I (v ++ [b]) ((u ÷ b) ++ [a] ++ [b]) :=
-    h_v_ub'a.compat (TraceEquiv.refl [b])
-  have h_tail : TraceEquiv I ((u ÷ b) ++ [a, b]) ((u ÷ b) ++ [b, a]) := by
-    have h' := h_vb_ub'ab.symm.trans (h_ua_vb.symm.trans h_ua_ub'ba)
-    simp at h'
-    exact h'
-  have h_ab_ba : TraceEquiv I [a, b] [b, a] := equiv_of_head_eq_implies_tail_equiv I h_tail
-  exact ⟨equiv_and_ne_implies_independence I h_ab_ba hne, ⟨u ÷ b, ⟨h_u_ub'b, h_v_ub'a⟩⟩⟩
+  have h_cancel_a := by simpa [hne] using cancellation_rule I a h
+  have h_cancel_b := by simpa [hne.symm] using (cancellation_rule I b h).symm
+  have h_cancel_ab := by simpa [hne] using cancellation_rule I b h_cancel_a
+  have h_cancel_b_concat_b := h_cancel_a.trans (h_cancel_ab.compat (TraceEquiv.refl [b])).symm
+  have h_cancel_b_concat_ba := h_cancel_b_concat_b.compat (TraceEquiv.refl [a])
+  have h_cancel_b_concat_ab := h_cancel_b.compat (TraceEquiv.refl [b])
+  have h_tail := by simpa using h_cancel_b_concat_ab.symm.trans (h.symm.trans h_cancel_b_concat_ba)
+  have h_ab_ba := equiv_of_head_eq_implies_tail_equiv I h_tail
+  exact ⟨equiv_and_ne_implies_independence I h_ab_ba hne,
+         ⟨u ÷ b,
+          ⟨h_cancel_b_concat_b, h_cancel_b⟩⟩⟩
 
 variable (I) in
 lemma equiv_of_head_eq_tail_implies_mid_equiv {u v x y : List α}
     (h : TraceEquiv I (x ++ u ++ y) (x ++ v ++ y)) : -- (1.10)
     TraceEquiv I u v := by
   rw [List.append_assoc, List.append_assoc] at h
-  have h₁ := mirror_rule I (equiv_of_head_eq_implies_tail_equiv I h)
-  simp at h₁
-  have h₂ := mirror_rule I (equiv_of_head_eq_implies_tail_equiv I h₁)
-  simp at h₂
-  exact h₂
+  replace h := equiv_of_head_eq_implies_tail_equiv I h
+  replace h := equiv_of_tail_eq_implies_head_equiv I h
+  exact h
+
+variable (I) in
+lemma commutation_lemma {u v w : List α} {a : α}
+    (h : TraceEquiv I (u ++ [a] ++ v) (w ++ [a])) (hav : a ∉ v) : -- (1.3.3)
+    ∀ b ∈ v, I.rel a b := by
+  induction v using List.induction_right generalizing w with
+  | nil =>
+    simp
+  | snoc x b ih =>
+    intro b' hb'
+    simp at hb' hav
+    rcases hav with ⟨hax, hab⟩
+    rw [eq_comm] at hab
+    rw [← List.append_assoc] at h
+    have ⟨hr, _⟩ := tail_lemma I h hab
+    replace h := cancellation_rule I b h
+    simp only [List.cancel_right_snoc, hab, ↓reduceIte] at h
+    replace h := ih h hax
+    rcases hb' with hb'x | hb'b
+    · exact h b' hb'x
+    · rw [← hb'b] at hr
+      exact I.symm b' a hr
 
 end Trace
