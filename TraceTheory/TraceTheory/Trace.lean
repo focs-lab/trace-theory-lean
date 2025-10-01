@@ -5,20 +5,20 @@ variable {α : Type*} [DecidableEq α]
 
 namespace Trace
 
-/-- A dependence relation is a finite, reflexive, and symmetric relation. -/
-structure Dependence (α : Type*) where
+/-- A dependency is a finite, reflexive, and symmetric relation. -/
+structure Dependency (α : Type*) where
   rel : α → α → Prop
   refl : ∀ a, rel a a
   symm: ∀ a b, rel a b → rel b a
 
-/-- An independence relation is a finite, irreflexive, and symmetric relation. -/
-structure Independence (α : Type*) where
+/-- An independency is a finite, irreflexive, and symmetric relation. -/
+structure Independency (α : Type*) where
   rel : α → α → Prop
   irrefl : ∀ a, ¬ rel a a
   symm : ∀ a b, rel a b → rel b a
 
 /-- The Independency relation induced by a Dependency `D`. -/
-def inducedIndependency {α : Type*} (D : Dependence α) : Independence α :=
+def inducedIndependency {α : Type*} (D : Dependency α) : Independency α :=
   { rel    := fun a b => ¬ D.rel a b,
     irrefl := by
       intro a h
@@ -27,7 +27,7 @@ def inducedIndependency {α : Type*} (D : Dependence α) : Independence α :=
       intro a b h
       exact h ∘ (D.symm b a) }
 
-variable {I : Independence α}
+variable {I : Independency α}
 
 variable (I) in
 /--
@@ -359,25 +359,38 @@ lemma equiv_of_head_eq_tail_implies_mid_equiv {u v x y : List α}
   exact h
 
 variable (I) in
+@[simp]
+def independent (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
+
+variable (I) in
 lemma commutation_lemma {u v w : List α} {a : α}
     (h : TraceEquiv I (u ++ [a] ++ v) (w ++ [a])) (hav : a ∉ v) : -- (1.3.3)
-    ∀ b ∈ v, I.rel a b := by
+    independent I [a] v := by
   induction v using List.induction_right generalizing w with
   | nil =>
     simp
   | snoc x b ih =>
+    simp
     intro b' hb'
     simp at hb' hav
     rcases hav with ⟨hax, hab⟩
     rw [eq_comm] at hab
     rw [← List.append_assoc] at h
-    have ⟨hr, _⟩ := tail_lemma I h hab
+    have hr := (tail_lemma I h hab).left
     replace h := cancellation_rule I b h
     simp only [List.cancel_right_snoc, hab, ↓reduceIte] at h
     replace h := ih h hax
+    simp at h
     rcases hb' with hb'x | hb'b
     · exact h b' hb'x
     · rw [← hb'b] at hr
       exact I.symm b' a hr
+
+-- variable (I) in
+-- lemma levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : -- (1.11)
+--     ∃ z₁ z₂ z₃ z₄, independent I z₂ z₃
+--     ∧ TraceEquiv I u (z₁ ++ z₂) ∧ TraceEquiv I v (z₃ ++ z₄)
+--     ∧ TraceEquiv I x (z₁ ++ z₃) ∧ TraceEquiv I y (z₂ ++ z₄) := by
+--   sorry
 
 end Trace
