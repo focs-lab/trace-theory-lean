@@ -108,22 +108,6 @@ lemma mirror_rule {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂) : -- (1.6)
 
 infixl:65 " ÷ " => List.cancel_right
 
-@[simp]
-lemma cancel_right_over_concat {w₁ w₂ : List α} (a : α) :
-    (w₁ ++ w₂) ÷ a = if (a ∈ w₂) then w₁ ++ (w₂ ÷ a) else (w₁ ÷ a) ++ w₂ := by
-  induction w₂ using List.induction_right with
-  | nil =>
-    simp
-  | snoc w₂' a' ih =>
-    nth_rw 1 [← List.append_assoc]
-    by_cases ha : a ∈ w₂'
-    all_goals
-      by_cases heq : a = a'
-      · rw [List.cancel_right_snoc]
-        simp [heq]
-      · rw [List.cancel_right_snoc]
-        simp [ha, heq, ih]
-
 variable (I) in
 lemma cancellation_rule {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) : -- (1.7)
     TraceEquiv I (w₁ ÷ a) (w₂ ÷ a) := by

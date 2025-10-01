@@ -317,6 +317,23 @@ lemma singleton_cancel_right {a : α} : [a].cancel_right a = [] := by
   rw [← List.nil_append [a], List.cancel_right_snoc]
   simp
 
+@[simp]
+lemma cancel_right_over_concat {w₁ w₂ : List α} (a : α) :
+    (w₁ ++ w₂).cancel_right a
+      = if (a ∈ w₂) then w₁ ++ (w₂.cancel_right a) else (w₁.cancel_right a) ++ w₂ := by
+  induction w₂ using List.induction_right with
+  | nil =>
+    simp
+  | snoc w₂' a' ih =>
+    nth_rw 1 [← List.append_assoc]
+    by_cases ha : a ∈ w₂'
+    all_goals
+      by_cases heq : a = a'
+      · rw [List.cancel_right_snoc]
+        simp [heq]
+      · rw [List.cancel_right_snoc]
+        simp [ha, heq, ih]
+
 /--
   Projection commutes with right-cancellation: projecting then cancelling is the same as cancelling then projecting.
 -/
