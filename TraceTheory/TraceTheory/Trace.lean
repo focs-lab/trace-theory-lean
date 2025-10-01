@@ -175,23 +175,11 @@ lemma equiv_of_length_two {a b : α} {w : List α} (h : TraceEquiv I [a, b] w) :
   rw [hw] at h ⊢
   by_cases heq : a = b
   · subst heq
-    have hc : c = a := by
-      have h' := (equiv_implies_alph_eq I c h.symm).mp
-      simp at h'
-      exact h'
-    have hd : d = a := by
-      have h' := (equiv_implies_alph_eq I d h.symm).mp
-      simp at h'
-      exact h'
+    have hc : c = a := by simpa using (equiv_implies_alph_eq I c h.symm).mp
+    have hd : d = a := by simpa using (equiv_implies_alph_eq I d h.symm).mp
     simp [hc, hd]
-  · have ha : a = c ∨ a = d := by
-      have h' := (equiv_implies_alph_eq I a h).mp
-      simp at h'
-      exact h'
-    have hb : b = c ∨ b = d := by
-      have h' := (equiv_implies_alph_eq I b h).mp
-      simp at h'
-      exact h'
+  · have ha : a = c ∨ a = d := by simpa using (equiv_implies_alph_eq I a h).mp
+    have hb : b = c ∨ b = d := by simpa using (equiv_implies_alph_eq I b h).mp
     rcases ha with hac | had <;> rcases hb with hbc | hbd
     · rw [← hbc] at hac
       contradiction
