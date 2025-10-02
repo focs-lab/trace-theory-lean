@@ -357,11 +357,72 @@ lemma commutation_lemma {u v w : List α} {a : α}
     · rw [← hb'b] at hr
       exact I.symm b' a hr
 
--- variable (I) in
--- lemma levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : -- (1.11)
---     ∃ z₁ z₂ z₃ z₄, independent I z₂ z₃
---     ∧ TraceEquiv I u (z₁ ++ z₂) ∧ TraceEquiv I v (z₃ ++ z₄)
---     ∧ TraceEquiv I x (z₁ ++ z₃) ∧ TraceEquiv I y (z₂ ++ z₄) := by
---   sorry
+lemma right_most_occurrence {w : List α} {a : α} (h : a ∈ w) :
+    ∃ w' w'', w = w' ++ [a] ++ w'' ∧ a ∉ w'' := by
+  induction w using List.induction_right with
+  | nil =>
+    contradiction
+  | snoc v b ih =>
+    by_cases hab : a = b
+    · use v, []
+      simp [hab]
+    · simp [hab] at h
+      have ⟨w', w'', ⟨h_concat, h_in⟩⟩ := ih h
+      use w', w'' ++ [b]
+      simp [h_concat, h_in, hab]
+
+omit [DecidableEq α] in
+variable (I) in
+lemma equiv_of_indep_symb_commute_list {w : List α} {a : α} (h : independent I [a] w) :
+    TraceEquiv I (w ++ [a]) ([a] ++ w) := by
+  induction w using List.induction_right with
+  | nil =>
+    exact TraceEquiv.refl [a]
+  | snoc w' b ih =>
+    simp at h
+    have haw' : independent I [a] w' := by
+      simp
+      intro b' hb'
+      exact h b' (Or.intro_left (b' = b) hb')
+    have ht := ih haw'
+    have hb := ht.compat (TraceEquiv.refl [b])
+    have hab : TraceEquiv I (w' ++ [b] ++ [a]) (w' ++ [a] ++ [b]) := by
+      have hr := h b
+      simp at hr
+      simp
+      exact (TraceEquiv.refl w').compat (TraceEquiv.swap b a (I.symm a b hr))
+    exact hab.trans hb
+
+variable (I) in
+theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : -- (1.11)
+    ∃ z₁ z₂ z₃ z₄, independent I z₂ z₃
+    ∧ TraceEquiv I u (z₁ ++ z₂) ∧ TraceEquiv I v (z₃ ++ z₄)
+    ∧ TraceEquiv I x (z₁ ++ z₃) ∧ TraceEquiv I y (z₂ ++ z₄) := by
+  induction y using List.induction_right generalizing u v with
+  | nil =>
+    use u, [], v, []
+    simp [List.append_nil, TraceEquiv.refl]
+    simp [List.append_nil] at h
+    exact TraceEquiv.symm h
+  | snoc w e ih =>
+    by_cases he : e ∈ v
+    · have ⟨v', v'', ⟨hv, hv''⟩⟩ := right_most_occurrence he
+      have h_cancel := cancellation_rule I e h
+      rw [hv, ← List.append_assoc, List.cancel_right_over_concat] at h_cancel
+      simp [hv''] at h_cancel
+      have ⟨z₁', z₂', z₃', z₄', ⟨h_indep, ht₁, ht₂, ht₃, ht₄⟩⟩ := ih h_cancel
+      use z₁', z₂', z₃', z₄' ++ [e], h_indep
+      replace ht₄ := ht₄.compat (TraceEquiv.refl [e])
+      replace ht₂ := ht₂.compat (TraceEquiv.refl [e])
+      have he : TraceEquiv I (v'' ++ [e]) ([e] ++ v'') := by
+        rw [hv, ← List.append_assoc, ← List.append_assoc, ← List.append_assoc] at h
+        have h_indep := commutation_lemma I h hv''
+        exact equiv_of_indep_symb_commute_list I h_indep
+      have hv'e := TraceEquiv.symm ((TraceEquiv.refl v').compat he)
+      rw [← List.append_assoc, ← List.append_assoc, ← hv] at hv'e
+      replace ht₂ := hv'e.trans ht₂
+      rw [List.append_assoc] at ht₂ ht₄
+      exact ⟨ht₁, ht₂, ht₃, ht₄⟩
+    · sorry
 
 end Trace
