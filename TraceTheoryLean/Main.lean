@@ -1376,7 +1376,7 @@ theorem arbitrary_morphism_finer
 
 /-
 
-Generated block for proving Theorem 1.3.8,
+Addendum for proving Theorem 1.3.8,
 on uniqueness (up to isomorphism) of dependency morphism image.
 
 -/
@@ -1460,13 +1460,13 @@ end
 -- Theorem 1.3.8 (Pg. 13)
 theorem morphism_images_isomorphic (φ : I.DependencyMorphism M) (ψ : I.DependencyMorphism N) :
     Nonempty (M ≃* N) := by
-  have hM : ∀ (x y : FreeMonoid α), φ.hom x = φ.hom y → ψ.hom x = ψ.hom y := by
+  have h : ∀ (x y : FreeMonoid α), φ.hom x = φ.hom y ↔ ψ.hom x = ψ.hom y := by
     intro x y
-    exact arbitrary_morphism_finer
-  have hN : ∀ (x y : FreeMonoid α), ψ.hom x = ψ.hom y → φ.hom x = φ.hom y := by
-    intro x y
-    exact arbitrary_morphism_finer
-  exact ⟨monoidEquiv φ.hom ψ.hom φ.surj ψ.surj hM hN⟩
+    constructor
+    all_goals exact arbitrary_morphism_finer
+  exact ⟨monoidEquiv φ.hom ψ.hom φ.surj ψ.surj
+    (fun (x y) => (h x y).mp)
+    (fun (x y) => (h x y).mpr)⟩
 
 end Independency
 
@@ -1819,6 +1819,7 @@ def toRep (G : D.DependenceGraph V) : D.DepGraphRep where
 
 def toDepGraph : FreeMonoid α →* D.DepGraphMonoid where
   toFun := fun w => Quotient.mk'' (toRep (toDepGraphIndiv w))
+
   map_one' := by
     simp [Quotient.mk'']
     apply Quotient.sound
@@ -1838,58 +1839,47 @@ def toDepGraph : FreeMonoid α →* D.DepGraphMonoid where
     -- then prove it (vacuously) preserves labels & arcs i.e. is an isomorphism
     · simp
     · simp
+
   map_mul' s t := by
     simp [Quotient.mk'']
     apply Quotient.sound
     constructor
     simp [DepGraphRep.mul, toRep]
+    have hconcat : List.length (s * t) = List.length s + List.length t := by
+      simp [<- List.length_append]
+      rfl
     refine ⟨?_, ?_, ?_⟩
-    · have : List.length (s * t) = List.length s + List.length t := by
-        simp [<- List.length_append]
-        rfl
-      rw [this]
-      /- write the bijection between graph of string concat
+    · /- write the bijection between graph of string concat
        <-> compose of string graphs -/
-      refine ⟨(fun n =>
+      refine ⟨(fun n => -- forward map
         if h : n.val < s.length then
           Sum.inl ⟨n.val, h⟩
         else
           have h' : n.val - s.length < t.length := by
-            rw [Nat.sub_lt_iff_lt_add]
-            · have : s.length = List.length s := by rfl
-              rw [this]
-              have : t.length = List.length t := by rfl
-              rw [this]
-              have : List.length t + List.length s = List.length s + List.length t := by
-                rw [Nat.add_comm]
-              rw [this]
-              exact n.2
-            · exact Nat.le_of_not_lt h
+            rw [show List.length s = s.length from rfl] at hconcat
+            rw [show List.length t = t.length from rfl] at hconcat
+            omega
           Sum.inr ⟨n.val - s.length, h'⟩),
-      (fun n =>
+      (fun n => -- inverse map
         match n with
         | Sum.inl n =>
-          have h : ↑n < List.length s + List.length t := by
+          have h : n < List.length (s * t) := by
             have ⟨n, h⟩ := n
+            rw [hconcat]
             simp [h, Nat.lt_add_right]
           ⟨n, h⟩
         | Sum.inr n =>
-          have h : ↑n + List.length s < List.length s + List.length t := by
-            have ⟨n, h⟩ := n
-            simp
-            rw [Nat.add_comm]
-            simp
-            exact h
-          ⟨n + s.length, h⟩), ?_, ?_⟩
-      · simp [Function.LeftInverse]
-        intro n
+          have h : n + List.length s < List.length (s * t) := by omega
+          ⟨n + s.length, h⟩),
+      ?_, ?_⟩
+      · simp [Function.LeftInverse] -- prove inv ∘ forward = id
+        intro ⟨n, tn⟩
         by_cases hn : n < s.length
         · simp [hn]
         · simp [hn]
           simp at hn
-          -- rw [Nat.sub_add_cancel hn]
-          sorry
-      · simp [Function.RightInverse, Function.LeftInverse]
+          exact Nat.sub_add_cancel hn
+      · simp [Function.RightInverse, Function.LeftInverse] -- prove forward ∘ inv = id
         intro ⟨n, hn⟩
         simp
         have : s.length = List.length s := by rfl
@@ -1897,13 +1887,142 @@ def toDepGraph : FreeMonoid α →* D.DepGraphMonoid where
         exact hn
     -- prove it preserves labels
     · simp [compose]
-      intro n
-      sorry
-      -- by_cases hn : n < s.length
-      -- · simp [hn]
-      -- · simp [hn]
+      intro ⟨n, tn⟩
+      by_cases hn : n < s.length
+      · simp [hn, toDepGraphIndiv]
+        have : (FreeMonoid.toList s ++ FreeMonoid.toList t)[n] = (FreeMonoid.toList s)[n] := by
+          apply List.getElem_append_left
+        exact this
+      · simp [hn, toDepGraphIndiv]
+        simp at hn
+        have ht : n - s.length < t.length := by
+          have : n < List.length s + List.length t := by omega
+          have : n < s.length + t.length := by exact this
+          omega
+        have : (FreeMonoid.toList s ++ FreeMonoid.toList t)[n]
+             = (FreeMonoid.toList t)[n - s.length]'ht := by
+          apply List.getElem_append_right
+          exact hn
+        exact this
     -- and prove it preserves arcs
-    · sorry
+    · intro ⟨u, tu⟩ ⟨v, tv⟩
+      simp [compose]
+      by_cases hu : u < s.length <;> by_cases hv : v < s.length
+      · simp [hu, hv, toDepGraphIndiv]
+        intro h_uv
+        have : D.r (FreeMonoid.toList (s * t))[u] (FreeMonoid.toList (s * t))[v]
+             ↔ D.r (FreeMonoid.toList s)[u] (FreeMonoid.toList s)[v] := by
+          simp
+          repeat rw [List.getElem_append_left]
+        exact this
+      · simp [hu, hv, toDepGraphIndiv]
+        simp [show u < v by omega]
+        have h_vt : v - s.length < t.length := by
+          have : v < (s * t).length := by exact tv
+          simp [FreeMonoid.length_mul] at this
+          omega
+        have : D.r (FreeMonoid.toList (s * t))[u] (FreeMonoid.toList (s * t))[v]
+             ↔ D.r (FreeMonoid.toList s)[u] (FreeMonoid.toList t)[v - s.length] := by
+          simp
+          rw [List.getElem_append_left, List.getElem_append_right]
+          rfl
+          simp at hv
+          exact hv
+        exact this
+      · simp [hu, hv, toDepGraphIndiv]
+        intro h_uv
+        omega
+      · simp [hu, hv, toDepGraphIndiv]
+        by_cases h_uv : u < v
+        · simp [h_uv, show u - s.length < v - s.length by omega]
+          have h_ut : u - s.length < t.length := by
+            have : u < (s * t).length := by exact tu
+            simp [FreeMonoid.length_mul] at this
+            omega
+          have h_vt : v - s.length < t.length := by
+            have : v < (s * t).length := by exact tv
+            simp [FreeMonoid.length_mul] at this
+            omega
+          have : D.r (FreeMonoid.toList (s * t))[u] (FreeMonoid.toList (s * t))[v]
+               ↔ D.r (FreeMonoid.toList t)[u - s.length] (FreeMonoid.toList t)[v - s.length] := by
+            simp
+            repeat rw [List.getElem_append_right]
+            rfl
+            · simp at hv
+              exact hv
+            · simp at hu
+              exact hu
+          exact this
+        · omega
+
+/- omit [Fintype V] in
+lemma anc_has_ssub_ancset {G : D.DependenceGraph V} {u v : V} (h : Relation.TransGen G.adj u v) :
+    {x : V | Relation.TransGen G.adj x u} ⊂ {x : V | Relation.TransGen G.adj x v} := by
+  constructor
+  · simp [Set.subset_def]
+    intro x xh
+    exact Relation.TransGen.trans xh h
+  · simp [Set.subset_def]
+    use u
+    exact And.intro h (G.acyclic u)
+
+theorem has_min_vertex [Nonempty V] (G : D.DependenceGraph V) :
+    ∃ v, ∀ u, ¬ G.adj u v := by
+  inhabit V
+  have v := inhabited_h.default
+  have : DecidableRel (Relation.TransGen G.adj) := by exact Classical.decRel (Relation.TransGen G.adj)
+  -- Create the Finset using a decidable predicate
+  let s : Finset V := Finset.univ.filter (fun x => Relation.TransGen G.adj x v)
+  let n : ℕ := Finset.card
+  induction Finset.card {x | Relation.TransGen G.adj x v} with
+  | zero => sorry
+  | succ n ih =>
+
+-/
+
+lemma morphism_compose_dist {u v : List α} :
+    (toDepGraph u) * (toDepGraph v) = toDepGraph (u ++ v) := by
+  sorry
+
+
+theorem has_min_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∀ u, ¬ G.adj u v := by
+  classical
+  let anccard : V → ℕ := fun v => Fintype.card {x // Relation.TransGen G.adj x v}
+  have measure_lt_of_adj : ∀ {u v}, G.adj u v → anccard u < anccard v := by
+    intro u v h
+    let f : {x // Relation.TransGen G.adj x u} → {x // Relation.TransGen G.adj x v} :=
+      fun ⟨x, hx⟩ => ⟨x, Relation.TransGen.trans hx (Relation.TransGen.single h)⟩
+    have inj : Function.Injective f := by
+      intro a b h'
+      cases a; cases b
+      simp [f] at h'
+      simp
+      exact h'
+    have not_surj : ¬ Function.Surjective f := by
+      simp [Function.Surjective]
+      use u, (Relation.TransGen.single h)
+      intro x hx
+      simp [f]
+      apply by_contradiction
+      intro h_xu
+      simp at h_xu
+      rw [h_xu] at hx
+      simp [G.acyclic] at hx
+    exact Fintype.card_lt_of_injective_not_surjective f inj not_surj
+  have well_founded : WellFounded (fun v1 v2 => anccard v1 < anccard v2) :=
+    InvImage.wf anccard (by exact wellFounded_lt)
+  obtain ⟨v⟩ := ‹Nonempty V›
+  induction v using (WellFounded.induction well_founded) with
+  | h v ih =>
+    by_cases h : ∃ u, G.adj u v
+    · rcases h with ⟨u, hu⟩
+      have : anccard u < anccard v := measure_lt_of_adj hu
+      rcases ih u this with ⟨w, hw⟩
+      exact ⟨w, hw⟩
+    · exact ⟨v, by simpa using h⟩
+
+theorem min_vertex_compose [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∃ H, G = compose {v} H := by
+  sorry
 
 end DepGraphMonoid
 
