@@ -334,6 +334,8 @@ lemma cancel_right_over_concat {w₁ w₂ : List α} (a : α) :
       · rw [List.cancel_right_snoc]
         simp [ha, heq, ih]
 
+infixl:65 " ÷ " => List.cancel_right
+
 /--
   Projection commutes with right-cancellation: projecting then cancelling is the same as cancelling then projecting.
 -/

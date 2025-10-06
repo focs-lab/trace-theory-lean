@@ -106,8 +106,6 @@ lemma mirror_rule {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂) : -- (1.6)
     simp
     exact ih₂.compat ih₁
 
-infixl:65 " ÷ " => List.cancel_right
-
 variable (I) in
 lemma cancellation_rule {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) : -- (1.7)
     TraceEquiv I (w₁ ÷ a) (w₂ ÷ a) := by
