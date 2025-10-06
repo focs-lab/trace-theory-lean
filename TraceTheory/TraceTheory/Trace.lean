@@ -386,8 +386,7 @@ lemma equiv_of_indep_symb_commute_list {w : List α} {a : α} (h : independent I
     have hb := ht.compat (TraceEquiv.refl [b])
     have hab : TraceEquiv I (w' ++ [b] ++ [a]) (w' ++ [a] ++ [b]) := by
       have hr := h b
-      simp at hr
-      simp
+      simp at hr ⊢
       exact (TraceEquiv.refl w').compat (TraceEquiv.swap b a (I.symm a b hr))
     exact hab.trans hb
 
@@ -440,14 +439,13 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
       have ⟨z₁', z₂', z₃', z₄', ⟨h_indep, ht₁, ht₂, ht₃, ht₄⟩⟩ := ih h_cancel
       use z₁', z₂', z₃', z₄' ++ [e], h_indep
       replace ht₄ := ht₄.compat (TraceEquiv.refl [e])
-      replace ht₂ := ht₂.compat (TraceEquiv.refl [e])
       have he : TraceEquiv I (v'' ++ [e]) ([e] ++ v'') := by
         rw [hv, ← List.append_assoc, ← List.append_assoc, ← List.append_assoc] at h
         have h_indep := indep_of_equiv_rightmost_symbol I h hv''
         exact equiv_of_indep_symb_commute_list I h_indep
       have hv'e := TraceEquiv.symm ((TraceEquiv.refl v').compat he)
       rw [← List.append_assoc, ← List.append_assoc, ← hv] at hv'e
-      replace ht₂ := hv'e.trans ht₂
+      replace ht₂ := hv'e.trans (ht₂.compat (TraceEquiv.refl [e]))
       rw [List.append_assoc] at ht₂ ht₄
       exact ⟨ht₁, ht₂, ht₃, ht₄⟩
     · have heu : e ∈ u := by
@@ -469,12 +467,9 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
         simp at ha h_indep
         rcases ha with haz₂' | hae
         · exact h_indep a haz₂' b hb
-        · have h_indep_ev := (indep_of_concat I h_indep_e).right
-          have h_equiv := indep_of_indep_of_equiv I h_indep_ev ht₂
+        · have h_equiv := indep_of_indep_of_equiv I (indep_of_concat I h_indep_e).right ht₂
           simp [← hae] at h_equiv
-          apply h_equiv
-          left
-          apply hb
+          exact h_equiv b (Or.intro_left (b ∈ z₄') hb)
       use z₁', z₂' ++ [e], z₃', z₄', h_indep
       rw [hu, ← List.append_assoc]
       have heu'' : TraceEquiv I (u'' ++ [e]) ([e] ++ u'') :=
@@ -486,9 +481,9 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
         have h_indep_ev := (indep_of_concat I h_indep_e).right
         have h_indep_ez₃'z₄' := indep_of_indep_of_equiv I h_indep_ev ht₂
         exact equiv_of_indep_symb_commute_list I (indep_of_concat I h_indep_ez₃'z₄').right
-      have hz₄'e := (TraceEquiv.refl z₂').compat hez₄'
-      rw [← List.append_assoc, ← List.append_assoc] at hz₄'e
-      replace ht₄ := (ht₄.compat (TraceEquiv.refl [e])).trans hz₄'e
+      have hz₂'e := (TraceEquiv.refl z₂').compat hez₄'
+      rw [← List.append_assoc, ← List.append_assoc] at hz₂'e
+      replace ht₄ := (ht₄.compat (TraceEquiv.refl [e])).trans hz₂'e
       exact ⟨ht₁, ht₂, ht₃, ht₄⟩
 
 end Trace
