@@ -5,20 +5,20 @@ variable {α : Type*} [DecidableEq α]
 
 namespace Trace
 
-/-- A dependency is a finite, reflexive, and symmetric relation. -/
-structure Dependency (α : Type*) where
+/-- A dependence is a finite, reflexive, and symmetric relation. -/
+structure Dependence (α : Type*) where
   rel : α → α → Prop
   refl : ∀ a, rel a a
   symm: ∀ a b, rel a b → rel b a
 
-/-- An independency is a finite, irreflexive, and symmetric relation. -/
-structure Independency (α : Type*) where
+/-- An independence is a finite, irreflexive, and symmetric relation. -/
+structure Independence (α : Type*) where
   rel : α → α → Prop
   irrefl : ∀ a, ¬ rel a a
   symm : ∀ a b, rel a b → rel b a
 
-/-- The Independency relation induced by a Dependency `D`. -/
-def inducedIndependency {α : Type*} (D : Dependency α) : Independency α :=
+/-- The Independence relation induced by a Dependence `D`. -/
+def inducedIndependency {α : Type*} (D : Dependence α) : Independence α :=
   { rel    := fun a b => ¬ D.rel a b,
     irrefl := by
       intro a h
@@ -27,7 +27,7 @@ def inducedIndependency {α : Type*} (D : Dependency α) : Independency α :=
       intro a b h
       exact h ∘ (D.symm b a) }
 
-variable {I : Independency α}
+variable {I : Independence α}
 
 variable (I) in
 /--
@@ -56,7 +56,7 @@ inductive TraceEquiv : List α → List α → Prop
 
 omit [DecidableEq α] in
 variable (I) in
-lemma equiv_implies_length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
+lemma length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
     w₁.length = w₂.length := by
   induction h with
   | swap _ _ _ =>
@@ -72,7 +72,7 @@ lemma equiv_implies_length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂)
 
 omit [DecidableEq α] in
 variable (I) in
-lemma equiv_implies_alph_eq {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) :
+lemma alphabet_eq {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) :
     (a ∈ w₁ ↔ a ∈ w₂) := by
   induction h with
   | swap _ _ _ =>
@@ -133,10 +133,10 @@ lemma cancellation_rule {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w�
   | compat t₁ t₂ ih₁ ih₂ =>
     rename_i l₃ _
     by_cases hal₃ : a ∈ l₃
-    · have hal₄ := (equiv_implies_alph_eq I a t₂).mp hal₃
+    · have hal₄ := (alphabet_eq I a t₂).mp hal₃
       simp [hal₃, hal₄]
       exact t₁.compat ih₂
-    · have hal₄ := (equiv_implies_alph_eq I a t₂).mpr.mt hal₃
+    · have hal₄ := (alphabet_eq I a t₂).mpr.mt hal₃
       simp [hal₃, hal₄]
       exact ih₁.compat t₂
 
@@ -168,18 +168,18 @@ lemma projection_rule {w₁ w₂ : List α} (Sigma : Alphabet α) (h : TraceEqui
     exact ih₁.compat ih₂
 
 variable (I) in
-lemma equiv_of_length_two {a b : α} {w : List α} (h : TraceEquiv I [a, b] w) :
+lemma equiv_length_eq_two {a b : α} {w : List α} (h : TraceEquiv I [a, b] w) :
     w = [a, b] ∨ w = [b, a] := by
-  have h_len := List.length_eq_two.mp (equiv_implies_length_eq I h).symm
+  have h_len := List.length_eq_two.mp (length_eq I h).symm
   rcases h_len with ⟨c, d, hw⟩
   rw [hw] at h ⊢
   by_cases heq : a = b
   · subst heq
-    have hc : c = a := by simpa using (equiv_implies_alph_eq I c h.symm).mp
-    have hd : d = a := by simpa using (equiv_implies_alph_eq I d h.symm).mp
+    have hc : c = a := by simpa using (alphabet_eq I c h.symm).mp
+    have hd : d = a := by simpa using (alphabet_eq I d h.symm).mp
     simp [hc, hd]
-  · have ha : a = c ∨ a = d := by simpa using (equiv_implies_alph_eq I a h).mp
-    have hb : b = c ∨ b = d := by simpa using (equiv_implies_alph_eq I b h).mp
+  · have ha : a = c ∨ a = d := by simpa using (alphabet_eq I a h).mp
+    have hb : b = c ∨ b = d := by simpa using (alphabet_eq I b h).mp
     rcases ha with hac | had <;> rcases hb with hbc | hbd
     · rw [← hbc] at hac
       contradiction
@@ -193,7 +193,7 @@ lemma equiv_of_length_two {a b : α} {w : List α} (h : TraceEquiv I [a, b] w) :
 omit [DecidableEq α] in
 variable (I) in
 @[simp]
-lemma equiv_of_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
+lemma equiv_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
   generalize hx : ([a] : List α) = x at h
   generalize hy : ([b] : List α) = y at h
   induction h generalizing a b with
@@ -205,8 +205,8 @@ lemma equiv_of_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
   | symm _ ih =>
     exact (ih hy hx).symm
   | trans t₁ t₂ _ _ =>
-    have ht₁ := equiv_implies_alph_eq I a t₁
-    have ht₂ := equiv_implies_alph_eq I a t₂
+    have ht₁ := alphabet_eq I a t₁
+    have ht₂ := alphabet_eq I a t₂
     have h_trans := ht₁.trans ht₂
     rw [← hx, ← hy] at h_trans
     simp at h_trans
@@ -215,16 +215,16 @@ lemma equiv_of_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
     rcases List.singleton_eq_append_iff.mp hx with ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩
     <;> rcases List.singleton_eq_append_iff.mp hy with ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩
     · exact ih₂ hl₃.symm hl₄.symm
-    · have h_t₁ := equiv_implies_length_eq I t₁
+    · have h_t₁ := length_eq I t₁
       rw [hl₁, hl₂] at h_t₁
       contradiction
-    · have h_t₁ := equiv_implies_length_eq I t₁
+    · have h_t₁ := length_eq I t₁
       rw [hl₁, hl₂] at h_t₁
       contradiction
     · exact ih₁ hl₁.symm hl₂.symm
 
 variable (I) in
-lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a ≠ b):
+lemma indep_of_equiv_of_neq {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a ≠ b):
     I.rel a b := by
   generalize hx : ([a, b] : List α) = x at h
   generalize hy : ([b, a] : List α) = y at h
@@ -242,7 +242,7 @@ lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, 
   | trans t₁ _ ih₁ ih₂ =>
     rename_i t _
     rw [← hx] at t₁
-    have ht := equiv_of_length_two I t₁
+    have ht := equiv_length_eq_two I t₁
     rcases ht with h_tab | h_tba
     · exact ih₂ hne h_tab.symm hy
     · exact ih₁ hne hx h_tba.symm
@@ -250,8 +250,8 @@ lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, 
     rename_i l₁ l₂ l₃ l₄
     have h_l₁l₃ : l₁.length + l₃.length = 2 := by simp [← List.length_append, ← hx]
     have h_l₂l₄ : l₂.length + l₄.length = 2 := by simp [← List.length_append, ← hy]
-    have h_t₁ := equiv_implies_length_eq I t₁
-    have h_t₂ := equiv_implies_length_eq I t₂
+    have h_t₁ := length_eq I t₁
+    have h_t₂ := length_eq I t₂
     rcases Nat.add_eq_two_iff.mp h_l₁l₃ with ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩
     <;> rcases Nat.add_eq_two_iff.mp h_l₂l₄ with ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩
     · rw [List.length_eq_zero_iff.mp hl₁, List.nil_append] at hx
@@ -268,7 +268,7 @@ lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, 
       simp [hc] at hx
       simp [hd] at hy
       rw [hc, hd] at t₁
-      have h_cd := equiv_of_singletons I t₁
+      have h_cd := equiv_singletons I t₁
       rw [← hx.left, ← hy.left] at h_cd
       contradiction
     · rw [hl₁, hl₂] at h_t₁
@@ -282,7 +282,7 @@ lemma equiv_and_ne_implies_independence {a b : α} (h : TraceEquiv I [a, b] [b, 
       exact ih₁ hne hx hy
 
 variable (I) in
-lemma equiv_of_head_eq_implies_tail_equiv {u v w : List α}
+lemma equiv_cancel_left {u v w : List α}
     (h : TraceEquiv I (w ++ u) (w ++ v)) :
     TraceEquiv I u v := by
   induction w with
@@ -296,17 +296,17 @@ lemma equiv_of_head_eq_implies_tail_equiv {u v w : List α}
     exact ih h
 
 variable (I) in
-lemma equiv_of_tail_eq_implies_head_equiv {u v w : List α}
+lemma equiv_cancel_right {u v w : List α}
     (h : TraceEquiv I (u ++ w) (v ++ w)) :
     TraceEquiv I u v := by
   replace h := mirror_rule I h
   simp at h
-  replace h := mirror_rule I (equiv_of_head_eq_implies_tail_equiv I h)
+  replace h := mirror_rule I (equiv_cancel_left I h)
   simp at h
   exact h
 
 variable (I) in
-lemma tail_lemma {u v : List α} {a b : α}
+lemma indep_and_decomp_of_equiv_of_neq_tail {u v : List α} {a b : α}
     (h : TraceEquiv I (u ++ [a]) (v ++ [b])) (hne : a ≠ b) : -- (1.9)
     I.rel a b ∧ ∃ w, TraceEquiv I u (w ++ [b]) ∧ TraceEquiv I v (w ++ [a]) := by
   have h_cancel_a := by simpa [hne] using cancellation_rule I a h
@@ -316,18 +316,18 @@ lemma tail_lemma {u v : List α} {a b : α}
   have h_cancel_b_concat_ba := h_cancel_b_concat_b.compat (TraceEquiv.refl [a])
   have h_cancel_b_concat_ab := h_cancel_b.compat (TraceEquiv.refl [b])
   have h_tail := by simpa using h_cancel_b_concat_ab.symm.trans (h.symm.trans h_cancel_b_concat_ba)
-  have h_ab_ba := equiv_of_head_eq_implies_tail_equiv I h_tail
-  exact ⟨equiv_and_ne_implies_independence I h_ab_ba hne,
+  have h_ab_ba := equiv_cancel_left I h_tail
+  exact ⟨indep_of_equiv_of_neq I h_ab_ba hne,
          ⟨u ÷ b,
           ⟨h_cancel_b_concat_b, h_cancel_b⟩⟩⟩
 
 variable (I) in
-lemma equiv_of_head_eq_tail_implies_mid_equiv {u v x y : List α}
+lemma equiv_cancel_left_right {u v x y : List α}
     (h : TraceEquiv I (x ++ u ++ y) (x ++ v ++ y)) : -- (1.10)
     TraceEquiv I u v := by
   rw [List.append_assoc, List.append_assoc] at h
-  replace h := equiv_of_head_eq_implies_tail_equiv I h
-  replace h := equiv_of_tail_eq_implies_head_equiv I h
+  replace h := equiv_cancel_left I h
+  replace h := equiv_cancel_right I h
   exact h
 
 variable (I) in
@@ -335,7 +335,7 @@ variable (I) in
 def independent (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
 
 variable (I) in
-lemma commutation_lemma {u v w : List α} {a : α}
+lemma indep_of_equiv_rightmost_symbol {u v w : List α} {a : α}
     (h : TraceEquiv I (u ++ [a] ++ v) (w ++ [a])) (hav : a ∉ v) : -- (1.3.3)
     independent I [a] v := by
   induction v using List.induction_right generalizing w with
@@ -348,7 +348,7 @@ lemma commutation_lemma {u v w : List α} {a : α}
     rcases hav with ⟨hax, hab⟩
     rw [eq_comm] at hab
     rw [← List.append_assoc] at h
-    have hr := (tail_lemma I h hab).left
+    have hr := (indep_and_decomp_of_equiv_of_neq_tail I h hab).left
     replace h := cancellation_rule I b h
     replace h := by simpa only [List.cancel_right_snoc, hab, ↓reduceIte] using h
     replace h := by simpa using ih h hax
@@ -393,6 +393,16 @@ lemma equiv_of_indep_symb_commute_list {w : List α} {a : α} (h : independent I
       exact (TraceEquiv.refl w').compat (TraceEquiv.swap b a (I.symm a b hr))
     exact hab.trans hb
 
+omit [DecidableEq α] in
+variable (I) in
+lemma indep_of_indep_of_equiv {w₁ w₂ w₃: List α}
+    (h : independent I w₁ w₂) (ht : TraceEquiv I w₂ w₃) :
+    independent I w₁ w₃ := by
+  intro a ha b hb
+  have h_alph := alphabet_eq I b ht
+  have hbw₂ := h_alph.mpr hb
+  exact h a ha b hbw₂
+
 variable (I) in
 theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : -- (1.11)
     ∃ z₁ z₂ z₃ z₄, independent I z₂ z₃
@@ -405,8 +415,8 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
     simp [List.append_nil] at h
     exact TraceEquiv.symm h
   | snoc w e ih =>
-    by_cases he : e ∈ v
-    · have ⟨v', v'', ⟨hv, hv''⟩⟩ := right_most_occurrence he
+    by_cases hev : e ∈ v
+    · have ⟨v', v'', ⟨hv, hv''⟩⟩ := right_most_occurrence hev
       have h_cancel := cancellation_rule I e h
       rw [hv, ← List.append_assoc, List.cancel_right_over_concat] at h_cancel
       simp [hv''] at h_cancel
@@ -416,13 +426,39 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
       replace ht₂ := ht₂.compat (TraceEquiv.refl [e])
       have he : TraceEquiv I (v'' ++ [e]) ([e] ++ v'') := by
         rw [hv, ← List.append_assoc, ← List.append_assoc, ← List.append_assoc] at h
-        have h_indep := commutation_lemma I h hv''
+        have h_indep := indep_of_equiv_rightmost_symbol I h hv''
         exact equiv_of_indep_symb_commute_list I h_indep
       have hv'e := TraceEquiv.symm ((TraceEquiv.refl v').compat he)
       rw [← List.append_assoc, ← List.append_assoc, ← hv] at hv'e
       replace ht₂ := hv'e.trans ht₂
       rw [List.append_assoc] at ht₂ ht₄
       exact ⟨ht₁, ht₂, ht₃, ht₄⟩
-    · sorry
+    · have heu : e ∈ u := by
+        have h_alph := alphabet_eq I e h
+        simp at h_alph
+        exact Or.resolve_right h_alph hev
+      have ⟨u', u'', ⟨hu, hu''⟩⟩ := right_most_occurrence heu
+      have h_cancel := cancellation_rule I e h
+      rw [hu, ← List.append_assoc, List.cancel_right_over_concat] at h_cancel
+      simp only [hev, ↓reduceIte] at h_cancel
+      rw [List.cancel_right_over_concat] at h_cancel
+      simp [hu''] at h_cancel
+      have ⟨z₁', z₂', z₃', z₄', ⟨h_indep, ht₁, ht₂, ht₃, ht₄⟩⟩ := ih h_cancel
+      replace h_indep : independent I (z₂' ++ [e]) z₃' := by
+        intro a ha b hb
+        simp at ha h_indep
+        rcases ha with haz₂' | hae
+        · exact h_indep a haz₂' b hb
+        · rw [hu, List.append_assoc] at h
+          nth_rw 2 [← List.append_assoc] at h
+          have heu''v : e ∉ u'' ++ v := by simp [hu'', hev]
+          have h_indep_u''v := indep_of_equiv_rightmost_symbol I h heu''v
+          have h_indep_z₃'z₄' := indep_of_indep_of_equiv I h_indep_u''v ht₂
+          rw [← hae] at h_indep_z₃'z₄'
+          simp at h_indep_z₃'z₄'
+          exact h_indep_z₃'z₄' b (Or.intro_left (b ∈ z₄') hb)
+      use z₁', z₂' ++ [e], z₃', z₄', h_indep
+      sorry
+
 
 end Trace
