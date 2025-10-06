@@ -403,6 +403,25 @@ lemma indep_of_indep_of_equiv {w₁ w₂ w₃: List α}
   have hbw₂ := h_alph.mpr hb
   exact h a ha b hbw₂
 
+omit [DecidableEq α] in
+variable (I) in
+lemma indep_of_concat {w₁ w₂ w₃: List α} (h : independent I w₁ (w₂ ++ w₃)) :
+    independent I w₁ w₂ ∧ independent I w₁ w₃ := by
+  unfold independent at *
+  constructor
+  · intro a ha b hb
+    apply h
+    apply ha
+    apply List.mem_append.mpr
+    left
+    apply hb
+  · intro a ha b hb
+    apply h
+    apply ha
+    apply List.mem_append.mpr
+    right
+    apply hb
+
 variable (I) in
 theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : -- (1.11)
     ∃ z₁ z₂ z₃ z₄, independent I z₂ z₃
@@ -442,23 +461,36 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
       rw [hu, ← List.append_assoc, List.cancel_right_over_concat] at h_cancel
       simp only [hev, ↓reduceIte] at h_cancel
       rw [List.cancel_right_over_concat] at h_cancel
-      simp [hu''] at h_cancel
+      simp [hu'', -List.append_assoc] at h_cancel
       have ⟨z₁', z₂', z₃', z₄', ⟨h_indep, ht₁, ht₂, ht₃, ht₄⟩⟩ := ih h_cancel
+      have h_indep_e : independent I [e] (u'' ++ v) := by
+         rw [hu, ← List.append_assoc, List.append_assoc] at h
+         exact indep_of_equiv_rightmost_symbol I h (List.not_mem_append hu'' hev)
       replace h_indep : independent I (z₂' ++ [e]) z₃' := by
         intro a ha b hb
         simp at ha h_indep
         rcases ha with haz₂' | hae
         · exact h_indep a haz₂' b hb
-        · rw [hu, List.append_assoc] at h
-          nth_rw 2 [← List.append_assoc] at h
-          have heu''v : e ∉ u'' ++ v := by simp [hu'', hev]
-          have h_indep_u''v := indep_of_equiv_rightmost_symbol I h heu''v
-          have h_indep_z₃'z₄' := indep_of_indep_of_equiv I h_indep_u''v ht₂
-          rw [← hae] at h_indep_z₃'z₄'
-          simp at h_indep_z₃'z₄'
-          exact h_indep_z₃'z₄' b (Or.intro_left (b ∈ z₄') hb)
+        · have h_indep_ev := (indep_of_concat I h_indep_e).right
+          have h_equiv := indep_of_indep_of_equiv I h_indep_ev ht₂
+          simp [← hae] at h_equiv
+          apply h_equiv
+          left
+          apply hb
       use z₁', z₂' ++ [e], z₃', z₄', h_indep
-      sorry
-
+      rw [hu, ← List.append_assoc]
+      have heu'' : TraceEquiv I (u'' ++ [e]) ([e] ++ u'') :=
+        equiv_of_indep_symb_commute_list I (indep_of_concat I h_indep_e).left
+      have hu'e := TraceEquiv.symm ((TraceEquiv.refl u').compat heu'')
+      rw [← List.append_assoc, ← List.append_assoc] at hu'e
+      replace ht₁ := hu'e.trans (ht₁.compat (TraceEquiv.refl [e]))
+      have hez₄' : TraceEquiv I (z₄' ++ [e]) ([e] ++ z₄') := by
+        have h_indep_ev := (indep_of_concat I h_indep_e).right
+        have h_indep_ez₃'z₄' := indep_of_indep_of_equiv I h_indep_ev ht₂
+        exact equiv_of_indep_symb_commute_list I (indep_of_concat I h_indep_ez₃'z₄').right
+      have hz₄'e := (TraceEquiv.refl z₂').compat hez₄'
+      rw [← List.append_assoc, ← List.append_assoc] at hz₄'e
+      replace ht₄ := (ht₄.compat (TraceEquiv.refl [e])).trans hz₄'e
+      exact ⟨ht₁, ht₂, ht₃, ht₄⟩
 
 end Trace
