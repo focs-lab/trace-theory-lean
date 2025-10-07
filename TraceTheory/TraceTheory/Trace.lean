@@ -494,6 +494,7 @@ instance traceSetoid : Setoid (List α) where
 variable (I) in
 def _root_.Trace := Quotient (traceSetoid I)
 
+@[simp]
 def mul :
     Trace I -> Trace I -> Trace I := by
   exact Quotient.lift₂
@@ -527,5 +528,30 @@ instance : Monoid (Trace I) where
     apply Quotient.sound
     rw [List.append_nil]
     exact TraceEquiv.refl _
+
+variable (I) in
+def isPrefix (t₁ t₂ : Trace I) := ∃ w, mul t₁ ⟦w⟧ = t₂
+
+variable (I) in
+lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+    ∃ w', isPrefix I ⟦w'⟧ ⟦u⟧ ∧ isPrefix I ⟦w'⟧ ⟦v⟧
+    ∧ (∀ w'', isPrefix I ⟦w''⟧ ⟦u⟧ → isPrefix I ⟦w''⟧ ⟦v⟧ → isPrefix I ⟦w''⟧ ⟦w'⟧) := by
+  have ⟨u', hu'w⟩ := hu
+  have ⟨v', hv'w⟩ := hv
+  simp at hu'w hv'w
+  replace hu'w := Quotient.exact hu'w
+  replace hv'w := Quotient.exact hv'w
+  have huv := hu'w.trans hv'w.symm
+  have ⟨z₁, z₂, z₃, z₄, ⟨h_indep, huz, hu'z, hvz, hv'z⟩⟩ := levi_lemma I huv
+  use z₁
+  dsimp [isPrefix]
+  and_intros
+  · use z₂
+    apply Quotient.sound
+    exact huz.symm
+  · use z₃
+    apply Quotient.sound
+    exact hvz.symm
+  · sorry
 
 end Trace
