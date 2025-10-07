@@ -18,14 +18,14 @@ structure Independence (α : Type*) where
   symm : ∀ a b, rel a b → rel b a
 
 /-- The Independence relation induced by a Dependence `D`. -/
-def inducedIndependency {α : Type*} (D : Dependence α) : Independence α :=
-  { rel    := fun a b => ¬ D.rel a b,
-    irrefl := by
-      intro a h
-      exact h (D.refl a),
-    symm   := by
-      intro a b h
-      exact h ∘ (D.symm b a) }
+def inducedIndependency {α : Type*} (D : Dependence α) : Independence α where
+  rel := fun a b => ¬ D.rel a b
+  irrefl := by
+    intro a h
+    exact h (D.refl a)
+  symm := by
+    intro a b h
+    exact h ∘ (D.symm b a)
 
 variable {I : Independence α}
 
