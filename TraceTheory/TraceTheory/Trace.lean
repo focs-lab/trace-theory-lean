@@ -486,4 +486,46 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
       replace ht₄ := (ht₄.compat (TraceEquiv.refl [e])).trans hz₂'e
       exact ⟨ht₁, ht₂, ht₃, ht₄⟩
 
+variable (I) in
+instance traceSetoid : Setoid (List α) where
+  r := TraceEquiv I
+  iseqv := Equivalence.mk TraceEquiv.refl TraceEquiv.symm TraceEquiv.trans
+
+variable (I) in
+def _root_.Trace := Quotient (traceSetoid I)
+
+def mul :
+    Trace I -> Trace I -> Trace I := by
+  exact Quotient.lift₂
+    (fun w₁ w₂ => ⟦ w₁ ++ w₂ ⟧)
+    (by
+      intro a₁ b₁ a₂ b₂ ha hb
+      apply Quotient.sound
+      exact ha.compat hb
+    )
+
+def one := Quotient.mk (traceSetoid I) []
+
+instance : Monoid (Trace I) where
+  mul := mul
+  one := one
+  mul_assoc := by
+    intro t₁ t₂ t₃
+    refine Quotient.inductionOn₃ t₁ t₂ t₃ (fun w₁ w₂ w₃ => ?_)
+    apply Quotient.sound
+    rw [List.append_assoc]
+    exact TraceEquiv.refl _
+  one_mul := by
+    intro t
+    refine Quotient.inductionOn t (fun w => ?_)
+    apply Quotient.sound
+    rw [List.nil_append]
+    exact TraceEquiv.refl _
+  mul_one := by
+    intro t
+    refine Quotient.inductionOn t (fun w => ?_)
+    apply Quotient.sound
+    rw [List.append_nil]
+    exact TraceEquiv.refl _
+
 end Trace
