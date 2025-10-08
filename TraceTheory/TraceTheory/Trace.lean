@@ -56,7 +56,7 @@ inductive TraceEquiv : List α → List α → Prop
 
 omit [DecidableEq α] in
 variable (I) in
-lemma length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
+lemma length_eq_of_equiv {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
     w₁.length = w₂.length := by
   induction h with
   | swap _ _ _ =>
@@ -72,7 +72,7 @@ lemma length_eq {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
 
 omit [DecidableEq α] in
 variable (I) in
-lemma alphabet_eq {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) :
+lemma mem_iff_mem {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w₂) :
     (a ∈ w₁ ↔ a ∈ w₂) := by
   induction h with
   | swap _ _ _ =>
@@ -131,10 +131,10 @@ lemma cancellation_rule {w₁ w₂ : List α} (a : α) (h : TraceEquiv I w₁ w�
   | compat t₁ t₂ ih₁ ih₂ =>
     rename_i l₃ _
     by_cases hal₃ : a ∈ l₃
-    · have hal₄ := (alphabet_eq I a t₂).mp hal₃
+    · have hal₄ := (mem_iff_mem I a t₂).mp hal₃
       simp [hal₃, hal₄]
       exact t₁.compat ih₂
-    · have hal₄ := (alphabet_eq I a t₂).mpr.mt hal₃
+    · have hal₄ := (mem_iff_mem I a t₂).mpr.mt hal₃
       simp [hal₃, hal₄]
       exact ih₁.compat t₂
 
@@ -168,16 +168,16 @@ lemma projection_rule {w₁ w₂ : List α} (Sigma : Alphabet α) (h : TraceEqui
 variable (I) in
 lemma equiv_length_eq_two {a b : α} {w : List α} (h : TraceEquiv I [a, b] w) :
     w = [a, b] ∨ w = [b, a] := by
-  have h_len := List.length_eq_two.mp (length_eq I h).symm
+  have h_len := List.length_eq_two.mp (length_eq_of_equiv I h).symm
   rcases h_len with ⟨c, d, hw⟩
   rw [hw] at h ⊢
   by_cases heq : a = b
   · subst heq
-    have hc : c = a := by simpa using (alphabet_eq I c h.symm).mp
-    have hd : d = a := by simpa using (alphabet_eq I d h.symm).mp
+    have hc : c = a := by simpa using (mem_iff_mem I c h.symm).mp
+    have hd : d = a := by simpa using (mem_iff_mem I d h.symm).mp
     simp [hc, hd]
-  · have ha : a = c ∨ a = d := by simpa using (alphabet_eq I a h).mp
-    have hb : b = c ∨ b = d := by simpa using (alphabet_eq I b h).mp
+  · have ha : a = c ∨ a = d := by simpa using (mem_iff_mem I a h).mp
+    have hb : b = c ∨ b = d := by simpa using (mem_iff_mem I b h).mp
     rcases ha with hac | had <;> rcases hb with hbc | hbd
     · rw [← hbc] at hac
       contradiction
@@ -203,8 +203,8 @@ lemma equiv_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
   | symm _ ih =>
     exact (ih hy hx).symm
   | trans t₁ t₂ _ _ =>
-    have ht₁ := alphabet_eq I a t₁
-    have ht₂ := alphabet_eq I a t₂
+    have ht₁ := mem_iff_mem I a t₁
+    have ht₂ := mem_iff_mem I a t₂
     have h_trans := ht₁.trans ht₂
     rw [← hx, ← hy] at h_trans
     simp at h_trans
@@ -213,10 +213,10 @@ lemma equiv_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
     rcases List.singleton_eq_append_iff.mp hx with ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩
     <;> rcases List.singleton_eq_append_iff.mp hy with ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩
     · exact ih₂ hl₃.symm hl₄.symm
-    · have h_t₁ := length_eq I t₁
+    · have h_t₁ := length_eq_of_equiv I t₁
       rw [hl₁, hl₂] at h_t₁
       contradiction
-    · have h_t₁ := length_eq I t₁
+    · have h_t₁ := length_eq_of_equiv I t₁
       rw [hl₁, hl₂] at h_t₁
       contradiction
     · exact ih₁ hl₁.symm hl₂.symm
@@ -248,8 +248,8 @@ lemma indep_of_equiv_of_neq {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a 
     rename_i l₁ l₂ l₃ l₄
     have h_l₁l₃ : l₁.length + l₃.length = 2 := by simp [← List.length_append, ← hx]
     have h_l₂l₄ : l₂.length + l₄.length = 2 := by simp [← List.length_append, ← hy]
-    have h_t₁ := length_eq I t₁
-    have h_t₂ := length_eq I t₂
+    have h_t₁ := length_eq_of_equiv I t₁
+    have h_t₂ := length_eq_of_equiv I t₂
     rcases Nat.add_eq_two_iff.mp h_l₁l₃ with ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩
     <;> rcases Nat.add_eq_two_iff.mp h_l₂l₄ with ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩
     · rw [List.length_eq_zero_iff.mp hl₁, List.nil_append] at hx
@@ -396,7 +396,7 @@ lemma indep_of_indep_of_equiv {w₁ w₂ w₃: List α}
     (h : independent I w₁ w₂) (ht : TraceEquiv I w₂ w₃) :
     independent I w₁ w₃ := by
   intro a ha b hb
-  have h_alph := alphabet_eq I b ht
+  have h_alph := mem_iff_mem I b ht
   have hbw₂ := h_alph.mpr hb
   exact h a ha b hbw₂
 
@@ -449,7 +449,7 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
       rw [List.append_assoc] at ht₂ ht₄
       exact ⟨ht₁, ht₂, ht₃, ht₄⟩
     · have heu : e ∈ u := by
-        have h_alph := alphabet_eq I e h
+        have h_alph := mem_iff_mem I e h
         simp at h_alph
         exact Or.resolve_right h_alph hev
       have ⟨u', u'', ⟨hu, hu''⟩⟩ := right_most_occurrence heu
@@ -498,7 +498,7 @@ def _root_.Trace := Quotient (traceSetoid I)
 def mul :
     Trace I -> Trace I -> Trace I := by
   exact Quotient.lift₂
-    (fun w₁ w₂ => ⟦ w₁ ++ w₂ ⟧)
+    (fun w₁ w₂ => ⟦w₁ ++ w₂⟧)
     (by
       intro a₁ b₁ a₂ b₂ ha hb
       apply Quotient.sound
@@ -534,17 +534,15 @@ def isPrefix (t₁ t₂ : Trace I) := ∃ w, mul t₁ ⟦w⟧ = t₂
 
 variable (I) in
 lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
-    ∃ w', isPrefix I ⟦w'⟧ ⟦u⟧ ∧ isPrefix I ⟦w'⟧ ⟦v⟧
-    ∧ (∀ w'', isPrefix I ⟦w''⟧ ⟦u⟧ → isPrefix I ⟦w''⟧ ⟦v⟧ → isPrefix I ⟦w''⟧ ⟦w'⟧) := by
-  have ⟨u', hu'w⟩ := hu
-  have ⟨v', hv'w⟩ := hv
-  simp at hu'w hv'w
-  replace hu'w := Quotient.exact hu'w
-  replace hv'w := Quotient.exact hv'w
-  have huv := hu'w.trans hv'w.symm
-  have ⟨z₁, z₂, z₃, z₄, ⟨h_indep, huz, hu'z, hvz, hv'z⟩⟩ := levi_lemma I huv
+    ∃ g, isPrefix I ⟦g⟧ ⟦u⟧ ∧ isPrefix I ⟦g⟧ ⟦v⟧
+    ∧ (∀ g', isPrefix I ⟦g ++ g'⟧ ⟦u⟧ → isPrefix I ⟦g ++ g'⟧ ⟦v⟧ → g' = []) := by
+  have ⟨u', hu'⟩ := hu
+  have ⟨v', hv'⟩ := hv
+  simp at hu' hv'
+  replace hu' := Quotient.exact hu'
+  replace hv' := Quotient.exact hv'
+  have ⟨z₁, z₂, z₃, z₄, ⟨h_indep, huz, hu'z, hvz, hv'z⟩⟩ := levi_lemma I (hu'.trans hv'.symm)
   use z₁
-  dsimp [isPrefix]
   and_intros
   · use z₂
     apply Quotient.sound
@@ -552,6 +550,21 @@ lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
   · use z₃
     apply Quotient.sound
     exact hvz.symm
-  · sorry
+  · intro g' hg'u hg'v
+    cases g' with
+    | nil =>
+      rfl
+    | cons a g'' =>
+      have ⟨w₁, hw₁⟩ := hg'u
+      have ⟨w₂, hw₂⟩ := hg'v
+      replace hw₁ := (Quotient.exact hw₁).trans huz
+      replace hw₂ := (Quotient.exact hw₂).trans hvz
+      rw [List.append_assoc] at hw₁ hw₂
+      replace hw₁ := mem_iff_mem I a (equiv_cancel_left I hw₁)
+      replace hw₂ := mem_iff_mem I a (equiv_cancel_left I hw₂)
+      simp only [List.mem_append, List.mem_cons, true_or, true_iff] at hw₁ hw₂
+      have h_absurd := h_indep a hw₁ a hw₂
+      exfalso
+      exact I.irrefl a h_absurd
 
 end Trace
