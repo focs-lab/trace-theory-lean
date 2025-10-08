@@ -18,7 +18,7 @@ structure Independence (α : Type*) where
   symm : ∀ a b, rel a b → rel b a
 
 /-- The Independence relation induced by a Dependence `D`. -/
-def inducedIndependency {α : Type*} (D : Dependence α) : Independence α where
+def inducedIndependence {α : Type*} (D : Dependence α) : Independence α where
   rel := fun a b => ¬ D.rel a b
   irrefl := by
     intro a h
