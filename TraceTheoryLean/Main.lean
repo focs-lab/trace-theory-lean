@@ -1492,7 +1492,6 @@ structure DependenceGraph (V : Type u) where
 
 variable {V₁ V₂ V₃ : Type u} [Fintype V₁] [Fintype V₂] [Fintype V₃]
 
-variable {V₁ V₂ : Type} [Fintype V₁] [Fintype V₂] in
 def compose (G₁ : D.DependenceGraph V₁) (G₂ : D.DependenceGraph V₂) :
     D.DependenceGraph (V₁ ⊕ V₂) where
   adj := fun u v =>
@@ -1980,11 +1979,6 @@ theorem has_min_vertex [Nonempty V] (G : D.DependenceGraph V) :
 
 -/
 
-lemma morphism_compose_dist {u v : List α} :
-    (toDepGraph u) * (toDepGraph v) = toDepGraph (u ++ v) := by
-  sorry
-
-
 theorem has_min_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∀ u, ¬ G.adj u v := by
   classical
   let anccard : V → ℕ := fun v => Fintype.card {x // Relation.TransGen G.adj x v}
@@ -2021,8 +2015,138 @@ theorem has_min_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∀ u, ¬
       exact ⟨w, hw⟩
     · exact ⟨v, by simpa using h⟩
 
-theorem min_vertex_compose [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∃ H, G = compose {v} H := by
-  sorry
+lemma reverse_TransGen {α : Type*} (r : α → α → Prop) {x y : α}
+    (h : Relation.TransGen (fun a b => r b a) x y) : Relation.TransGen r y x := by
+  induction h with
+  | single h => exact Relation.TransGen.single h
+  | tail ht hcb ih => exact Relation.TransGen.trans (Relation.TransGen.single hcb) ih
+
+def DependenceGraph.reverse (G : D.DependenceGraph V) : D.DependenceGraph V where
+  adj := fun x y => G.adj y x
+  φ := G.φ
+  acyclic := by
+    intro x h
+    have h' := reverse_TransGen G.adj h
+    exact G.acyclic x h'
+  dep := by
+    intro u v
+    apply Iff.intro
+    · intro h
+      have := Iff.mp (G.dep v u) h
+      apply And.intro
+      · intro huv
+        simp [huv] at this
+      · exact D.symm this.right
+    · intro h
+      have := Iff.mpr (G.dep u v) h
+      exact Or.symm this
+
+omit [Fintype V] in
+theorem DependenceGraph.reverse_reverse (G : D.DependenceGraph V) :
+    DependenceGraph.reverse (DependenceGraph.reverse G) = G := by
+  simp [reverse]
+
+theorem has_max_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∀ u, ¬ G.adj v u := by
+  have ⟨v, hv⟩ := has_min_vertex (DependenceGraph.reverse G)
+  simp [DependenceGraph.reverse] at hv
+  exact ⟨v, hv⟩
+
+theorem Relation.transGen_sub {α : Type*} {p q : α → α → Prop} (h : ∀ x y, p x y → q x y) :
+    (∀ x y, Relation.TransGen p x y → Relation.TransGen q x y) := by
+  intro x y hpt
+  induction hpt with
+  | single hp =>
+    rename_i y
+    exact Relation.TransGen.single (h x y hp)
+  | tail hpt hpw hqt =>
+    rename_i w y
+    exact Relation.TransGen.trans hqt (Relation.TransGen.single (h w y hpw))
+
+def omit_vertex (G : D.DependenceGraph V) (v : V) : D.DependenceGraph {x // x ≠ v} where
+  adj := fun u v => G.adj u v
+  φ := fun v => G.φ v
+  acyclic := by
+    intro ⟨x, hx⟩ h
+    simp at h
+    have h_sub : ∀ x y, (fun u v => G.adj u v) x y → G.adj x y := by simp
+    have h_id := Relation.transGen_sub (h_sub) x x
+    apply G.acyclic x
+    apply h_id
+    sorry
+  dep := by
+    intro ⟨u, hu⟩ ⟨v, hv⟩
+    simp
+    exact G.dep u v
+
+/-
+theorem _induction_card {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V → Prop}
+    (h_empty : ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V), Fintype.card V = 0 → P V G)
+    (h_step : ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V),
+        (∃ (U : Type u) (_ : Fintype U) (H : D.DependenceGraph U),
+        Fintype.card U < Fintype.card V ∧ P U H) → P V G) :
+    ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V), P V G := by
+  intro V hV G
+  by_cases h : Fintype.card V = 0
+  · exact h_empty V G h
+  · apply h_step V G
+    let U : Type u := ULift.{u} Empty
+    have hU : Fintype U := by infer_instance
+    let H : D.DependenceGraph U :=
+      { adj := fun _ _ => False
+        φ := fun x => Empty.elim x.down
+        acyclic := fun x => Empty.elim x.down
+        dep := by simp}
+    have cardU : Fintype.card U = 0 := by
+      rw [Fintype.card_congr Equiv.ulift.{u}, Fintype.card_empty]
+    have card_lt : Fintype.card U < Fintype.card V := by
+      rw [cardU]
+      exact Nat.pos_of_ne_zero h
+    have P_U_H : P U H := h_empty U H cardU
+    exact ⟨U, hU, H, card_lt, P_U_H⟩
+-/
+
+theorem induction_card {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V → Prop}
+    (h_empty : ∀ (V : Type u) [Fintype V] (h : Fintype.card V = 0) (G : D.DependenceGraph V), P V G)
+    (h_step : ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V),
+        ∃ (U : Type u) (_ : Fintype U) (H : D.DependenceGraph U),
+        Fintype.card U < Fintype.card V ∧ (P U H → P V G)) :
+    ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V), P V G := by
+  intro V _ G
+  induction' h : Fintype.card V using Nat.strong_induction_on with n ih generalizing V G
+  by_cases h_n : n = 0
+  · apply h_empty V (by rw [h, h_n]) G
+  · rcases h_step V G with ⟨U, hU, H, h_card, h_imp⟩
+    have h_card' : Fintype.card U < n := by
+      rw [h] at h_card
+      exact h_card
+    have hP : P U H :=
+      ih (Fintype.card U) h_card' U H rfl
+    exact h_imp hP
+
+/-
+theorem max_vertex_induction {V} {motive : Type u → D.DependenceGraph V → Prop} (nil : motive (∅ : Set V) emptyGraph)
+    (cons : ∀ (V : Type u) (G : D.DependenceGraph V), ∃ (v : V), motive {x // x ≠ v} (omit_vertex G v) → motive V G) :
+  ∀ V G, motive V G := by
+  intro l
+  let motive' := fun (l : List α) => ∀ k, motive k → motive (k ++ l)
+  have h_base : motive' [] := by
+    intro k hk
+    rw [append_nil]
+    exact hk
+  have h_step : ∀ (a : α) (l' : List α), motive' l' → motive' (a :: l') := by
+    intro a l' IH k hk
+    have h1 : motive (k ++ [a]) := cons k a hk
+    have : k ++ a :: l' = (k ++ [a]) ++ l' := by
+      simp
+    rw [this]
+    exact IH (k ++ [a]) h1
+  have : ∀ l, motive' l := by
+    intro l
+    induction l with
+    | nil => exact h_base
+    | cons a l' IH => exact h_step a l' IH
+  exact this l [] nil
+-/
 
 end DepGraphMonoid
 
