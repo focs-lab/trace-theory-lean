@@ -371,7 +371,7 @@ lemma right_most_occurrence {w : List α} {a : α} (h : a ∈ w) :
 
 omit [DecidableEq α] in
 variable (I) in
-lemma equiv_of_indep_symb_commute_list {w : List α} {a : α} (h : independent I [a] w) :
+lemma equiv_commute_append_of_indep_symb {w : List α} {a : α} (h : independent I [a] w) :
     TraceEquiv I (w ++ [a]) ([a] ++ w) := by
   induction w using List.induction_right with
   | nil =>
@@ -442,7 +442,7 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
       have he : TraceEquiv I (v'' ++ [e]) ([e] ++ v'') := by
         rw [hv, ← List.append_assoc, ← List.append_assoc, ← List.append_assoc] at h
         have h_indep := indep_of_equiv_rightmost_symbol I h hv''
-        exact equiv_of_indep_symb_commute_list I h_indep
+        exact equiv_commute_append_of_indep_symb I h_indep
       have hv'e := TraceEquiv.symm ((TraceEquiv.refl v').compat he)
       rw [← List.append_assoc, ← List.append_assoc, ← hv] at hv'e
       replace ht₂ := hv'e.trans (ht₂.compat (TraceEquiv.refl [e]))
@@ -473,14 +473,14 @@ theorem levi_lemma {u v x y : List α} (h : TraceEquiv I (u ++ v) (x ++ y)) : --
       use z₁', z₂' ++ [e], z₃', z₄', h_indep
       rw [hu, ← List.append_assoc]
       have heu'' : TraceEquiv I (u'' ++ [e]) ([e] ++ u'') :=
-        equiv_of_indep_symb_commute_list I (indep_of_concat I h_indep_e).left
+        equiv_commute_append_of_indep_symb I (indep_of_concat I h_indep_e).left
       have hu'e := TraceEquiv.symm ((TraceEquiv.refl u').compat heu'')
       rw [← List.append_assoc, ← List.append_assoc] at hu'e
       replace ht₁ := hu'e.trans (ht₁.compat (TraceEquiv.refl [e]))
       have hez₄' : TraceEquiv I (z₄' ++ [e]) ([e] ++ z₄') := by
         have h_indep_ev := (indep_of_concat I h_indep_e).right
         have h_indep_ez₃'z₄' := indep_of_indep_of_equiv I h_indep_ev ht₂
-        exact equiv_of_indep_symb_commute_list I (indep_of_concat I h_indep_ez₃'z₄').right
+        exact equiv_commute_append_of_indep_symb I (indep_of_concat I h_indep_ez₃'z₄').right
       have hz₂'e := (TraceEquiv.refl z₂').compat hez₄'
       rw [← List.append_assoc, ← List.append_assoc] at hz₂'e
       replace ht₄ := (ht₄.compat (TraceEquiv.refl [e])).trans hz₂'e
@@ -541,7 +541,7 @@ lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
   simp at hu' hv'
   replace hu' := Quotient.exact hu'
   replace hv' := Quotient.exact hv'
-  have ⟨z₁, z₂, z₃, z₄, ⟨h_indep, huz, hu'z, hvz, hv'z⟩⟩ := levi_lemma I (hu'.trans hv'.symm)
+  have ⟨z₁, z₂, z₃, _, ⟨h_indep, huz, _, hvz, _⟩⟩ := levi_lemma I (hu'.trans hv'.symm)
   use z₁
   and_intros
   · use z₂
@@ -566,5 +566,54 @@ lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
       have h_absurd := h_indep a hw₁ a hw₂
       exfalso
       exact I.irrefl a h_absurd
+
+omit [DecidableEq α] in
+variable (I) in
+lemma indep_symm {w₁ w₂ : List α} (h : independent I w₁ w₂) : independent I w₂ w₁ := by
+  intro a ha b hb
+  apply I.symm
+  apply h
+  apply hb
+  apply ha
+
+omit [DecidableEq α] in
+variable (I) in
+lemma equiv_commute_append_of_indep {w₁ w₂ : List α} (h : independent I w₁ w₂) :
+    TraceEquiv I (w₁ ++ w₂) (w₂ ++ w₁) := by
+  induction w₁ using List.induction_right with
+  | nil =>
+    rw [List.nil_append, List.append_nil]
+    exact TraceEquiv.refl _
+  | snoc w' a ih =>
+    replace h := indep_of_concat I (indep_symm I h)
+    have ha := equiv_commute_append_of_indep_symb I (indep_symm I h.right)
+    have hw'a := ((TraceEquiv.refl w').compat ha).symm
+    rw [← List.append_assoc, ← List.append_assoc] at hw'a
+    apply hw'a.trans
+    rw [← List.append_assoc]
+    exact (ih (indep_symm I h.left)).compat (TraceEquiv.refl [a])
+
+variable (I) in
+lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+    ∃ d, isPrefix I ⟦u⟧ ⟦d⟧ ∧ isPrefix I ⟦v⟧ ⟦d⟧
+    ∧ (∀ d', isPrefix I ⟦d'⟧ ⟦d⟧ → ¬(isPrefix I ⟦u⟧ ⟦d'⟧) ∨ ¬(isPrefix I ⟦v⟧ ⟦d'⟧)) := by
+  have ⟨u', hu'⟩ := hu
+  have ⟨v', hv'⟩ := hv
+  simp at hu' hv'
+  replace hu' := Quotient.exact hu'
+  replace hv' := Quotient.exact hv'
+  have ⟨z₁, z₂, z₃, z₄, ⟨h_indep, huz, hu'z, hvz, hv'z⟩⟩ := levi_lemma I (hu'.trans hv'.symm)
+  use z₁ ++ z₂ ++ z₃
+  and_intros
+  · use z₃
+    apply Quotient.sound
+    exact huz.compat (TraceEquiv.refl z₃)
+  · use z₂
+    apply Quotient.sound
+    have hz := ((TraceEquiv.refl z₁).compat (equiv_commute_append_of_indep I h_indep)).symm
+    rw [← List.append_assoc, ← List.append_assoc] at hz
+    apply (hvz.compat (TraceEquiv.refl z₂)).trans
+    exact hz
+  · sorry
 
 end Trace
