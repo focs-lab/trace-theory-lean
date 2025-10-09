@@ -533,7 +533,7 @@ variable (I) in
 def isPrefix (t₁ t₂ : Trace I) := ∃ w, mul t₁ ⟦w⟧ = t₂
 
 variable (I) in
-lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+lemma exists_gcp' {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
     ∃ g, isPrefix I ⟦g⟧ ⟦u⟧ ∧ isPrefix I ⟦g⟧ ⟦v⟧
     ∧ (∀ g', isPrefix I ⟦g ++ g'⟧ ⟦u⟧ → isPrefix I ⟦g ++ g'⟧ ⟦v⟧ → g' = []) := by
   have ⟨u', hu'⟩ := hu
@@ -568,7 +568,7 @@ lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
       exact I.irrefl a h_absurd
 
 variable (I) in
-lemma exists_gcp' {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) : -- (1.3.5)
     ∃ g, isPrefix I ⟦g⟧ ⟦u⟧ ∧ isPrefix I ⟦g⟧ ⟦v⟧
     ∧ (∀ g', isPrefix I ⟦g'⟧ ⟦u⟧ → isPrefix I ⟦g'⟧ ⟦v⟧ → isPrefix I ⟦g'⟧ ⟦g⟧) := by
   have ⟨u', hu'⟩ := hu
@@ -644,7 +644,7 @@ lemma equiv_comm_append_of_indep {w₁ w₂ : List α} (h : independent I w₁ w
     exact (ih (indep_symm I h.left)).compat (TraceEquiv.refl [a])
 
 variable (I) in
-lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) : -- (1.3.5)
     ∃ d, isPrefix I ⟦u⟧ ⟦d⟧ ∧ isPrefix I ⟦v⟧ ⟦d⟧
     ∧ (∀ d', isPrefix I ⟦u⟧ ⟦d'⟧ → isPrefix I ⟦v⟧ ⟦d'⟧ → isPrefix I ⟦d⟧ ⟦d'⟧) := by
   have ⟨u', hu'⟩ := hu
@@ -680,7 +680,7 @@ lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
     have h_y₁_empty : y₁ = [] := by
       have h_indep_yy : independent I (y₁ ++ y₂) (y₁ ++ y₃) := by
         intro a ha b hb
-        exact h_indep a ((mem_iff_mem I a hy_z₂.symm).mp ha) b ((mem_iff_mem I b hy_z₃.symm).mp hb)
+        exact h_indep a ((mem_iff_mem I a hy_z₂).mpr ha) b ((mem_iff_mem I b hy_z₃).mpr hb)
       by_cases he : y₁ = []
       · exact he
       · exfalso
