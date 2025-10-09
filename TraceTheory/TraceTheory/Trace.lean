@@ -596,7 +596,7 @@ lemma equiv_comm_append_of_indep {w₁ w₂ : List α} (h : independent I w₁ w
 variable (I) in
 lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
     ∃ d, isPrefix I ⟦u⟧ ⟦d⟧ ∧ isPrefix I ⟦v⟧ ⟦d⟧
-    ∧ (∀ d', isPrefix I ⟦d'⟧ ⟦d⟧ → ¬(isPrefix I ⟦u⟧ ⟦d'⟧) ∨ ¬(isPrefix I ⟦v⟧ ⟦d'⟧)) := by
+    ∧ (∀ d', isPrefix I ⟦u⟧ ⟦d'⟧ → isPrefix I ⟦v⟧ ⟦d'⟧ → isPrefix I ⟦d⟧ ⟦d'⟧) := by
   have ⟨u', hu'⟩ := hu
   have ⟨v', hv'⟩ := hv
   simp at hu' hv'
@@ -614,6 +614,39 @@ lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
     rw [← List.append_assoc, ← List.append_assoc] at hz
     apply (hvz.compat (TraceEquiv.refl z₂)).trans
     exact hz
-  · sorry
+  · intro d' hud' hvd'
+    have ⟨w₁, hw₁⟩ := hud'
+    have ⟨w₂, hw₂⟩ := hvd'
+    replace hw₁ := Quotient.exact hw₁
+    replace hw₂ := Quotient.exact hw₂
+    have huv : TraceEquiv I (u ++ w₁) (v ++ w₂) := hw₁.trans hw₂.symm
+    have hzw : TraceEquiv I (z₂ ++ w₁) (z₃ ++ w₂) := by
+      have huzw := huz.compat (TraceEquiv.refl w₁)
+      have hvzw := hvz.compat (TraceEquiv.refl w₂)
+      have huvzw := huzw.symm.trans (huv.trans hvzw)
+      rw [List.append_assoc, List.append_assoc] at huvzw
+      exact equiv_cancel_left I huvzw
+    have ⟨y₁, y₂, y₃, y₄, ⟨_, hy_z₂, hy_w₁, hy_z₃, _⟩⟩ := levi_lemma I hzw
+    have h_y1_empty : y₁ = [] := by
+      have h_indep_yy : independent I (y₁ ++ y₂) (y₁ ++ y₃) := by
+        intro a ha b hb
+        exact h_indep a ((mem_iff_mem I a hy_z₂.symm).mp ha) b ((mem_iff_mem I b hy_z₃.symm).mp hb)
+      by_cases he : y₁ = []
+      · exact he
+      · exfalso
+        let ⟨a, ha⟩ := List.exists_mem_of_ne_nil y₁ he
+        have ha_left : a ∈ y₁ ++ y₂ := List.mem_append.mpr (Or.inl ha)
+        have ha_right : a ∈ y₁ ++ y₃ := List.mem_append.mpr (Or.inl ha)
+        have h_rel := h_indep_yy a ha_left a ha_right
+        exact I.irrefl a h_rel
+    rw [h_y1_empty, List.nil_append] at hy_z₂ hy_z₃
+    have hd' := hw₁.symm.trans (huz.compat (TraceEquiv.refl w₁))
+    replace hd' := hd'.trans ((TraceEquiv.refl (z₁ ++ z₂)).compat hy_w₁)
+    replace hd' :=
+      hd'.trans ((TraceEquiv.refl (z₁ ++ z₂)).compat (hy_z₃.symm.compat (TraceEquiv.refl y₄)))
+    rw [← List.append_assoc] at hd'
+    use y₄
+    apply Quotient.sound
+    exact hd'.symm
 
 end Trace
