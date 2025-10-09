@@ -567,6 +567,56 @@ lemma exists_gcp {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
       exfalso
       exact I.irrefl a h_absurd
 
+variable (I) in
+lemma exists_gcp' {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+    ∃ g, isPrefix I ⟦g⟧ ⟦u⟧ ∧ isPrefix I ⟦g⟧ ⟦v⟧
+    ∧ (∀ g', isPrefix I ⟦g'⟧ ⟦u⟧ → isPrefix I ⟦g'⟧ ⟦v⟧ → isPrefix I ⟦g'⟧ ⟦g⟧) := by
+  have ⟨u', hu'⟩ := hu
+  have ⟨v', hv'⟩ := hv
+  simp at hu' hv'
+  replace hu' := Quotient.exact hu'
+  replace hv' := Quotient.exact hv'
+  have ⟨z₁, z₂, z₃, _, ⟨h_indep, huz, _, hvz, _⟩⟩ := levi_lemma I (hu'.trans hv'.symm)
+  use z₁
+  and_intros
+  · use z₂
+    apply Quotient.sound
+    exact huz.symm
+  · use z₃
+    apply Quotient.sound
+    exact hvz.symm
+  · intro g' hg'u hg'v
+    have ⟨w₁, hw₁⟩ := hg'u
+    have ⟨w₂, hw₂⟩ := hg'v
+    replace hw₁ := Quotient.exact hw₁
+    replace hw₂ := Quotient.exact hw₂
+    replace hw₁ := hw₁.trans huz
+    replace hw₂ := hw₂.trans hvz
+    have ⟨y₁, y₂, y₃, y₄, ⟨h_indep_yy, hy_g', _, hy_z₁, hy_z₂⟩⟩ := levi_lemma I hw₁
+    have h_y₂_empty : y₂ = [] := by
+      have hyw : TraceEquiv I (y₂ ++ w₂) (y₃ ++ z₃) := by
+        have hywz := (hy_g'.compat (TraceEquiv.refl w₂)).symm.trans hw₂
+        replace hywz := (hywz.trans (hy_z₁.compat (TraceEquiv.refl z₃)))
+        rw [List.append_assoc, List.append_assoc] at hywz
+        exact equiv_cancel_left I hywz
+      by_cases he : y₂ = []
+      · exact he
+      · exfalso
+        let ⟨a, ha⟩ := List.exists_mem_of_ne_nil y₂ he
+        have ha_z₂ := (mem_iff_mem I a hy_z₂).mpr (List.mem_append.mpr (Or.inl ha))
+        have ha_yz := (mem_iff_mem I a hyw).mp (List.mem_append.mpr (Or.inl ha))
+        simp only [List.mem_append] at ha_yz
+        have ha_y₃ : a ∈ y₃ := by
+          rcases ha_yz with hay | haz
+          · exact hay
+          · exfalso
+            exact I.irrefl a (h_indep a ha_z₂ a haz)
+        exact I.irrefl a (h_indep_yy a ha a ha_y₃)
+    rw [h_y₂_empty, List.append_nil] at hy_g'
+    use y₃
+    apply Quotient.sound
+    exact (hy_g'.compat (TraceEquiv.refl y₃)).trans hy_z₁.symm
+
 omit [DecidableEq α] in
 variable (I) in
 lemma indep_symm {w₁ w₂ : List α} (h : independent I w₁ w₂) : independent I w₂ w₁ := by
@@ -627,7 +677,7 @@ lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
       rw [List.append_assoc, List.append_assoc] at huvzw
       exact equiv_cancel_left I huvzw
     have ⟨y₁, y₂, y₃, y₄, ⟨_, hy_z₂, hy_w₁, hy_z₃, _⟩⟩ := levi_lemma I hzw
-    have h_y1_empty : y₁ = [] := by
+    have h_y₁_empty : y₁ = [] := by
       have h_indep_yy : independent I (y₁ ++ y₂) (y₁ ++ y₃) := by
         intro a ha b hb
         exact h_indep a ((mem_iff_mem I a hy_z₂.symm).mp ha) b ((mem_iff_mem I b hy_z₃.symm).mp hb)
@@ -639,7 +689,7 @@ lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
         have ha_right : a ∈ y₁ ++ y₃ := List.mem_append.mpr (Or.inl ha)
         have h_rel := h_indep_yy a ha_left a ha_right
         exact I.irrefl a h_rel
-    rw [h_y1_empty, List.nil_append] at hy_z₂ hy_z₃
+    rw [h_y₁_empty, List.nil_append] at hy_z₂ hy_z₃
     have hd' := hw₁.symm.trans (huz.compat (TraceEquiv.refl w₁))
     replace hd' := hd'.trans ((TraceEquiv.refl (z₁ ++ z₂)).compat hy_w₁)
     replace hd' :=
