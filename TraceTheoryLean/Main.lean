@@ -1630,7 +1630,7 @@ end DepGraphIso
 
 structure DepGraphRep where
   V : Type u
-  [fintypeV : Fintype V]
+  fintypeV : Fintype V
   graph : D.DependenceGraph V
 
 namespace DepGraphRep
@@ -1814,6 +1814,7 @@ def toDepGraphIndiv (w : List α) : D.DependenceGraph (Fin w.length) where
 
 def toRep (G : D.DependenceGraph V) : D.DepGraphRep where
   V := V
+  fintypeV := by infer_instance
   graph := G
 
 def toDepGraph : FreeMonoid α →* D.DepGraphMonoid where
@@ -2105,9 +2106,9 @@ theorem _induction_card {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V �
     exact ⟨U, hU, H, card_lt, P_U_H⟩
 -/
 
-theorem induction_card {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V → Prop}
+theorem card_induction {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V → Prop}
     (h_empty : ∀ (V : Type u) [Fintype V] (h : Fintype.card V = 0) (G : D.DependenceGraph V), P V G)
-    (h_step : ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V),
+    (h_step : ∀ (V : Type u) [Fintype V] (h : Fintype.card V > 0) (G : D.DependenceGraph V),
         ∃ (U : Type u) (_ : Fintype U) (H : D.DependenceGraph U),
         Fintype.card U < Fintype.card V ∧ (P U H → P V G)) :
     ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V), P V G := by
@@ -2115,13 +2116,76 @@ theorem induction_card {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V �
   induction' h : Fintype.card V using Nat.strong_induction_on with n ih generalizing V G
   by_cases h_n : n = 0
   · apply h_empty V (by rw [h, h_n]) G
-  · rcases h_step V G with ⟨U, hU, H, h_card, h_imp⟩
+  · replace h_n : n > 0 := by apply Nat.zero_lt_of_ne_zero; simp [h_n]
+    replace h_n : Fintype.card V > 0 := by simp [h, h_n]
+    rcases h_step V h_n G with ⟨U, hU, H, h_card, h_imp⟩
     have h_card' : Fintype.card U < n := by
       rw [h] at h_card
       exact h_card
     have hP : P U H :=
       ih (Fintype.card U) h_card' U H rfl
     exact h_imp hP
+
+/-
+theorem omit_induction {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V → Prop}
+    (h_empty : ∀ (V : Type u) [Fintype V] (h : Fintype.card V = 0) (G : D.DependenceGraph V), P V G)
+    (h_step : ∀ (V : Type u) [Fintype V] (h : Fintype.card V > 0) (G : D.DependenceGraph V),
+        ∃ (v : V) (_ : Fintype { x // x ≠ v }), (P { x // x ≠ v } (omit_vertex G v) → P V G)) :
+    ∀ (V : Type u) [Fintype V] (G : D.DependenceGraph V), P V G := by
+  apply card_induction h_empty
+
+  intro V finV G
+  have ⟨v, finO, h⟩ := h_step V G
+  use { x // x ≠ v }, finO, (omit_vertex G v)
+  apply And.intro
+  · simp
+    cases Fintype.card V
+    · simp
+    · simp
+  · exact h
+-/
+
+def card : D.DepGraphMonoid → ℕ :=
+  Quotient.lift (fun GR : DepGraphRep => @Fintype.card GR.V GR.fintypeV) (by
+    intro a b ⟨φ⟩
+    have := a.fintypeV
+    have := b.fintypeV
+    simp
+    exact Fintype.card_congr φ.map
+    sorry
+  )
+
+theorem toDepGraph_surj (Γ : D.DepGraphMonoid) : ∃ s : FreeMonoid α, toDepGraph s = Γ := by
+  induction h : card Γ generalizing Γ with
+  | zero =>
+    use []
+    simp [toDepGraph]
+    simp [Quotient.mk'', toRep]
+    rw [show Γ = ⟦Γ.out⟧ by simp]
+    apply Quotient.sound
+    refine ⟨?_, ?_, ?_⟩
+    all_goals simp
+    rw [card, show Γ = ⟦Γ.out⟧ by simp, Quotient.lift_mk] at h
+    calc
+      Fin 0 ≃ Empty := by
+        exact ⟨Fin.elim0,
+               Empty.elim,
+               by simp [Function.LeftInverse],
+               by simp [Function.RightInverse, Function.LeftInverse]⟩
+      Empty ≃ (Quotient.out Γ).V := by
+        have := (Quotient.out Γ).fintypeV
+        -- have := Fintype.cardEqZeroEquivEquivEmpty h
+        refine ⟨Empty.elim, ?_, by simp [Function.LeftInverse], ?_⟩
+        · sorry
+        · sorry
+    -- rw [@Fintype.card_eq_zero_iff] at h
+    -- rw [Fintype.cardEqZeroEquivEquivEmpty] at h
+  | succ n ih =>
+    rw [show Γ = ⟦Γ.out⟧ by simp]
+    -- have ⟨v, hv⟩ := has_max_vertex Γ.out.graph
+    -- have H := omit_vertex Γ.out.graph v
+    -- (apply ih to H, and prove [appending the respective symbol to H's string] →* Γ.out.graph)
+    sorry
 
 /-
 theorem max_vertex_induction {V} {motive : Type u → D.DependenceGraph V → Prop} (nil : motive (∅ : Set V) emptyGraph)
