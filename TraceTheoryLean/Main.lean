@@ -1229,7 +1229,7 @@ def toTrace : FreeMonoid α →* I.Trace where
   map_one' := rfl
   map_mul' _ _ := rfl
 
-structure DependencyMorphism (M : Type) [Monoid M] where
+structure DependencyMorphism (M : Type*) [Monoid M] where
   hom : FreeMonoid α →* M
   surj : Function.Surjective hom
   prop1 : ∀ s, hom s = hom 1 → s = 1
@@ -2052,8 +2052,9 @@ theorem has_max_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∀ u, ¬
   simp [DependenceGraph.reverse] at hv
   exact ⟨v, hv⟩
 
-theorem Relation.transGen_sub {α : Type*} {p q : α → α → Prop} (h : ∀ x y, p x y → q x y) :
-    (∀ x y, Relation.TransGen p x y → Relation.TransGen q x y) := by
+theorem Relation.transGen_sub_iso {α β : Type*} (p : α → α → Prop) (q : β → β → Prop) (f : α → β)
+    (h : ∀ x y, p x y → q (f x) (f y)) :
+    (∀ x y, Relation.TransGen p x y → Relation.TransGen q (f x) (f y)) := by
   intro x y hpt
   induction hpt with
   | single hp =>
@@ -2063,21 +2064,30 @@ theorem Relation.transGen_sub {α : Type*} {p q : α → α → Prop} (h : ∀ x
     rename_i w y
     exact Relation.TransGen.trans hqt (Relation.TransGen.single (h w y hpw))
 
+theorem Relation.transGen_sub {α : Type*} {p q : α → α → Prop} (h : ∀ x y, p x y → q x y) :
+    (∀ x y, Relation.TransGen p x y → Relation.TransGen q x y) := by
+  apply Relation.transGen_sub_iso
+  exact h
+
 def omit_vertex (G : D.DependenceGraph V) (v : V) : D.DependenceGraph {x // x ≠ v} where
   adj := fun u v => G.adj u v
   φ := fun v => G.φ v
   acyclic := by
     intro ⟨x, hx⟩ h
-    simp at h
-    have h_sub : ∀ x y, (fun u v => G.adj u v) x y → G.adj x y := by simp
-    have h_id := Relation.transGen_sub (h_sub) x x
-    apply G.acyclic x
-    apply h_id
-    sorry
+    apply Relation.transGen_sub_iso _ G.adj (fun ⟨x, hx⟩ => x) at h
+    · simp [G.acyclic] at h
+    · simp
   dep := by
     intro ⟨u, hu⟩ ⟨v, hv⟩
     simp
     exact G.dep u v
+
+def omit_vertex_rep (G : D.DepGraphRep) (v : G.V) : D.DepGraphRep where
+  V := {x // x ≠ v}
+  fintypeV := by
+    --exact Fintype.ofSurjective ?_
+    sorry
+  graph := omit_vertex G.graph v
 
 /-
 theorem _induction_card {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V → Prop}
@@ -2148,12 +2158,12 @@ theorem omit_induction {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V �
 def card : D.DepGraphMonoid → ℕ :=
   Quotient.lift (fun GR : DepGraphRep => @Fintype.card GR.V GR.fintypeV) (by
     intro a b ⟨φ⟩
-    have := a.fintypeV
-    have := b.fintypeV
     simp
-    exact Fintype.card_congr φ.map
-    sorry
+    exact @Fintype.card_congr a.V b.V a.fintypeV b.fintypeV φ.map
   )
+
+lemma card_eq_card_memV (Γ : D.DepGraphMonoid) : Γ.card = @Fintype.card Γ.out.V Γ.out.fintypeV := by
+  rw [card, show Γ = ⟦Γ.out⟧ by simp, Quotient.lift_mk, Quotient.out_eq]
 
 theorem toDepGraph_surj (Γ : D.DepGraphMonoid) : ∃ s : FreeMonoid α, toDepGraph s = Γ := by
   induction h : card Γ generalizing Γ with
@@ -2165,27 +2175,41 @@ theorem toDepGraph_surj (Γ : D.DepGraphMonoid) : ∃ s : FreeMonoid α, toDepGr
     apply Quotient.sound
     refine ⟨?_, ?_, ?_⟩
     all_goals simp
+    --rw [card_eq_card_memV] at h
     rw [card, show Γ = ⟦Γ.out⟧ by simp, Quotient.lift_mk] at h
-    calc
-      Fin 0 ≃ Empty := by
-        exact ⟨Fin.elim0,
-               Empty.elim,
-               by simp [Function.LeftInverse],
-               by simp [Function.RightInverse, Function.LeftInverse]⟩
-      Empty ≃ (Quotient.out Γ).V := by
-        have := (Quotient.out Γ).fintypeV
-        -- have := Fintype.cardEqZeroEquivEquivEmpty h
-        refine ⟨Empty.elim, ?_, by simp [Function.LeftInverse], ?_⟩
-        · sorry
-        · sorry
-    -- rw [@Fintype.card_eq_zero_iff] at h
-    -- rw [Fintype.cardEqZeroEquivEquivEmpty] at h
+    apply Iff.mp (@Fintype.card_eq_zero_iff (Quotient.out Γ).V (Quotient.out Γ).fintypeV) at h
+    apply Equiv.equivOfIsEmpty
   | succ n ih =>
-    rw [show Γ = ⟦Γ.out⟧ by simp]
-    -- have ⟨v, hv⟩ := has_max_vertex Γ.out.graph
-    -- have H := omit_vertex Γ.out.graph v
-    -- (apply ih to H, and prove [appending the respective symbol to H's string] →* Γ.out.graph)
-    sorry
+    let G := Γ.out
+    have hG : G = Γ.out := by rfl
+    rw [show Γ = ⟦G⟧ by simp [hG]] at h ⊢
+    have h_vNe : Nonempty G.V := by
+      have : @Fintype.card G.V G.fintypeV = n + 1 := by
+        simp [card] at h
+        exact h
+      have : @Fintype.card G.V G.fintypeV > 0 := by simp [this]
+      exact (@Fintype.card_pos_iff G.V G.fintypeV).mp this
+    have h_vFt := G.fintypeV
+    have ⟨v, hv⟩ := has_max_vertex G.graph
+    have h_voFt : Fintype { x // x ≠ v } := by sorry -- simp []
+    replace ih := ih (⟦toRep (omit_vertex G.graph v)⟧)
+    have h_Hn : card ⟦toRep (omit_vertex G.graph v)⟧ = n := by
+      simp [card, toRep]
+      rw [card_eq_card_memV, Quotient.out_eq, <- hG] at h
+      -- rw [h]
+      sorry
+    have ⟨s, hs⟩ := ih h_Hn
+    use s * FreeMonoid.of (G.graph.φ v)
+    apply Quotient.sound
+    simp [toRep, toDepGraphIndiv]
+    refine ⟨?_, ?_, ?_⟩
+    · refine ⟨?_, ?_, ?_, ?_⟩
+      · sorry
+      · sorry
+      · sorry
+      · sorry
+    · sorry
+    · sorry
 
 /-
 theorem max_vertex_induction {V} {motive : Type u → D.DependenceGraph V → Prop} (nil : motive (∅ : Set V) emptyGraph)
@@ -2211,6 +2235,48 @@ theorem max_vertex_induction {V} {motive : Type u → D.DependenceGraph V → Pr
     | cons a l' IH => exact h_step a l' IH
   exact this l [] nil
 -/
+
+def toDependencyMorphism [DecidableEq α] : D.independency.DependencyMorphism (D.DepGraphMonoid) where
+  hom := toDepGraph
+  surj := toDepGraph_surj
+  prop1 := by
+    intro s h
+    -- simp at h
+    simp [toDepGraph, toRep] at h
+    have : List.length s = @List.length α [] := by
+      simp [h]
+
+    replace h : (toDepGraph s).card = (toDepGraph 1).card := by simp [h]
+    have : (I.toTrace) s = (I.toTrace) 1 := h
+    simp [toTrace] at this
+    have hrel : I.trace_equiv s [] := Quotient.exact this
+    have hlen : s.length = ([] : List α).length := I.trace_equiv_length hrel
+    cases s with
+    | h0 => rfl
+    | ih a s' => simp at hlen
+  prop2 := by
+    intro a b h
+    simp
+    apply Quotient.sound
+    refine ⟨?_, ?_, ?_⟩
+    · refine ⟨?_, ?_, ?_, ?_⟩
+      · exact fun v => v --
+      · exact fun v => v --
+      · simp [Function.LeftInverse]
+      · simp [Function.RightInverse, Function.LeftInverse]
+    · simp [toRep, DepGraphRep.mul]
+      intro v
+    · sorry
+  prop3 := by
+    intro a u v h
+    have hrel : I.trace_equiv ((u.toList ++ [a]).cancelRight a) (v.cancelRight a) :=
+      I.cancelRight_preserves_congruence a (Quotient.exact h)
+    simp at hrel
+    exact Quotient.sound hrel
+  prop4 := by
+    intro a b u v hne h
+    have hrel : I.trace_equiv (u.toList ++ [a]) (v.toList ++ [b]) := Quotient.exact h
+    exact (I.tail_lemma u v a b hrel hne).left
 
 end DepGraphMonoid
 
