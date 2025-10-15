@@ -1490,7 +1490,7 @@ structure DependenceGraph (V : Type u) where
   sorry
 -/
 
-variable {V₁ V₂ V₃ : Type u} [Fintype V₁] [Fintype V₂] [Fintype V₃]
+variable {V₁ V₂ V₃ V₄ : Type*} [Fintype V₁] [Fintype V₂] [Fintype V₃] [Fintype V₄]
 
 def compose (G₁ : D.DependenceGraph V₁) (G₂ : D.DependenceGraph V₂) :
     D.DependenceGraph (V₁ ⊕ V₂) where
@@ -1625,6 +1625,31 @@ def trans {G₁ : D.DependenceGraph V₁} {G₂ : D.DependenceGraph V₂} {G₃ 
   map := φ.map.trans ψ.map
   label := by simp [φ.label, ψ.label]
   arcs := by simp [φ.arcs, ψ.arcs]
+
+def congr {G₁ : D.DependenceGraph V₁} {G₂ : D.DependenceGraph V₂}
+    {H₁ : D.DependenceGraph V₃} {H₂ : D.DependenceGraph V₄}
+    (φ : D.DepGraphIso G₁ G₂) (ψ : D.DepGraphIso H₁ H₂) :
+    D.DepGraphIso (compose G₁ H₁) (compose G₂ H₂) where
+  map := Equiv.sumCongr φ.map ψ.map
+  label := by
+    intro v
+    cases v with
+    | inl v => simp [compose, φ.label]
+    | inr v => simp [compose, ψ.label]
+  arcs := by
+    intro u v
+    cases u <;> cases v
+    · case inl.inl u v =>
+        simp [compose]
+        exact φ.arcs u v
+    · case inl.inr u v =>
+        simp [compose]
+        rw [φ.label, ψ.label]
+    · case inr.inl u v =>
+        simp [compose]
+    · case inr.inr u v =>
+        simp [compose]
+        exact ψ.arcs u v
 
 end DepGraphIso
 
@@ -1766,6 +1791,10 @@ instance : Monoid D.DepGraphMonoid where
   mul_assoc := mul_assoc
   one_mul := one_mul
   mul_one := mul_one
+
+lemma mul_congr {a₁ a₂ b₁ b₂ : D.DepGraphMonoid}
+    (ha : a₁ = a₂) (hb : b₁ = b₂) : a₁ * b₁ = a₂ * b₂ := by
+  rw [ha, hb]
 
 structure DependenceGraph (V : Type u) where
   adj : V → V → Prop
@@ -2082,6 +2111,27 @@ def omit_vertex (G : D.DependenceGraph V) (v : V) : D.DependenceGraph {x // x �
     simp
     exact G.dep u v
 
+def omit_max_compose {G : D.DependenceGraph V} {v : V} (h : ∀ u, ¬ G.adj v u) [DecidableEq V] :
+    DepGraphIso (compose (omit_vertex G v) (toDepGraphIndiv [G.φ v])) G := by
+  refine ⟨?_, ?_, ?_⟩
+  · refine ⟨?_, ?_, ?_, ?_⟩
+    · exact fun x => match x with
+      | Sum.inl x => x
+      | Sum.inr _ => v
+    · exact fun x => if hx : x ≠ v then Sum.inl ⟨x, hx⟩ else Sum.inr ⟨0, by simp⟩
+    · simp [Function.LeftInverse]
+      omega
+    · simp [Function.RightInverse, Function.LeftInverse]
+      intro x
+      by_cases h : x = v
+      all_goals simp [h]
+  · simp [compose, omit_vertex, toDepGraphIndiv]
+  · simp [compose, omit_vertex, toDepGraphIndiv, h]
+    intro u hu
+    have := G.dep u v
+    simp [h, hu] at this
+    rw [this]
+
 def omit_vertex_rep (G : D.DepGraphRep) (v : G.V) : D.DepGraphRep where
   V := {x // x ≠ v}
   fintypeV := by
@@ -2165,7 +2215,7 @@ def card : D.DepGraphMonoid → ℕ :=
 lemma card_eq_card_memV (Γ : D.DepGraphMonoid) : Γ.card = @Fintype.card Γ.out.V Γ.out.fintypeV := by
   rw [card, show Γ = ⟦Γ.out⟧ by simp, Quotient.lift_mk, Quotient.out_eq]
 
-theorem toDepGraph_surj (Γ : D.DepGraphMonoid) : ∃ s : FreeMonoid α, toDepGraph s = Γ := by
+theorem toDepGraph_surj (Γ : D.DepGraphMonoid) [DecidableEq Γ.out.V] : ∃ s : FreeMonoid α, toDepGraph s = Γ := by
   induction h : card Γ generalizing Γ with
   | zero =>
     use []
@@ -2196,20 +2246,45 @@ theorem toDepGraph_surj (Γ : D.DepGraphMonoid) : ∃ s : FreeMonoid α, toDepGr
     have h_Hn : card ⟦toRep (omit_vertex G.graph v)⟧ = n := by
       simp [card, toRep]
       rw [card_eq_card_memV, Quotient.out_eq, <- hG] at h
-      -- rw [h]
-      sorry
+      have : Fintype.card G.V = n + 1 → Fintype.card G.V - 1 = n := by omega
+      apply this
+      exact h
     have ⟨s, hs⟩ := ih h_Hn
     use s * FreeMonoid.of (G.graph.φ v)
+    rw [toDepGraph.map_mul]
+    obtain h_g_omit : ⟦G⟧ = ⟦toRep (omit_vertex G.graph v)⟧ * ⟦toRep (toDepGraphIndiv [G.graph.φ v])⟧ := by
+      obtain h_mm : ⟦toRep (omit_vertex G.graph v)⟧ * ⟦toRep (toDepGraphIndiv [G.graph.φ v])⟧ = ⟦(toRep (omit_vertex G.graph v)) * (toRep (toDepGraphIndiv [G.graph.φ v]))⟧ := by
+        unfold DepGraphRep.mul
+      -- rw [DepGraph]
+      rw [h_mm]
+      apply Quotient.sound
+      refine ⟨?_, ?_, ?_⟩
+    rw [h_g_omit]
+    apply mul_congr
+    all_goals apply Quotient.sound
+    · refine ⟨?_, ?_, ?_⟩
+      · simp [toRep]
+        sorry
+    · refine ⟨?_, ?_, ?_⟩
+      · simp [toRep]
+        rw [show List.length (FreeMonoid.of (G.graph.φ v)) = 1 by rfl]
+      · simp [toRep, toDepGraphIndiv]
+        intro tv
+        rfl
+      · simp [toRep, toDepGraphIndiv]
+        intro u w
+        rfl
+    /-
     apply Quotient.sound
-    simp [toRep, toDepGraphIndiv]
+    apply Quotient.exact at hs
+    -- use omit_max_compose hv
     refine ⟨?_, ?_, ?_⟩
     · refine ⟨?_, ?_, ?_, ?_⟩
-      · sorry
-      · sorry
-      · sorry
-      · sorry
-    · sorry
-    · sorry
+      · exact fun x => match x with
+        | Sum.inl x => x
+        | Sum.inr _ => v
+    rw [DepGraphRep.mul]
+    -/
 
 /-
 theorem max_vertex_induction {V} {motive : Type u → D.DependenceGraph V → Prop} (nil : motive (∅ : Set V) emptyGraph)
