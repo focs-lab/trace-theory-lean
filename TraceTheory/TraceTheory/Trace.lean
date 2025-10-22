@@ -700,21 +700,31 @@ lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
     apply Quotient.sound
     exact hd'.symm
 
-open FreeMonoid
+instance : Monoid (List α) where
+  one := []
+  mul := List.append
+  mul_assoc := List.append_assoc
+  mul_one := List.append_nil
+  one_mul := List.nil_append
 
 variable (I) in
 @[ext]
 structure DependenceMorphism (M : Type*) [Monoid M] where
-  toFun : FreeMonoid α →* M
-  A1 : ∀ w, toFun w = toFun 1 → w = 1
-  A2 : ∀ {a b}, I.rel a b → toFun (of a * of b) = toFun (of b * of a)
-  A3 : ∀ {u v} {a}, toFun (u * of a) = toFun v → toFun u = toFun (v ÷ a)
-  A4 : ∀ {u v} {a b}, toFun (u * of a) = toFun (v * of b) ∧ a ≠ b → I.rel a b
+  toFun : List α →* M
+  A1 : ∀ w, toFun w = toFun 1 → w = []
+  A2 : ∀ {a b}, I.rel a b → toFun [a, b] = toFun [b, a]
+  A3 : ∀ {u v} {a}, toFun (u ++ [a]) = toFun v → toFun u = toFun (v ÷ a)
+  A4 : ∀ {u v} {a b}, toFun (u ++ [a]) = toFun (v ++ [b]) ∧ a ≠ b → I.rel a b
 
 instance {M} [Monoid M] : CoeFun (DependenceMorphism I M) (fun _ ↦ FreeMonoid α → M) where
   coe := fun morphism ↦ morphism.toFun
 
 attribute [coe] DependenceMorphism.toFun
+
+lemma DependenceMorphism.map_append {I M} [Monoid M]
+    (ϕ : DependenceMorphism I M) (u v : List α) :
+    ϕ (u ++ v) = ϕ u * ϕ v :=
+  ϕ.toFun.map_mul u v
 
 def mk' : FreeMonoid α →* Trace I where
   toFun := Quotient.mk (traceSetoid I)
@@ -738,7 +748,7 @@ def traceDependenceMorphism : DependenceMorphism I (Trace I) where -- (1.3.9)
     intro u v a huav
     replace huav := Quotient.exact huav
     apply Quotient.sound
-    have h_cancel : TraceEquiv I (u.toList ++ [a] ÷ a) (v ÷ a) := cancellation_rule I a huav
+    have h_cancel : TraceEquiv I (u ++ [a] ÷ a) (v ÷ a) := cancellation_rule I a huav
     simp at h_cancel
     exact h_cancel
   A4 := by
@@ -746,5 +756,23 @@ def traceDependenceMorphism : DependenceMorphism I (Trace I) where -- (1.3.9)
     have h_equiv := Quotient.exact huvab.left
     have h_indep := indep_and_decomp_of_equiv_of_neq_tail I h_equiv huvab.right
     exact h_indep.left
+
+variable {M : Type*} [Monoid M]
+
+lemma decomp_of_image_eq_of_neq_tail
+    {ϕ : DependenceMorphism I M} {u v : List α} {a b : α}
+    (heq : ϕ (u ++ [a]) = ϕ (v ++ [b])) (hne : a ≠ b) : -- (1.3.6)
+    ∃ w, ϕ u = ϕ (w ++ [b]) ∧ ϕ v = ϕ (w ++ [a]) := by
+  have hu : ϕ u = ϕ (v ÷ a ++ [b]) := by
+    have h := ϕ.A3 heq
+    simp [List.cancel_right_over_concat, hne] at h
+    exact h
+  have hu' : ϕ (u ÷ b) = ϕ (v ÷ a) := (ϕ.A3 hu.symm).symm
+  use u ÷ b
+  constructor
+  · rw [hu, ϕ.map_append, ϕ.map_append, hu']
+  · have hab : u ÷ b ++ [a] = u ++ [a] ÷ b := by simp [hne.symm]
+    rw [hab]
+    exact ϕ.A3 heq.symm
 
 end Trace
