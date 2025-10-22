@@ -757,7 +757,7 @@ def traceDependenceMorphism : DependenceMorphism I (Trace I) where -- (1.3.9)
     have h_indep := indep_and_decomp_of_equiv_of_neq_tail I h_equiv huvab.right
     exact h_indep.left
 
-variable {M : Type*} [Monoid M]
+variable {M N : Type*} [Monoid M] [Monoid N]
 
 lemma decomp_of_image_eq_of_neq_tail
     {ϕ : DependenceMorphism I M} {u v : List α} {a b : α}
@@ -774,5 +774,43 @@ lemma decomp_of_image_eq_of_neq_tail
   · have hab : u ÷ b ++ [a] = u ++ [a] ÷ b := by simp [hne.symm]
     rw [hab]
     exact ϕ.A3 heq.symm
+
+lemma image_eq_of_image_eq
+    (ϕ : DependenceMorphism I M) (ψ : DependenceMorphism I N)
+    (x y : List α) (h : ϕ x = ϕ y) : -- (1.3.7)
+    ψ x = ψ y := by
+  induction x using List.induction_right generalizing y with
+  | nil =>
+    replace h := ϕ.A1 y h.symm
+    rw [h]
+  | snoc u a ihx =>
+    induction y using List.induction_right generalizing u a with
+    | nil =>
+      replace h := ϕ.A1 (u ++ [a]) h
+      rw [h]
+    | snoc v b ihy =>
+      by_cases hab : a = b
+      · replace h := ϕ.A3 h
+        simp [hab] at h
+        rw [ψ.map_append, ψ.map_append]
+        rw [ihx v, hab]
+        exact h
+      · have h_indep := ϕ.A4 ⟨h, hab⟩
+        have ⟨w, hw⟩ := decomp_of_image_eq_of_neq_tail h hab
+        have hwb := ihx (w ++ [b]) hw.left
+        have h' : ∀ z, ϕ w = ϕ z → ψ w = ψ z := by
+          intro z hz
+          have hu := hw.left
+          rw [ϕ.map_append, hz, ← ϕ.map_append] at hu
+          replace hu := ihx (z ++ [b]) hu
+          have hwz := ψ.A3 (hwb.symm.trans hu)
+          simp at hwz
+          exact hwz
+        have hwa := (ihy w a h' hw.right.symm).symm
+        rw [ψ.map_append, ψ.map_append, hwb, hwa, ← ψ.map_append, ← ψ.map_append]
+        rw [List.append_assoc, List.append_assoc]
+        rw [ψ.map_append, ψ.map_append w]
+        rw [List.singleton_append, List.singleton_append]
+        rw [ψ.A2 h_indep]
 
 end Trace
