@@ -1,3 +1,4 @@
+import Mathlib.Algebra.FreeMonoid.Basic
 import Mathlib.Data.Fintype.Basic
 import TraceTheory.Basic
 
@@ -698,5 +699,52 @@ lemma exists_lcd {u v w : List α} (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPre
     use y₄
     apply Quotient.sound
     exact hd'.symm
+
+open FreeMonoid
+
+variable (I) in
+@[ext]
+structure DependenceMorphism (M : Type*) [Monoid M] where
+  toFun : FreeMonoid α →* M
+  A1 : ∀ w, toFun w = toFun 1 → w = 1
+  A2 : ∀ {a b}, I.rel a b → toFun (of a * of b) = toFun (of b * of a)
+  A3 : ∀ {u v} {a}, toFun (u * of a) = toFun v → toFun u = toFun (v ÷ a)
+  A4 : ∀ {u v} {a b}, toFun (u * of a) = toFun (v * of b) ∧ a ≠ b → I.rel a b
+
+instance {M} [Monoid M] : CoeFun (DependenceMorphism I M) (fun _ ↦ FreeMonoid α → M) where
+  coe := fun morphism ↦ morphism.toFun
+
+attribute [coe] DependenceMorphism.toFun
+
+def mk' : FreeMonoid α →* Trace I where
+  toFun := Quotient.mk (traceSetoid I)
+  map_one' := rfl
+  map_mul' := by
+    intro w₁ w₂
+    rfl
+
+def traceDependenceMorphism : DependenceMorphism I (Trace I) where -- (1.3.9)
+  toFun := mk'
+  A1 := by
+    intro w hw
+    replace hw := Quotient.exact hw
+    apply List.length_eq_zero_iff.mp
+    exact length_eq_of_equiv I hw
+  A2 := by
+    intro a b hab
+    apply Quotient.sound
+    exact TraceEquiv.swap a b hab
+  A3 := by
+    intro u v a huav
+    replace huav := Quotient.exact huav
+    apply Quotient.sound
+    have h_cancel : TraceEquiv I (u.toList ++ [a] ÷ a) (v ÷ a) := cancellation_rule I a huav
+    simp at h_cancel
+    exact h_cancel
+  A4 := by
+    intro u v a b huvab
+    have h_equiv := Quotient.exact huvab.left
+    have h_indep := indep_and_decomp_of_equiv_of_neq_tail I h_equiv huvab.right
+    exact h_indep.left
 
 end Trace
