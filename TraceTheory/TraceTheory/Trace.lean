@@ -305,7 +305,7 @@ lemma equiv_cancel_right {u v w : List α}
   exact h
 
 variable (I) in
-lemma indep_and_decomp_of_equiv_of_neq_tail {u v : List α} {a b : α}
+lemma indep_and_decomp_of_equiv_of_tail_ne {u v : List α} {a b : α}
     (h : TraceEquiv I (u ++ [a]) (v ++ [b])) (hne : a ≠ b) : -- (1.9)
     I.rel a b ∧ ∃ w, TraceEquiv I u (w ++ [b]) ∧ TraceEquiv I v (w ++ [a]) := by
   have h_cancel_a := by simpa [hne] using cancellation_rule I a h
@@ -347,7 +347,7 @@ lemma indep_of_equiv_rightmost_symbol {u v w : List α} {a : α}
     rcases hav with ⟨hax, hab⟩
     rw [eq_comm] at hab
     rw [← List.append_assoc] at h
-    have hr := (indep_and_decomp_of_equiv_of_neq_tail I h hab).left
+    have hr := (indep_and_decomp_of_equiv_of_tail_ne I h hab).left
     replace h := cancellation_rule I b h
     replace h := by simpa only [List.cancel_right_snoc, hab, ↓reduceIte] using h
     replace h := by simpa using ih h hax
@@ -754,7 +754,7 @@ def traceDependenceMorphism : DependenceMorphism I (Trace I) where -- (1.3.9)
   A4 := by
     intro u v a b huvab
     have h_equiv := Quotient.exact huvab.left
-    have h_indep := indep_and_decomp_of_equiv_of_neq_tail I h_equiv huvab.right
+    have h_indep := indep_and_decomp_of_equiv_of_tail_ne I h_equiv huvab.right
     exact h_indep.left
 
 variable {M N : Type*} [Monoid M] [Monoid N]
@@ -812,5 +812,48 @@ lemma image_eq_of_image_eq
         rw [ψ.map_append, ψ.map_append w]
         rw [List.singleton_append, List.singleton_append]
         rw [ψ.A2 h_indep]
+
+noncomputable def dependenceMorphismIso
+    (ϕ : DependenceMorphism I M) (hϕ_surj : Function.Surjective ϕ.toFun)
+    (ψ : DependenceMorphism I N) (hψ_surj : Function.Surjective ψ.toFun): -- (1.3.8)
+    M ≃* N := by
+  let θ (m : M) : N := ψ (Classical.choose (hϕ_surj m))
+  let θ_inv (n : N) : M := ϕ (Classical.choose (hψ_surj n))
+  have θ_well_defined : ∀ (m : M) (w : List α) (h : ϕ w = m), θ m = ψ w := by
+    intro m w h
+    have h_choose := Classical.choose_spec (hϕ_surj m)
+    rw [← h_choose, ] at h
+    exact image_eq_of_image_eq ϕ ψ _ _ h.symm
+  have θ_inv_well_defined : ∀ (n : N) (w : List α) (h : ψ w = n), θ_inv n = ϕ w := by
+    intro n w h
+    have h_choose := Classical.choose_spec (hψ_surj n)
+    rw [← h_choose] at h
+    exact image_eq_of_image_eq ψ ϕ _ _ h.symm
+  refine' {
+    toFun := θ
+    invFun := θ_inv
+    map_mul' := ?_
+    left_inv := ?_
+    right_inv := ?_
+  }
+  · intro m
+    rcases hϕ_surj m with ⟨w, hw⟩
+    rw [θ_well_defined m w hw]
+    rw [θ_inv_well_defined (ψ w) w rfl]
+    exact hw
+  · intro n
+    rcases hψ_surj n with ⟨w, hw⟩
+    rw [θ_inv_well_defined n w hw]
+    rw [θ_well_defined (ϕ w) w rfl]
+    exact hw
+  · intro m₁ m₂
+    rcases hϕ_surj m₁ with ⟨w₁, hw₁⟩
+    rcases hϕ_surj m₂ with ⟨w₂, hw₂⟩
+    rw [θ_well_defined m₁ w₁ hw₁]
+    rw [θ_well_defined m₂ w₂ hw₂]
+    rw [← ψ.map_append]
+    have h : ϕ (w₁ ++ w₂) = m₁ * m₂ := by
+      rw [ϕ.map_append, hw₁, hw₂]
+    exact θ_well_defined (m₁ * m₂) (w₁ ++ w₂) h
 
 end Trace
