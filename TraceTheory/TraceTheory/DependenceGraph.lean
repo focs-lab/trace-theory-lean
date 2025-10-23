@@ -1,3 +1,4 @@
+import Mathlib.Data.Fintype.Basic
 import Mathlib.Logic.Relation
 import TraceTheory.Trace
 
@@ -66,5 +67,39 @@ lemma edge_subset_of_dep_subset {D₁ D₂ : Dependence α}
   · contradiction
 
 end EdgeSubset
+
+instance (γ : DependenceGraph D) : Fintype γ.V := γ.fintype
+
+def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D where
+  V := γ₁.V ⊕ γ₂.V
+  fintype := inferInstance
+  R := fun u v =>
+    match u, v with
+    | Sum.inl u, Sum.inl v => γ₁.R u v
+    | Sum.inl u, Sum.inr v => D.rel (γ₁.φ u) (γ₂.φ v)
+    | Sum.inr u, Sum.inl v => False
+    | Sum.inr u, Sum.inr v => γ₂.R u v
+  φ := Sum.elim γ₁.φ γ₂.φ
+  acyclic := by
+    intro v h
+    sorry
+  d_conn := by
+    intro v₁ v₂
+    cases v₁ with
+    | inl v₁ =>
+      cases v₂ with
+      | inl v₂ =>
+        simp
+        exact γ₁.d_conn v₁ v₂
+      | inr v₂ =>
+        simp
+    | inr v₁ =>
+      cases v₂ with
+      | inl v₂ =>
+        simp
+        exact ⟨D.symm _ _, D.symm _ _⟩
+      | inr v₂ =>
+        simp
+        exact γ₂.d_conn v₁ v₂
 
 end DependenceGraph
