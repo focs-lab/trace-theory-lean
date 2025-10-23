@@ -223,7 +223,7 @@ lemma equiv_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
     · exact ih₁ hl₁.symm hl₂.symm
 
 variable (I) in
-lemma indep_of_equiv_of_neq {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a ≠ b):
+lemma indep_of_equiv_of_ne {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a ≠ b):
     I.rel a b := by
   generalize hx : ([a, b] : List α) = x at h
   generalize hy : ([b, a] : List α) = y at h
@@ -316,7 +316,7 @@ lemma indep_and_decomp_of_equiv_of_tail_ne {u v : List α} {a b : α}
   have h_cancel_b_concat_ab := h_cancel_b.compat (TraceEquiv.refl [b])
   have h_tail := by simpa using h_cancel_b_concat_ab.symm.trans (h.symm.trans h_cancel_b_concat_ba)
   have h_ab_ba := equiv_cancel_left I h_tail
-  exact ⟨indep_of_equiv_of_neq I h_ab_ba hne,
+  exact ⟨indep_of_equiv_of_ne I h_ab_ba hne,
          ⟨u ÷ b,
           ⟨h_cancel_b_concat_b, h_cancel_b⟩⟩⟩
 
@@ -759,7 +759,7 @@ def traceDependenceMorphism : DependenceMorphism I (Trace I) where -- (1.3.9)
 
 variable {M N : Type*} [Monoid M] [Monoid N]
 
-lemma decomp_of_image_eq_of_neq_tail
+lemma decomp_of_image_eq_of_tail_ne
     {ϕ : DependenceMorphism I M} {u v : List α} {a b : α}
     (heq : ϕ (u ++ [a]) = ϕ (v ++ [b])) (hne : a ≠ b) : -- (1.3.6)
     ∃ w, ϕ u = ϕ (w ++ [b]) ∧ ϕ v = ϕ (w ++ [a]) := by
@@ -796,7 +796,7 @@ lemma image_eq_of_image_eq
         rw [ihx v, hab]
         exact h
       · have h_indep := ϕ.A4 ⟨h, hab⟩
-        have ⟨w, hw⟩ := decomp_of_image_eq_of_neq_tail h hab
+        have ⟨w, hw⟩ := decomp_of_image_eq_of_tail_ne h hab
         have hwb := ihx (w ++ [b]) hw.left
         have h' : ∀ z, ϕ w = ϕ z → ψ w = ψ z := by
           intro z hz
