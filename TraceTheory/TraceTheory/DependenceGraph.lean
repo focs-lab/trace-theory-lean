@@ -70,36 +70,110 @@ end EdgeSubset
 
 instance (γ : DependenceGraph D) : Fintype γ.V := γ.fintype
 
-def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D where
-  V := γ₁.V ⊕ γ₂.V
-  fintype := inferInstance
-  R := fun u v =>
+def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D :=
+  let Vcomp := γ₁.V ⊕ γ₂.V
+  let Rcomp := fun u v =>
     match u, v with
     | Sum.inl u, Sum.inl v => γ₁.R u v
     | Sum.inl u, Sum.inr v => D.rel (γ₁.φ u) (γ₂.φ v)
     | Sum.inr u, Sum.inl v => False
     | Sum.inr u, Sum.inr v => γ₂.R u v
-  φ := Sum.elim γ₁.φ γ₂.φ
-  acyclic := by
-    intro v h
-    sorry
-  d_conn := by
-    intro v₁ v₂
-    cases v₁ with
-    | inl v₁ =>
-      cases v₂ with
-      | inl v₂ =>
-        simp
-        exact γ₁.d_conn v₁ v₂
+  let φcomp := Sum.elim γ₁.φ γ₂.φ
+  {
+    V := Vcomp
+    fintype := inferInstance
+    R := Rcomp
+    φ := φcomp
+    acyclic := by
+      intro v h
+      cases v with
+      | inl v₁ =>
+        have hγ₁ : ∀ {x y u v},
+            x = Sum.inl u →
+            y = Sum.inl v →
+            Relation.TransGen Rcomp x y →
+            Relation.TransGen γ₁.R u v := by
+          intro x y u v hx hy hxy
+          induction hxy generalizing v with
+          | single h_step =>
+            rename_i y
+            simp only [hx, hy, Rcomp] at h_step
+            exact Relation.TransGen.single h_step
+          | tail h_before h_step ih =>
+            rename_i w y
+            cases w with
+            | inl w₁ =>
+              simp only [hy, Rcomp] at h_step
+              exact Relation.TransGen.tail (ih rfl) h_step
+            | inr w₂ =>
+              exfalso
+              simp only [hy, Rcomp] at h_step
+        generalize hv₁ : Sum.inl v₁ = v' at h
+        exact γ₁.acyclic v₁ (hγ₁ hv₁.symm hv₁.symm h)
       | inr v₂ =>
-        simp
-    | inr v₁ =>
-      cases v₂ with
-      | inl v₂ =>
-        simp
-        exact ⟨D.symm _ _, D.symm _ _⟩
-      | inr v₂ =>
-        simp
-        exact γ₂.d_conn v₁ v₂
+        have h_right : ∀ (u : γ₂.V) (w : Vcomp),
+            Relation.TransGen Rcomp (Sum.inr u) w → Sum.isRight w := by
+          intro u w huw
+          induction huw with
+          | single h_step =>
+            rename_i w
+            cases w with
+            | inl w₁ =>
+              exfalso
+              simp only [Rcomp] at h_step
+            | inr w₂ =>
+              exact Sum.isRight_inr
+          | tail _ h_rest ih =>
+            rename_i x w _
+            cases w with
+            | inl w₁ =>
+              exfalso
+              have ⟨y, hy⟩ := Sum.isRight_iff.mp ih
+              simp only [Rcomp, hy] at h_rest
+            | inr w₂ =>
+              exact Sum.isRight_inr
+        have hγ₂ : ∀ {x y u v},
+            x = Sum.inr u →
+            y = Sum.inr v →
+            Relation.TransGen Rcomp x y →
+            Relation.TransGen γ₂.R u v := by
+          intro x y u v hx hy hxy
+          induction hxy generalizing v with
+          | single h_step =>
+            rename_i y
+            simp only [hx, hy, Rcomp] at h_step
+            exact Relation.TransGen.single h_step
+          | tail h_before h_step ih =>
+            rename_i w y
+            cases w with
+            | inl w₁ =>
+              exfalso
+              rw [hx] at h_before
+              have hw₁ := h_right u (Sum.inl w₁) h_before
+              simp only [Sum.isRight_inl, Bool.false_eq_true] at hw₁
+            | inr w₂ =>
+              simp only [hy, Rcomp] at h_step
+              exact Relation.TransGen.tail (ih rfl) h_step
+        generalize hv₂ : Sum.inr v₂ = v' at h
+        exact γ₂.acyclic v₂ (hγ₂ hv₂.symm hv₂.symm h)
+    d_conn := by
+      intro v₁ v₂
+      cases v₁ with
+      | inl v₁ =>
+        cases v₂ with
+        | inl v₂ =>
+          simp [Vcomp, Rcomp, φcomp]
+          exact γ₁.d_conn v₁ v₂
+        | inr v₂ =>
+          simp [Vcomp, Rcomp, φcomp]
+      | inr v₁ =>
+        cases v₂ with
+        | inl v₂ =>
+          simp [Vcomp, Rcomp, φcomp]
+          exact ⟨D.symm _ _, D.symm _ _⟩
+        | inr v₂ =>
+          simp [Vcomp, Rcomp, φcomp]
+          exact γ₂.d_conn v₁ v₂
+  }
 
 end DependenceGraph
