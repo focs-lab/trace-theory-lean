@@ -70,7 +70,7 @@ end EdgeSubset
 
 instance (γ : DependenceGraph D) : Fintype γ.V := γ.fintype
 
-def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D :=
+def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D := -- (1.4.4)
   let Vcomp := γ₁.V ⊕ γ₂.V
   let Rcomp := fun u v =>
     match u, v with
