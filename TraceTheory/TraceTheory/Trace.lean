@@ -496,8 +496,7 @@ variable (I) in
 def _root_.Trace := Quotient (traceSetoid I)
 
 @[simp]
-def mul :
-    Trace I -> Trace I -> Trace I := by
+def mul : Trace I -> Trace I -> Trace I := by
   exact Quotient.lift₂
     (fun w₁ w₂ => ⟦w₁ ++ w₂⟧)
     (by
