@@ -262,4 +262,178 @@ def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D := -- (1.4.4)
           exact γ₂.d_conn v₁ v₂
   }
 
+def Isomorphic (γ₁ γ₂ : DependenceGraph D) : Prop := Nonempty (Iso γ₁ γ₂)
+infix:50 " ≃g " => Isomorphic
+
+omit [DecidableEq α] in
+@[refl]
+lemma isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
+  Nonempty.intro {
+    toEquiv := Equiv.refl γ.V
+    preserves_label' := by
+      intro v
+      rfl
+    preserves_arcs' := by
+      intro v₁ v₂
+      rfl
+  }
+
+omit [DecidableEq α] in
+@[symm]
+lemma isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) : γ₂ ≃g γ₁ :=
+  Nonempty.intro {
+    toEquiv := h.some.toEquiv.symm
+    preserves_label' := by
+      intro v₂
+      rw [h.some.preserves_label', h.some.toEquiv.apply_symm_apply v₂]
+    preserves_arcs' := by
+      intro v₂ w₂
+      rw [h.some.preserves_arcs']
+      rw [h.some.toEquiv.apply_symm_apply v₂, h.some.toEquiv.apply_symm_apply w₂]
+  }
+
+omit [DecidableEq α] in
+@[trans]
+lemma isomorphic_trans {γ₁ γ₂ γ₃ : DependenceGraph D} (h₁ : γ₁ ≃g γ₂) (h₂ : γ₂ ≃g γ₃) : γ₁ ≃g γ₃ :=
+  Nonempty.intro {
+    toEquiv := h₁.some.toEquiv.trans h₂.some.toEquiv
+    preserves_label' := by
+      intro v₁
+      rw [h₁.some.preserves_label', h₂.some.preserves_label', h₁.some.toEquiv.trans_apply]
+    preserves_arcs' := by
+      intro v₁ w₁
+      rw [h₁.some.preserves_arcs', h₂.some.preserves_arcs']
+      rw [h₁.some.toEquiv.trans_apply, h₁.some.toEquiv.trans_apply]
+  }
+
+instance isomorphicSetoid (D : Dependence α) : Setoid (DependenceGraph D) where
+  r := Isomorphic
+  iseqv := ⟨isomorphic_refl, isomorphic_symm, isomorphic_trans⟩
+
+def GraphMonoid (D : Dependence α) := Quotient (isomorphicSetoid D)
+
+def emptyGraph (D : Dependence α) : DependenceGraph D where
+  V := Empty
+  fintype := inferInstance
+  R := fun u v => False
+  φ := Empty.elim
+  acyclic := by simp
+  d_conn := by simp
+
+def one (D : Dependence α) : GraphMonoid D :=
+  Quotient.mk (isomorphicSetoid D) (emptyGraph D)
+
+def mul (D : Dependence α) : GraphMonoid D → GraphMonoid D → GraphMonoid D :=
+  Quotient.lift₂
+    (fun γ₁ γ₂ => ⟦compose γ₁ γ₂⟧)
+    (by
+      intro γ₁ γ₁' γ₂ γ₂' h h'
+      apply Quotient.sound
+      refine ⟨?_, ?_, ?_⟩
+      · exact Equiv.sumCongr h.some.toEquiv h'.some.toEquiv
+      · intro v
+        dsimp [compose]
+        cases v with
+        | inl v₁ =>
+          simp only [Sum.elim_inl, Sum.map_inl, h.some.preserves_label']
+        | inr v₂ =>
+          simp only [Sum.elim_inr, Sum.map_inr, h'.some.preserves_label']
+      · intro v₁ v₂
+        rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂ <;> dsimp [compose]
+        · rw [h.some.preserves_arcs']
+        . rw [h.some.preserves_label', h'.some.preserves_label']
+        · rfl
+        . rw [h'.some.preserves_arcs']
+    )
+
+omit [DecidableEq α] in
+lemma compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
+    (compose (compose γ₁ γ₂) γ₃) ≃g (compose γ₁ (compose γ₂ γ₃)) := by
+  apply Nonempty.intro
+  refine ⟨?_, ?_, ?_⟩
+  · dsimp [compose]
+    exact Equiv.sumAssoc _ _ _
+  · intro v
+    dsimp [compose]
+    cases v with
+    | inl v₁ =>
+      cases v₁ with
+      | inl v₁₁ =>
+        rw [Equiv.sumAssoc_apply_inl_inl]
+        simp only [Sum.elim_inl]
+      | inr v₁₂ =>
+        rw [Equiv.sumAssoc_apply_inl_inr]
+        simp only [Sum.elim_inl, Sum.elim_inr]
+    | inr v₂ =>
+      rw [Equiv.sumAssoc_apply_inr]
+      simp only [Sum.elim_inr]
+  · intro v₁ v₂
+    rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂
+    · rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂ <;> dsimp [compose] <;> rfl
+    · rcases v₁ with v₁ | v₁ <;> dsimp [compose] <;> rfl
+    · rcases v₂ with v₂ | v₂ <;> dsimp [compose] <;> rfl
+    · dsimp [compose]
+      rfl
+
+omit [DecidableEq α] in
+lemma empty_compose_iso (γ : DependenceGraph D) :
+    compose (emptyGraph D) γ ≃g γ := by
+  apply Nonempty.intro
+  refine ⟨?_, ?_, ?_⟩
+  · dsimp [compose, emptyGraph]
+    exact Equiv.emptySum _ _
+  · intro v
+    cases v with
+    | inl v₁ =>
+      cases v₁
+    | inr v₂ =>
+      dsimp [compose, emptyGraph]
+  · intro v₁ v₂
+    rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂
+    · cases v₁
+    · cases v₁
+    · cases v₂
+    · dsimp [compose, emptyGraph]
+      rfl
+
+omit [DecidableEq α] in
+lemma compose_empty_iso (γ : DependenceGraph D) :
+    compose γ (emptyGraph D) ≃g γ := by
+  apply Nonempty.intro
+  refine ⟨?_, ?_, ?_⟩
+  · dsimp [compose, emptyGraph]
+    exact Equiv.sumEmpty γ.V Empty
+  · intro v
+    cases v with
+    | inl v₁ =>
+      dsimp [compose, emptyGraph]
+    | inr v₂ =>
+      cases v₂
+  · intro v₁ v₂
+    rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂
+    · dsimp [compose, emptyGraph]
+      rfl
+    · cases v₂
+    · cases v₁
+    · cases v₁
+
+instance : Monoid (GraphMonoid D) where -- (1.4.5)
+  mul := mul D
+  one := one D
+  mul_assoc := by
+    intro γ₁_q γ₂_q γ₃_q
+    refine Quotient.inductionOn₃ γ₁_q γ₂_q γ₃_q (fun γ₁ γ₂ γ₃ => ?_)
+    apply Quotient.sound
+    exact compose_assoc_iso _ _ _
+  one_mul := by
+    intro γ_q
+    refine Quotient.inductionOn γ_q (fun γ => ?_)
+    apply Quotient.sound
+    exact empty_compose_iso _
+  mul_one := by
+    intro γ_q
+    refine Quotient.inductionOn γ_q (fun γ => ?_)
+    apply Quotient.sound
+    exact compose_empty_iso _
+
 end DependenceGraph
