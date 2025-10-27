@@ -1,5 +1,7 @@
+import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Fintype.Basic
 import Mathlib.Logic.Relation
+import Mathlib.Tactic.FinCases
 import TraceTheory.Trace
 
 open Trace
@@ -33,38 +35,122 @@ instance (γ₁ γ₂ : DependenceGraph D) : CoeFun (γ₁.Iso γ₂) (fun _ => 
 
 section EdgeSubset
 
-variable {V : Type} [Fintype V] (φ : V → α)
-variable (R₁ R₂ : V → V → Prop)
-variable (D₁ D₂ : Dependence α)
+variable {V : Type} [Fintype V]
 
 def RelSubset (R₁ R₂ : V → V → Prop) : Prop :=
   ∀ v₁ v₂, R₁ v₁ v₂ → R₂ v₁ v₂
 
 notation:50 R₁ " ⊆ " R₂ => RelSubset R₁ R₂
 
-lemma edge_subset_of_dep_subset {D₁ D₂ : Dependence α}
-    (h_acyclic₁ : ∀ v, ¬ Relation.TransGen R₁ v v)
-    (h_dconn₁ : ∀ v₁ v₂, R₁ v₁ v₂ ∨ R₁ v₂ v₁ ∨ v₁ = v₂ ↔ D₁.rel (φ v₁) (φ v₂))
-    (h_acyclic₂ : ∀ v, ¬ Relation.TransGen R₂ v v)
-    (h_dconn₂ : ∀ v₁ v₂, R₂ v₁ v₂ ∨ R₂ v₂ v₁ ∨ v₁ = v₂ ↔ D₂.rel (φ v₁) (φ v₂))
-    (h_subset : D₁ ⊆ D₂) : -- (1.4.2)
-    R₁ ⊆ R₂ := by
-  intro v₁ v₂ hR₁
-  have h_irref₁ : v₁ ≠ v₂ := by
-    intro heq
-    subst heq
-    have h_trans := Relation.TransGen.single hR₁
-    exact h_acyclic₁ v₁ h_trans
-  have h_dconn₁_left : R₁ v₁ v₂ ∨ R₁ v₂ v₁ ∨ v₁ = v₂ := by
-    left
-    exact hR₁
-  have hD₁ : D₁.rel (φ v₁) (φ v₂) := (h_dconn₁ v₁ v₂).mp h_dconn₁_left
-  have hD₂ : D₂.rel (φ v₁) (φ v₂) := h_subset (φ v₁) (φ v₂) hD₁
-  have h_dconn₂_left : R₂ v₁ v₂ ∨ R₂ v₂ v₁ ∨ v₁ = v₂ := (h_dconn₂ v₁ v₂).mpr hD₂
-  rcases h_dconn₂_left with hR₂_v₁v₂ | hR₂_v₂v₁ | hR₂_eq
-  · exact hR₂_v₁v₂
-  · sorry
-  · contradiction
+def counterexample_D_rel : Fin 2 → Fin 2 → Prop
+  | 0, 0 => True
+  | 0, 1 => True
+  | 1, 0 => True
+  | 1, 1 => True
+
+def D₁ : Dependence (Fin 2) where
+  rel := counterexample_D_rel
+  refl := by
+    intro a
+    fin_cases a <;> simp [counterexample_D_rel]
+  symm := by
+    intro a b h
+    fin_cases a <;> fin_cases b <;> simp [counterexample_D_rel]
+
+def D₂ := D₁
+
+def φ' : Fin 2 → Fin 2 := id
+
+def R₁ : Fin 2 → Fin 2 → Prop
+  | 0, 1 => True
+  | _, _ => False
+
+def R₂ : Fin 2 → Fin 2 → Prop
+  | 1, 0 => True
+  | _, _ => False
+
+lemma not_edge_subset_of_dep_subset :
+  ¬ (∀ {V α : Type} [Fintype V] (φ : V → α) (R₁ R₂ : V → V → Prop) (D₁ D₂ : Dependence α),
+    (∀ v, ¬ Relation.TransGen R₁ v v) →
+    (∀ v₁ v₂, R₁ v₁ v₂ ∨ R₁ v₂ v₁ ∨ v₁ = v₂ ↔ D₁.rel (φ v₁) (φ v₂)) →
+    (∀ v, ¬ Relation.TransGen R₂ v v) →
+    (∀ v₁ v₂, R₂ v₁ v₂ ∨ R₂ v₂ v₁ ∨ v₁ = v₂ ↔ D₂.rel (φ v₁) (φ v₂)) →
+    (D₁ ⊆ D₂) →
+    (R₁ ⊆ R₂)) := by
+  intro h
+  have hce := h φ' R₁ R₂ D₁ D₂
+  have hR₁ : ∀ u, ¬ Relation.TransGen R₁ 1 u := by
+    intro u hu
+    induction hu with
+    | single h_step =>
+      rename_i u
+      simp [R₁] at h_step
+    | tail h_before h_step ih =>
+      exact ih
+  have hR₂ : ∀ u, ¬ Relation.TransGen R₂ 0 u := by
+    intro u hu
+    induction hu with
+    | single h_step =>
+      rename_i u
+      simp [R₂] at h_step
+    | tail h_before h_step ih =>
+      exact ih
+  have h_acyclic₁ : ∀ v, ¬ Relation.TransGen R₁ v v := by
+    intro v
+    fin_cases v
+    · intro hv
+      cases hv with
+      | single h_step =>
+        simp [R₁] at h_step
+      | tail h_before h_step =>
+        rename_i u
+        fin_cases u <;> simp [R₁] at h_step
+    · intro hv
+      cases hv with
+      | single h_step =>
+        simp [R₁] at h_step
+      | tail h_before h_step =>
+        rename_i u
+        simp at h_before
+        exact hR₁ u h_before
+  have h_dconn₁ : ∀ v₁ v₂, R₁ v₁ v₂ ∨ R₁ v₂ v₁ ∨ v₁ = v₂ ↔ D₁.rel (φ' v₁) (φ' v₂) := by
+    intro v₁ v₂
+    fin_cases v₁ <;> fin_cases v₂
+    all_goals (
+      dsimp [D₁, counterexample_D_rel, φ', R₁]
+      simp
+    )
+  have h_acyclic₂ : ∀ v, ¬ Relation.TransGen R₂ v v := by
+    intro v
+    fin_cases v
+    · intro hv
+      cases hv with
+      | single h_step =>
+        simp [R₂] at h_step
+      | tail h_before h_step =>
+        rename_i u
+        simp at h_before
+        exact hR₂ u h_before
+    · intro hv
+      cases hv with
+      | single h_step =>
+        simp [R₂] at h_step
+      | tail h_before h_step =>
+        rename_i u
+        fin_cases u <;> simp [R₂] at h_step
+  have h_dconn₂ : ∀ v₁ v₂, R₂ v₁ v₂ ∨ R₂ v₂ v₁ ∨ v₁ = v₂ ↔ D₂.rel (φ' v₁) (φ' v₂) := by
+    intro v₁ v₂
+    fin_cases v₁ <;> fin_cases v₂
+    all_goals (
+      dsimp [D₂, D₁, counterexample_D_rel, φ', R₁, R₂]
+      simp
+    )
+  have h_subset : D₁ ⊆ D₂ := by
+    intro a b
+    simp [D₂]
+  replace hce := hce h_acyclic₁ h_dconn₁ h_acyclic₂ h_dconn₂ h_subset
+  replace hce := hce 0 1
+  simp [R₁, R₂] at hce
 
 end EdgeSubset
 
