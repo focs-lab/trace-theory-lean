@@ -595,4 +595,42 @@ lemma fromString_surjective : -- (1.4.6)
           intro h
           exact γ.acyclic a (Relation.TransGen.single h)
 
+omit [DecidableEq α] in
+lemma fromString_empty : fromString D [] = emptyGraph D := by rfl
+
+omit [DecidableEq α] in
+lemma fromString_concat (w : List α) (a : α) :
+    fromString D (w ++ [a]) = compose (fromString D w) (singletonGraph D a) := by
+  dsimp [fromString]
+  rw [List.foldl_concat]
+
+omit [DecidableEq α] in
+lemma fromString_append_iso_compose (w₁ w₂ : List α) :
+    fromString D (w₁ ++ w₂) ≃g compose (fromString D w₁) (fromString D w₂) := by
+  induction w₂ using List.induction_right with
+  | nil =>
+    simp only [List.append_nil, fromString_empty]
+    exact isomorphic_symm (compose_empty_iso (fromString D w₁))
+  | snoc w' a ih =>
+    rw [← List.append_assoc, fromString_concat, fromString_concat]
+    apply isomorphic_trans (compose_congr ih (isomorphic_refl (singletonGraph D a)))
+    exact compose_assoc_iso _ _ _
+
+def mk' : List α →* GraphMonoid D where
+  toFun := fun w => ⟦fromString D w⟧
+  map_one' := by rfl
+  map_mul' := by
+    intro w₁ w₂
+    change ⟦fromString D (w₁ ++ w₂)⟧ = ⟦compose (fromString D w₁) (fromString D w₂)⟧
+    apply Quotient.sound
+    exact fromString_append_iso_compose _ _
+
+def dependenceGraphDependenceMorphism :
+    DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
+  toFun := mk'
+  A1 := sorry
+  A2 := sorry
+  A3 := sorry
+  A4 := sorry
+
 end DependenceGraph
