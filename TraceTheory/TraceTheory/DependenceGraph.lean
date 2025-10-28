@@ -616,6 +616,36 @@ lemma fromString_append_iso_compose (w₁ w₂ : List α) :
     apply isomorphic_trans (compose_congr ih (isomorphic_refl (singletonGraph D a)))
     exact compose_assoc_iso _ _ _
 
+omit [DecidableEq α] in
+lemma card_eq_of_iso {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) :
+    Fintype.card γ₁.V = Fintype.card γ₂.V := by
+  apply Fintype.card_eq.mpr
+  apply Nonempty.intro
+  exact h.some.toEquiv
+
+omit [DecidableEq α] in
+lemma card_compose_eq_sum (γ₁ γ₂ : DependenceGraph D) :
+    Fintype.card (compose γ₁ γ₂).V = Fintype.card γ₁.V + Fintype.card γ₂.V := by
+  dsimp [compose]
+  exact Fintype.card_sum
+
+omit [DecidableEq α] in
+lemma card_fromString_eq_length (w : List α) :
+    Fintype.card (fromString D w).V = w.length := by
+  induction w using List.induction_right with
+  | nil =>
+    simp [fromString, emptyGraph]
+  | snoc w' a ih =>
+    rw [fromString_concat, card_compose_eq_sum, ih]
+    dsimp [singletonGraph]
+    simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
+
+omit [DecidableEq α] in
+lemma fromString_length_eq_of_iso {w₁ w₂ : List α} (h : fromString D w₁ ≃g fromString D w₂) :
+    w₁.length = w₂.length := by
+  rw [← card_fromString_eq_length, ← card_fromString_eq_length]
+  exact card_eq_of_iso h
+
 def mk' : List α →* GraphMonoid D where
   toFun := fun w => ⟦fromString D w⟧
   map_one' := by rfl
@@ -625,10 +655,16 @@ def mk' : List α →* GraphMonoid D where
     apply Quotient.sound
     exact fromString_append_iso_compose _ _
 
-def dependenceGraphDependenceMorphism :
+def dependenceGraphDependenceMorphism : -- (1.4.7)
     DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
   toFun := mk'
-  A1 := sorry
+  A1 := by
+    intro w hw
+    replace hw := Quotient.exact hw
+    change fromString D w ≈ fromString D [] at hw
+    replace hw := fromString_length_eq_of_iso hw
+    rw [List.length_nil] at hw
+    exact List.length_eq_zero_iff.mp hw
   A2 := sorry
   A3 := sorry
   A4 := sorry
