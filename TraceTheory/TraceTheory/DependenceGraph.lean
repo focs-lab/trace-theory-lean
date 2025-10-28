@@ -436,4 +436,75 @@ instance : Monoid (GraphMonoid D) where -- (1.4.5)
     apply Quotient.sound
     exact compose_empty_iso _
 
+def singletonGraph (a : α) : DependenceGraph D where
+  V := Unit
+  fintype := inferInstance
+  R := fun u v => False
+  φ := fun v => a
+  acyclic := by
+    intro v hv
+    cases hv <;> contradiction
+  d_conn := by
+    intro v₁ v₂
+    simp only [or_true, D.refl]
+
+def fromString (w : List α) : DependenceGraph D :=
+  List.foldl (fun γ a => compose γ (singletonGraph a)) (emptyGraph D) w
+
+def IsSink (γ : DependenceGraph D) (v : γ.V) : Prop :=
+  ∀ w, ¬ γ.R v w
+
+omit [DecidableEq α] in
+lemma exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty γ.V) :
+    ∃ v, IsSink γ v := by
+  classical
+  have wf : WellFounded (flip γ.R) := by
+    let μ : γ.V → ℕ := fun v => (Finset.univ.filter (fun w => Relation.TransGen γ.R v w)).card
+    have μ_wf : WellFounded (Function.onFun Nat.lt μ) :=
+      WellFounded.onFun wellFounded_lt
+    apply WellFounded.mono μ_wf
+    intro a b hab
+    dsimp [μ]
+    apply Finset.card_lt_card
+    constructor
+    · intro w
+      rw [Finset.mem_filter_univ, Finset.mem_filter_univ]
+      intro hw
+      exact Relation.TransGen.head hab hw
+    · apply Finset.not_subset.mpr
+      use a
+      constructor
+      · rw [Finset.mem_filter_univ]
+        exact Relation.TransGen.single hab
+      · rw [Finset.mem_filter_univ]
+        exact γ.acyclic a
+  have ⟨v, _, hv⟩ := wf.has_min (Set.univ : Set γ.V) (Set.nonempty_iff_univ_nonempty.mp h)
+  use v
+  intro w hw
+  replace hv := hv w (Set.mem_univ w)
+  dsimp [flip] at hv
+  exact hv hw
+
+noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceGraph D where
+  V := {u : γ.V // u ≠ v}
+  fintype := Fintype.ofFinite {u : γ.V // u ≠ v}
+  R := fun u v => γ.R u v
+  φ := fun v => γ.φ v
+  acyclic := by
+    intro u h
+    have h_lift : ∀ u v : { u // u ≠ v },
+        Relation.TransGen (fun x y => γ.R x.val y.val) u v →
+        Relation.TransGen γ.R u.val v.val := by
+      intro u v h
+      induction h with
+      | single h_step =>
+        exact Relation.TransGen.single h_step
+      | tail h_before h_step ih =>
+        exact Relation.TransGen.tail ih h_step
+    exact γ.acyclic u (h_lift u u h )
+  d_conn := by
+    intro ⟨u, hu⟩ ⟨w, hw⟩
+    simp only [ne_eq, Subtype.mk.injEq]
+    exact γ.d_conn u w
+
 end DependenceGraph
