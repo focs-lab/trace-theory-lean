@@ -323,27 +323,34 @@ def emptyGraph (D : Dependence α) : DependenceGraph D where
 def one (D : Dependence α) : GraphMonoid D :=
   Quotient.mk (isomorphicSetoid D) (emptyGraph D)
 
+omit [DecidableEq α] in
+lemma compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
+    (h₁ : γ₁ ≃g γ₁') (h₂ : γ₂ ≃g γ₂') :
+    (compose γ₁ γ₂) ≃g (compose γ₁' γ₂') := by
+  apply Nonempty.intro
+  refine ⟨?_, ?_, ?_⟩
+  · exact Equiv.sumCongr h₁.some.toEquiv h₂.some.toEquiv
+  · intro v
+    dsimp [compose]
+    cases v with
+    | inl v₁ =>
+      simp only [Sum.elim_inl, Sum.map_inl, h₁.some.preserves_label']
+    | inr v₂ =>
+      simp only [Sum.elim_inr, Sum.map_inr, h₂.some.preserves_label']
+  · intro v₁ v₂
+    rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂ <;> dsimp [compose]
+    · rw [h₁.some.preserves_arcs']
+    . rw [h₁.some.preserves_label', h₂.some.preserves_label']
+    · rfl
+    . rw [h₂.some.preserves_arcs']
+
 def mul (D : Dependence α) : GraphMonoid D → GraphMonoid D → GraphMonoid D :=
   Quotient.lift₂
     (fun γ₁ γ₂ => ⟦compose γ₁ γ₂⟧)
     (by
       intro γ₁ γ₁' γ₂ γ₂' h h'
       apply Quotient.sound
-      refine ⟨?_, ?_, ?_⟩
-      · exact Equiv.sumCongr h.some.toEquiv h'.some.toEquiv
-      · intro v
-        dsimp [compose]
-        cases v with
-        | inl v₁ =>
-          simp only [Sum.elim_inl, Sum.map_inl, h.some.preserves_label']
-        | inr v₂ =>
-          simp only [Sum.elim_inr, Sum.map_inr, h'.some.preserves_label']
-      · intro v₁ v₂
-        rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂ <;> dsimp [compose]
-        · rw [h.some.preserves_arcs']
-        . rw [h.some.preserves_label', h'.some.preserves_label']
-        · rfl
-        . rw [h'.some.preserves_arcs']
+      exact compose_congr h h'
     )
 
 omit [DecidableEq α] in
@@ -436,6 +443,7 @@ instance : Monoid (GraphMonoid D) where -- (1.4.5)
     apply Quotient.sound
     exact compose_empty_iso _
 
+variable (D) in
 def singletonGraph (a : α) : DependenceGraph D where
   V := Unit
   fintype := inferInstance
@@ -448,8 +456,9 @@ def singletonGraph (a : α) : DependenceGraph D where
     intro v₁ v₂
     simp only [or_true, D.refl]
 
+variable (D) in
 def fromString (w : List α) : DependenceGraph D :=
-  List.foldl (fun γ a => compose γ (singletonGraph a)) (emptyGraph D) w
+  List.foldl (fun γ a => compose γ (singletonGraph D a)) (emptyGraph D) w
 
 def IsSink (γ : DependenceGraph D) (v : γ.V) : Prop :=
   ∀ w, ¬ γ.R v w
@@ -506,5 +515,84 @@ noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceG
     intro ⟨u, hu⟩ ⟨w, hw⟩
     simp only [ne_eq, Subtype.mk.injEq]
     exact γ.d_conn u w
+
+omit [DecidableEq α] in
+lemma fromString_surjective : -- (1.4.6)
+    ∀ (γ : DependenceGraph D), ∃ (w : List α), fromString D w ≃g γ := by
+  intro γ
+  let size_lt (γ₁ γ₂ : DependenceGraph D) : Prop := Fintype.card γ₁.V < Fintype.card γ₂.V
+  have wf : WellFounded size_lt :=
+    InvImage.wf (fun (γ : DependenceGraph D) => Fintype.card γ.V) wellFounded_lt
+  induction γ using WellFounded.induction wf with
+  | h γ ih =>
+    classical
+    cases isEmpty_or_nonempty γ.V with
+    | inl h_empty =>
+      use []
+      dsimp [fromString, emptyGraph]
+      refine ⟨?_, ?_, ?_⟩
+      · simp
+        exact Equiv.equivOfIsEmpty Empty γ.V
+      · intro v
+        simp at v
+        cases v
+      · intro v₁ v₂
+        simp at v₁
+        cases v₁
+    | inr h_nonempty =>
+      have ⟨a, ha⟩ := exists_sink_of_nonempty_depGraph γ h_nonempty
+      let γ' := removeVertex γ a
+      have h_smaller : Fintype.card γ'.V < Fintype.card γ.V := by
+        dsimp [γ', removeVertex]
+        rw [Fintype.card_subtype_compl, Fintype.card_subtype_eq]
+        apply Nat.sub_one_lt_of_le Fintype.card_pos
+        rfl
+      have ⟨w, hw⟩ := ih γ' h_smaller
+      use w ++ [γ.φ a]
+      rw [fromString, List.foldl_append, ← fromString]
+      rw [List.foldl_cons, List.foldl_nil]
+      apply isomorphic_trans (compose_congr hw (isomorphic_refl (singletonGraph D (γ.φ a))))
+      apply Nonempty.intro
+      let p : γ.V → Prop := fun v => v = a
+      let e : γ'.V ⊕ Unit ≃ γ.V := by
+        apply (Equiv.sumCongr (Equiv.refl γ'.V) (Equiv.ofUnique Unit (Subtype p))).trans
+        apply (Equiv.sumComm γ'.V (Subtype p)).trans
+        exact Equiv.sumCompl p
+      refine ⟨e, ?_, ?_⟩
+      · intro v
+        dsimp [compose, singletonGraph, γ', removeVertex, e]
+        cases v with
+        | inl v₁ =>
+          rw [Sum.elim_inl, Sum.map_inl, id_eq, Sum.swap_inl, Equiv.sumCompl_apply_inr]
+        | inr v₂ =>
+          rw [Sum.elim_inr, Sum.map_inr, Equiv.ofUnique_apply, Sum.swap_inr]
+          rw [Equiv.sumCompl_apply_inl]
+          rfl
+      · intro v₁ v₂
+        dsimp [compose, singletonGraph, γ', removeVertex, e]
+        rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂
+        · simp only [Sum.map_inl, id_eq, Sum.swap_inl]
+          rw [Equiv.sumCompl_apply_inr, Equiv.sumCompl_apply_inr]
+        · simp only [Sum.map_inl, id_eq, Sum.swap_inl, Sum.map_inr,
+                     Equiv.ofUnique_apply, Sum.swap_inr]
+          rw [Equiv.sumCompl_apply_inr, Equiv.sumCompl_apply_inl, Pi.default_apply]
+          constructor
+          · intro h
+            rcases (γ.d_conn v₁.1 a).mpr h with h₁ | h₂ | h₃
+            · exact h₁
+            · exfalso
+              exact ha v₁.1 h₂
+            · exfalso
+              exact v₁.property h₃
+          · intro h
+            exact (γ.d_conn v₁.1 a).mp (Or.inl h)
+        · simp only [Sum.map_inr, Equiv.ofUnique_apply, Pi.default_def, Sum.swap_inr, Sum.map_inl,
+                     id_eq, Sum.swap_inl, false_iff]
+          rw [Equiv.sumCompl_apply_inl, Equiv.sumCompl_apply_inr]
+          exact ha v₂.1
+        · simp only [Sum.map_inr, Equiv.ofUnique_apply, Pi.default_def, Sum.swap_inr, false_iff]
+          rw [Equiv.sumCompl_apply_inl]
+          intro h
+          exact γ.acyclic a (Relation.TransGen.single h)
 
 end DependenceGraph
