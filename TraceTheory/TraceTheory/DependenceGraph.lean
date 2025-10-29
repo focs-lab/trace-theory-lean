@@ -517,6 +517,15 @@ noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceG
     exact γ.d_conn u w
 
 omit [DecidableEq α] in
+lemma fromString_empty : fromString D [] = emptyGraph D := by rfl
+
+omit [DecidableEq α] in
+lemma fromString_concat (w : List α) (a : α) :
+    fromString D (w ++ [a]) = compose (fromString D w) (singletonGraph D a) := by
+  dsimp [fromString]
+  rw [List.foldl_concat]
+
+omit [DecidableEq α] in
 lemma fromString_surjective : -- (1.4.6)
     ∀ (γ : DependenceGraph D), ∃ (w : List α), fromString D w ≃g γ := by
   intro γ
@@ -549,8 +558,7 @@ lemma fromString_surjective : -- (1.4.6)
         rfl
       have ⟨w, hw⟩ := ih γ' h_smaller
       use w ++ [γ.φ a]
-      rw [fromString, List.foldl_append, ← fromString]
-      rw [List.foldl_cons, List.foldl_nil]
+      rw [fromString_concat]
       apply isomorphic_trans (compose_congr hw (isomorphic_refl (singletonGraph D (γ.φ a))))
       apply Nonempty.intro
       let p : γ.V → Prop := fun v => v = a
@@ -594,15 +602,6 @@ lemma fromString_surjective : -- (1.4.6)
           rw [Equiv.sumCompl_apply_inl]
           intro h
           exact γ.acyclic a (Relation.TransGen.single h)
-
-omit [DecidableEq α] in
-lemma fromString_empty : fromString D [] = emptyGraph D := by rfl
-
-omit [DecidableEq α] in
-lemma fromString_concat (w : List α) (a : α) :
-    fromString D (w ++ [a]) = compose (fromString D w) (singletonGraph D a) := by
-  dsimp [fromString]
-  rw [List.foldl_concat]
 
 omit [DecidableEq α] in
 lemma fromString_append_iso_compose (w₁ w₂ : List α) :
@@ -665,7 +664,38 @@ def dependenceGraphDependenceMorphism : -- (1.4.7)
     replace hw := fromString_length_eq_of_iso hw
     rw [List.length_nil] at hw
     exact List.length_eq_zero_iff.mp hw
-  A2 := sorry
+  A2 := by
+    intro a b h_indep
+    apply Quotient.sound
+    apply isomorphic_trans (fromString_append_iso_compose [a] [b])
+    apply isomorphic_symm
+    apply isomorphic_trans (fromString_append_iso_compose [b] [a])
+    apply Nonempty.intro
+    refine ⟨Equiv.sumComm _ _, ?_, ?_⟩
+    · intro v
+      dsimp [fromString, compose, emptyGraph, singletonGraph]
+      cases v <;> rfl
+    · intro v₁ v₂
+      dsimp [fromString, compose, emptyGraph, singletonGraph] at v₁ v₂
+      dsimp [inducedIndependence] at h_indep
+      rcases v₁ with (u₁ | u₁) | (u₁ | u₁)
+      · cases u₁
+      · rcases v₂ with (u₂ | u₂) | (u₂ | u₂)
+        · cases u₂
+        · rfl
+        · cases u₂
+        · dsimp [fromString, compose, emptyGraph, singletonGraph]
+          constructor
+          · intro h_rel
+            exact h_indep (Dependence.symm D b a h_rel)
+          · exact False.elim
+      · cases u₁
+      · rcases v₂ with (u₂ | u₂) | (u₂ | u₂)
+        · cases u₂
+        · dsimp [fromString, compose, emptyGraph, singletonGraph]
+          exact Iff.symm (iff_false_intro h_indep)
+        · cases u₂
+        · rfl
   A3 := sorry
   A4 := sorry
 
