@@ -79,6 +79,7 @@ def proj (w : List α) (S : Alphabet α) : List α :=
 protected def projRight (w : List α) (S : Alphabet α) : List α := reverse (proj w.reverse S)
 -/
 
+-- Equivalent to `List.erase`? Consider rewriting to base off `erase`
 def cancelLeft (w : List α) (a : α) :=
   match w with
   | [] => []
@@ -1984,8 +1985,10 @@ def toDepGraph : FreeMonoid α →* D.DepGraphMonoid where
           exact this
         · omega
 
+def min_vertex (G : D.DependenceGraph V) (v : V) := ∀ u, ¬ G.adj u v
+def max_vertex (G : D.DependenceGraph V) (v : V) := ∀ u, ¬ G.adj v u
 
-theorem has_min_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∀ u, ¬ G.adj u v := by
+theorem has_min_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, min_vertex G v := by
   classical
   let anccard : V → ℕ := fun v => Fintype.card {x // Relation.TransGen G.adj x v}
   have measure_lt_of_adj : ∀ {u v}, G.adj u v → anccard u < anccard v := by
@@ -2052,7 +2055,7 @@ theorem DependenceGraph.reverse_reverse (G : D.DependenceGraph V) :
     DependenceGraph.reverse (DependenceGraph.reverse G) = G := by
   simp [reverse]
 
-theorem has_max_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, ∀ u, ¬ G.adj v u := by
+theorem has_max_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, max_vertex G v := by
   have ⟨v, hv⟩ := has_min_vertex (DependenceGraph.reverse G)
   simp [DependenceGraph.reverse] at hv
   exact ⟨v, hv⟩
@@ -2116,6 +2119,130 @@ noncomputable def omit_vertex_rep (G : D.DepGraphRep) (v : G.V) : D.DepGraphRep 
     -- See comment in `toDepGraph_surj` about automatically retrieving `G.fintypeV`
     -- exact @Fintype.ofFinite { x // x ≠ v } (@Subtype.finite _ (Fintype.finite G.fintypeV) _)
   graph := omit_vertex G.graph v
+
+/- We could write this if we rely on the fact that `D : Dependency` is <reflexive>.
+
+ If we commit to having `dependencies` be reflexive, we can also write a more powerful
+ version of this where `ψ : G₁ ⊕ H₁ ≃ G₂ ⊕ H₂` cleanly decomposes `ψ G₁ = G₂` and `ψ H₁ = H₂`.
+ More broadly, dependency reflexivity makes label-wise `choice/ordering` easier on graphs,
+ which may continue to be convenient through Ch2.
+
+ However, we lose some generality in the sense that we would prefer to be free from caring
+ about whether dependencies are reflexive or irreflexive.
+-/
+/-
+lemma compose_singleton_invariant {G H : D.DependenceGraph V} {a : α}
+    (ψ : DepGraphIso (compose G (toDepGraphIndiv [a])) (compose H (toDepGraphIndiv [a]))) :
+    ψ.map (Sum.inr ⟨0, by simp⟩) = Sum.inr ⟨0, by simp⟩ := by sorry
+-/
+
+-- We can still make a construction in which we do not use reflexivity.
+def compose_singleton_restrict {G H : D.DependenceGraph V} {a : α}
+    (ψ : DepGraphIso (compose G (toDepGraphIndiv [a])) (compose H (toDepGraphIndiv [a]))) :
+    DepGraphIso G H where
+  map := by
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · exact fun v => match ψ.map (Sum.inl v) with
+      | Sum.inl iv => iv
+      | Sum.inr az => match ψ.map (Sum.inr ⟨0, by simp⟩) with
+        | Sum.inl m => m
+        | Sum.inr bz => v -- dummy, providing a proof causes a typechecking complaint later (!?)
+          /- by
+          have hab : az = bz := by
+            have ⟨az, ha⟩ := az
+            have ⟨bz, hb⟩ := bz
+            simp at ha hb
+            simp [ha, hb]
+          rw [<- hab] at hb
+          rw [<- hb] at hf
+          simp at hf -/
+    · exact fun v => match ψ.map.symm (Sum.inl v) with
+      | Sum.inl iv => iv
+      | Sum.inr az => match ψ.map.symm (Sum.inr ⟨0, by simp⟩) with
+        | Sum.inl m => m
+        | Sum.inr bz => v -- dummy
+    · simp [Function.LeftInverse]
+      intro x
+      -- simp [toDepGraphIndiv] at ψ
+      cases hf : ψ.map (Sum.inl x) with
+      | inl ix =>
+        simp
+        cases hb : ψ.map.symm (Sum.inl ix) with
+        | inl x => simp [<- hf] at hb; simp [hb]
+        | inr _ => simp [<- hf] at hb
+      | inr v =>
+        simp
+        cases hb : ψ.map (@Sum.inr V (Fin 1) 0) with
+        | inl x =>
+          simp [<- hb]
+          have hvz : v = @OfNat.ofNat (Fin (0 + 1)) 0 Fin.instOfNat := by
+            have ⟨v, hv⟩ := v
+            simp at hv
+            simp [hv]
+          rw [hvz] at hf
+          rw [<- hf]
+          simp
+        | inr w =>
+          have hwv : w = v := by
+            have ⟨w, hw⟩ := w
+            have ⟨v, hv⟩ := v
+            simp at hw hv
+            simp [hw, hv]
+          rw [hwv] at hb
+          rw [<- hb] at hf
+          simp at hf
+    · simp [Function.RightInverse, Function.LeftInverse]
+      intro x
+      -- simp [toDepGraphIndiv] at ψ
+      cases hf : ψ.map.symm (Sum.inl x) with
+      | inl ix =>
+        simp
+        cases hb : ψ.map (Sum.inl ix) with
+        | inl x => simp [<- hf] at hb; simp [hb]
+        | inr _ => simp [<- hf] at hb
+      | inr v =>
+        simp
+        cases hb : ψ.map.symm (@Sum.inr V (Fin 1) 0) with
+        | inl x =>
+          simp [<- hb]
+          have hvz : v = @OfNat.ofNat (Fin (0 + 1)) 0 Fin.instOfNat := by
+            have ⟨v, hv⟩ := v
+            simp at hv
+            simp [hv]
+          rw [hvz] at hf
+          rw [<- hf]
+          simp
+        | inr w =>
+          have hwv : w = v := by
+            have ⟨w, hw⟩ := w
+            have ⟨v, hv⟩ := v
+            simp at hw hv
+            simp [hw, hv]
+          rw [hwv] at hb
+          rw [<- hb] at hf
+          simp at hf
+
+  -- map ψ [a] to ψ⁻¹ [a], if they are not already matched
+  label := by
+    have h := ψ.label
+    simp [compose, toDepGraphIndiv] at h
+    simp
+    intro v
+    simp [h.left v]
+    cases ψ.map (Sum.inl v) with
+    | inl iv => simp
+    | inr _ =>
+      simp
+      cases ψ.map (@Sum.inr V (Fin 1) 0) with
+      | inl iv => simp
+      | inr _ => simp
+  arcs := by
+    -- have h := ψ.arcs
+    -- simp [compose, toDepGraphIndiv] at h
+    simp
+    intro u v
+    --cases ψ.map (Sum.inl u) with
+
 
 theorem card_induction {P : ∀ (V : Type u) [Fintype V], D.DependenceGraph V → Prop}
     (h_empty : ∀ (V : Type u) [Fintype V] (_ : Fintype.card V = 0) (G : D.DependenceGraph V), P V G)
@@ -2245,6 +2372,7 @@ theorem toDepGraph_surj (Γ : D.DepGraphMonoid) : ∃ s : FreeMonoid α, toDepGr
         simp [toRep] at w u
         replace ⟨w, hw⟩ := w
         have := Iff.symm (G.graph.dep w v)
+        unfold max_vertex at hv
         simp [hw, hv] at this
         exact this
       · case h.a.refine_3.inr.inl w u =>
@@ -2278,32 +2406,49 @@ theorem toDepGraph_tail_max (s : FreeMonoid α) (a : α) : ∃ v,
     omega
   · exact List.getElem_of_append rfl rfl
 
-/- Consider replacing the following with writing a function to
- get the index of the deleted element,
+namespace List
 
-def List.cancelRight_idx (w : List α) (a : α) (h : a ∈ w) : Fin (w.length) := by
-  -- have hw : w ≠ [] := by intro hw; simp [hw] at h
-  ...
-
-  and instead proving the respective properties about this function.
--/
-
-def List.cancelLeft_idx [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) : Fin (w.length) := by
+/- We define this raw `→ ℕ` function and then define another `→ Fin` function atop it,
+ since this allows us to reduce `cancelLeft_idx.val = ⟨cancelLeft_idx', (by ...)⟩.val` to
+ simply `cancelLeft_idx'`, which eliminates a lot of unnecessary typechecking/bounding work in
+ subsequent proofs. -/
+def cancelLeft_idx' [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) : ℕ := by
   cases w with
   | nil => simp at h
   | cons b u =>
     by_cases hab : a = b
-    · exact ⟨0, by simp⟩
-    · exact ⟨Nat.succ (cancelLeft_idx u a (List.mem_of_ne_of_mem hab h)), by simp⟩
+    · exact 0
+    · exact Nat.succ (cancelLeft_idx' u a (List.mem_of_ne_of_mem hab h))
 
 omit [Fintype α] in
-theorem List.cancelLeft_idx_prop [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+lemma cancelLeft_idx'_le [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+    cancelLeft_idx' w a h < w.length := by
+  induction w with
+    | nil => simp at h
+    | cons b u ih =>
+      by_cases hab : a = b
+      · simp [hab, List.cancelLeft_idx']
+      · rw [List.cancelLeft_idx']
+        simp [hab]
+        exact ih _
+
+def cancelLeft_idx [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) : Fin (w.length) :=
+  ⟨List.cancelLeft_idx' w a h, List.cancelLeft_idx'_le _ _ _⟩
+
+omit [Fintype α] in
+lemma cancelLeft_idx_val [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+    (List.cancelLeft_idx w a h).val = List.cancelLeft_idx' w a h := by
+  rfl
+
+omit [Fintype α] in
+theorem cancelLeft_idx_prop [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
     w.cancelLeft a = w.eraseIdx (List.cancelLeft_idx w a h) := by
   induction w with
   | nil => simp at h
   | cons b u ih =>
     unfold List.cancelLeft
     unfold List.cancelLeft_idx
+    unfold List.cancelLeft_idx'
     simp
     by_cases hab : a = b
     · simp [hab]
@@ -2311,14 +2456,28 @@ theorem List.cancelLeft_idx_prop [DecidableEq α] (w : List α) (a : α) (h : a 
       have : a ∈ u := List.mem_of_ne_of_mem hab h
       exact ih this
 
-def List.cancelRight_idx [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) : Fin (w.length) :=
-  ⟨w.length - List.cancelLeft_idx w.reverse a (List.mem_reverse.mpr h) - 1,
-  by
-    have : w.length > 0 := List.length_pos_of_mem h
-    omega⟩
+/- Again, we define a raw `→ ℕ` function and then define another `→ Fin` function atop it. -/
+@[simp]
+def cancelRight_idx' [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) : ℕ :=
+  w.length - List.cancelLeft_idx w.reverse a (List.mem_reverse.mpr h) - 1
 
 omit [Fintype α] in
-theorem List.reverse_eraseIdx (w : List α) (n : Fin (w.length)) :
+lemma cancelRight_idx'_le [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+    List.cancelRight_idx' w a h < w.length := by
+  unfold List.cancelRight_idx'
+  have : w.length > 0 := List.length_pos_of_mem h
+  omega
+
+def cancelRight_idx [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) : Fin (w.length) :=
+  ⟨List.cancelRight_idx' w a h, List.cancelRight_idx'_le _ _ _⟩
+
+omit [Fintype α] in
+lemma cancelRight_idx_heq [DecidableEq α] (w : List α) (a : α) (h₁ h₂ : a ∈ w) :
+    List.cancelRight_idx' w a h₁ = List.cancelRight_idx' w a h₂ := by
+  simp
+
+omit [Fintype α] in
+theorem reverse_eraseIdx (w : List α) (n : Fin (w.length)) :
     w.reverse.eraseIdx n = (w.eraseIdx (w.length - n - 1)).reverse := by
   induction w with
   | nil => simp
@@ -2347,29 +2506,113 @@ theorem List.reverse_eraseIdx (w : List α) (n : Fin (w.length)) :
       simp
 
 omit [Fintype α] in
-theorem List.cancelRight_idx_prop [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+theorem cancelRight_idx_prop [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
     w.cancelRight a = w.eraseIdx (List.cancelRight_idx w a h) := by
   induction w using List.right_induction with
   | nil => simp at h
   | cons u b ih =>
-    unfold List.cancelRight
-    -- unfold List.cancelLeft
-    unfold List.cancelRight_idx
-    -- unfold List.cancelLeft_idx
-    -- rw [List.reverse_eraseIdx]
-    simp
     by_cases hab : a = b
-    · simp [hab]
-      have : cancelRight_idx (u ++ [b]) b (by rw [hab] at h; exact h) = u.length := by
-        simp [cancelRight_idx]
-        unfold cancelLeft_idx
-      rw [this]
-    · simp [hab]
-      have : a ∈ u := List.mem_of_ne_of_mem hab h
-      exact ih this
+    · unfold List.cancelRight_idx
+      simp
+      /- The next two lines seem to ask for a lot of unnecessary (though true) conditions
+       if we do not fall back to the raw `List.cancelLeft_idx'`. -/
+      rw [List.cancelLeft_idx_val]
+      simp [hab]
+      simp [List.cancelLeft_idx']
+      simp [List.eraseIdx_append]
+    · simp [hab] at h
+      unfold List.cancelRight at ih ⊢
+      unfold List.cancelRight_idx at ih ⊢
+      simp at ih ⊢
+      unfold List.cancelLeft_idx at ih ⊢
+      simp at ih ⊢
+
+      unfold List.cancelLeft
+      unfold List.cancelLeft_idx'
+      simp [hab]
+
+      rw [List.eraseIdx_append]
+      have : ∀h, u.length - cancelLeft_idx' u.reverse a h - 1 < u.length := by
+        have : u.length > 0 := by exact List.length_pos_of_mem h
+        omega
+      simp [this]
+      exact ih h
+
+/- Probably exists a more elegant way to extract this from `cancelRight_idx_prop`:
+ take a closer look at the theorems about `List.Perm`? -/
+omit [Fintype α] in
+lemma cancelRight_idx_elem [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+    w[List.cancelRight_idx w a h] = a := by
+  induction w using List.right_induction with
+  | nil => simp at h
+  | cons u b ih =>
+    by_cases hab : a = b
+    · unfold List.cancelRight_idx
+      simp [hab]
+      unfold List.cancelLeft_idx
+      simp [List.cancelLeft_idx']
+    · simp [hab] at h
+      unfold List.cancelRight_idx at ih ⊢
+      simp at ih ⊢
+      unfold List.cancelLeft_idx at ih ⊢
+      simp at ih ⊢
+
+      unfold List.cancelLeft_idx'
+      simp [hab]
+
+      have : ∀h, u.length - cancelLeft_idx' u.reverse a h - 1 < u.length := by
+        have : u.length > 0 := by exact List.length_pos_of_mem h
+        omega
+      simp [this]
+      exact ih h
 
 omit [Fintype α] in
-lemma List.cancelRight_at (w : List α) (a : α) (h : a ∈ w) :
+lemma cancelRight_idx'_elem [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+    w[List.cancelRight_idx' w a h]'(by exact cancelRight_idx'_le w a h) = a := by
+  have := cancelRight_idx_elem w a h
+  unfold cancelRight_idx at this
+  exact this
+
+omit [Fintype α] in
+lemma cancelRight_idx''_elem [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+    w[↑(@Fin.val w.length (List.cancelRight_idx w a h))]'(by exact cancelRight_idx'_le w a h)
+    = a := by
+  have := cancelRight_idx_elem w a h
+  unfold cancelRight_idx at this
+  exact this
+
+omit [Fintype α] in
+lemma cancelRight_idx_tail_eq [DecidableEq α] (w : List α) (a : α) :
+    List.cancelRight_idx (w ++ [a]) a (by simp) = ⟨w.length, by simp⟩ := by
+  unfold cancelRight_idx
+  simp
+  unfold cancelLeft_idx
+  simp [cancelLeft_idx']
+
+omit [Fintype α] in
+lemma cancelRight_idx_tail_neq' [DecidableEq α] (w : List α) (a b : α) (h : a ∈ w) (hab : a ≠ b) :
+    List.cancelRight_idx (w ++ [b]) a (by simp [h]) = (List.cancelRight_idx w a h).val := by
+  unfold cancelRight_idx
+  simp
+  unfold cancelLeft_idx
+  simp
+  rw [cancelLeft_idx']
+  simp [hab]
+
+omit [Fintype α] in
+lemma cancelRight_idx_tail_neq [DecidableEq α] (w : List α) (a b : α) (h : a ∈ w) (hab : a ≠ b) :
+    List.cancelRight_idx (w ++ [b]) a (by simp [h]) = ⟨(List.cancelRight_idx w a h).val, by
+    have := cancelRight_idx'_le w a h; simp; omega⟩ := by
+  unfold cancelRight_idx
+  simp
+  unfold cancelLeft_idx
+  simp
+  rw [cancelLeft_idx']
+  simp [hab]
+
+/-
+omit [Fintype α] in
+lemma cancelRight_at (w : List α) (a : α) (h : a ∈ w) :
     ∃ n : Fin (w.length), w[n] = a ∧ ∀ m : Fin (w.length), m > n → w[m] ≠ a := by
   induction w using List.right_induction with
   | nil => simp at h
@@ -2394,9 +2637,10 @@ lemma List.cancelRight_at (w : List α) (a : α) (h : a ∈ w) :
         · replace hmu : m = u.length := by simp at hm; omega
           simp [hmu]
           exact fun a_1 ↦ hab (id (Eq.symm a_1))
+-/
 
 omit [Fintype α] in
-lemma List.cancelRight_length_le [DecidableEq α] (w : List α) (a : α) :
+lemma cancelRight_length_le [DecidableEq α] (w : List α) (a : α) :
     (w.cancelRight a).length ≤ w.length := by
   induction w using List.right_induction with
   | nil => simp [List.cancelRight, List.cancelLeft]
@@ -2406,7 +2650,7 @@ lemma List.cancelRight_length_le [DecidableEq α] (w : List α) (a : α) :
     all_goals simp [hab, ih]
 
 omit [Fintype α] in
-lemma List.cancelRight_length_sub [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+lemma cancelRight_length_sub [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
     (w.cancelRight a).length + 1 = w.length := by
   induction w using List.right_induction with
   | nil => simp at h
@@ -2418,10 +2662,11 @@ lemma List.cancelRight_length_sub [DecidableEq α] (w : List α) (a : α) (h : a
       replace h : a ∈ u := by simp [hab] at h; exact h
       exact ih h
 
+/-
 omit [Fintype α] in
-lemma List.cancelRight_mapGet [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
+lemma cancelRight_mapGet [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
     ∃ n : Fin (w.length), ∀ i : Fin (w.cancelRight a).length, (w.cancelRight a)[i] =
-    if i.val < n.val
+    if i.val < (cancelRight_idx w a h).val
     then w[i]'(by have ⟨i, hi⟩ := i; have := List.cancelRight_length_le w a; omega)
     else w[i.val + 1]'(by have ⟨i, hi⟩ := i; have := List.cancelRight_length_sub w a h; omega) := by
   induction w using List.right_induction with
@@ -2446,6 +2691,94 @@ lemma List.cancelRight_mapGet [DecidableEq α] (w : List α) (a : α) (h : a ∈
       · replace hi : i = (u.cancelRight a).length := by omega
         simp [hi, huca]
         omega
+-/
+
+end List
+
+/- If a graph of some string `s` has a max vertex labelled with `a`,
+ then `s.cancelRight_idx a` is also one such max vertex.
+
+ Important for proving Proposition 1.4.7 (A3)'s
+ "... it is easy to see that removing such a vertex from ⟨v⟩ results in ⟨v ÷ a⟩." -/
+theorem toDepGraph_cancelRightIdx_max_ifExists [DecidableEq α] (s : List α) (a : α) (h : a ∈ s)
+    (h_eMax : ∃ m, @max_vertex _ _ D _ (toDepGraphIndiv s) m ∧ s[m] = a) :
+    (@max_vertex _ _ D _ (toDepGraphIndiv s) (List.cancelRight_idx s a h)) := by
+  induction s using List.right_induction with
+  | nil => simp at h
+  | cons t b ih =>
+    by_cases hab : a = b
+    · simp [hab]
+      rw [List.cancelRight_idx_tail_eq]
+      simp [toDepGraphIndiv, max_vertex]
+      intro ⟨u, hu⟩ hut
+      simp at hu hut
+      omega
+    · rename a ∈ t ++ [b] => h'
+      have h : a ∈ t := by simp [hab] at h'; exact h'
+      replace ih := ih h
+      have ⟨⟨m, hnm⟩, hm⟩ := h_eMax
+      replace hnm : m < t.length := by
+        replace hm := hm.right
+        apply by_contradiction
+        intro
+        replace hnm : m = t.length := by simp at hnm; omega
+        simp [hnm] at hm
+        simp [hm] at hab
+      have : @max_vertex _ _ D _ (toDepGraphIndiv t) ⟨m, hnm⟩ ∧ t[m] = a := by
+        simp [hnm] at hm
+        simp [hm]
+        simp [toDepGraphIndiv, max_vertex] at hm ⊢
+        intro ⟨u, hu⟩
+        replace hm := hm.left ⟨u, by simp; omega⟩
+        simp [hnm, hu] at hm ⊢
+        exact hm
+      replace ih := ih ⟨⟨m, hnm⟩, this⟩
+      simp [toDepGraphIndiv, max_vertex] at ih ⊢
+      intro ⟨u, hnu⟩ hu
+      by_cases hut : u < t.length
+      · replace ih := ih ⟨u, hut⟩
+        simp [hut]
+        rw [List.cancelRight_idx''_elem] at ih ⊢
+        have : List.cancelRight_idx (t ++ [b]) a h' =
+            ⟨(List.cancelRight_idx t a h).val, by simp [List.cancelRight_idx]; omega⟩ := by
+          rw [List.cancelRight_idx_tail_neq]
+          exact hab
+        rw [this] at hu
+        exact ih hu
+      · replace hut : u = t.length := by simp at hnu; omega
+        simp [hut]
+        rw [List.cancelRight_idx''_elem] at ⊢
+        simp [toDepGraphIndiv, max_vertex] at hm
+        replace ⟨hm, hmeq⟩ := hm
+        replace hm := hm ⟨t.length, by simp⟩ hnm
+        simp [hmeq] at hm
+        exact hm
+
+/- theorem toDepGraph_mem_max (s : List α) (a : α) (h : a ∈ s) : ∃ v,
+    (@max_vertex _ _ D _ (toDepGraphIndiv s) v) ∧ (@toDepGraphIndiv _ _ D s).φ v = a := by
+  induction s using List.right_induction with
+  | nil => simp at h
+  | cons t b ih =>
+    by_cases hab : a = b
+    · simp [hab]
+      exact toDepGraph_tail_max t b
+    · replace h : a ∈ t := by simp [hab] at h; exact h
+      replace ih := ih h
+      have ⟨⟨v, hnv⟩, hv⟩ := ih
+      use ⟨v, by simp; omega⟩
+      apply And.intro
+      · intro ⟨u, hnu⟩
+        simp [toDepGraphIndiv] at hv ⊢
+        intro hvu
+        by_cases hut : u < t.length
+        · replace hv := hv.left ⟨u, hut⟩ hvu
+          simp [hnv, hut]
+          exact hv
+        · replace hut : u = t.length := by simp at hnu; omega
+          simp [hnv, hut, hv.right]
+          sorry
+      · simp [toDepGraphIndiv] at hv ⊢
+        simp [hnv, hv] -/
 
 lemma toDepGraphIndiv_preserves_mem {u v : List α} {a : α} (hm : a ∈ u)
     (ψ : @DepGraphIso _ _ D _ _ (toDepGraphIndiv u) (toDepGraphIndiv v)) : a ∈ v := by
@@ -2526,24 +2859,85 @@ def toDependencyMorphism [DecidableEq α] : D.independency.DependencyMorphism (D
         simp [hu, hv]
         rfl
 
+  /- prop3 := by
+    intro a u v h
+    simp [toDepGraph, Quotient.mk''] at h
+    simp [toDepGraph, Quotient.mk'', toRep] at ⊢
+    apply @Quotient.exact _ DepGraphRepSetoid _ at h
+    have ⟨ψ⟩ := h
+    simp [toRep] at ψ
+    have ζ : @DepGraphIso _ _ D _ _
+        (toDepGraphIndiv ((u * FreeMonoid.of a).cancelRight a))
+        (toDepGraphIndiv (v.cancelRight a)) := by
+      sorry
+    rw [show u * FreeMonoid.of a = FreeMonoid.toList u ++ [a] by rfl] at ζ
+    rw [List.cancelRight_prop] at ζ
+    simp [toDepGraphIndiv] at ζ
+    apply Quotient.sound
+    exact ⟨ζ⟩
+    have hva : a ∈ v := by sorry
+    have : List.length u < List.length (u * FreeMonoid.of a) := by -- ∀h
+      rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
+      simp [show FreeMonoid.toList u = u by rfl]
+    have ha : ψ.map ⟨u.length, this⟩ = List.cancelRight_idx v a hva := by sorry -/
+
+  /- .. -/
   prop3 := by
     intro a u v h
     simp [toDepGraph, Quotient.mk''] at h
     simp [toDepGraph, Quotient.mk'', toRep] at ⊢
     apply @Quotient.exact _ DepGraphRepSetoid _ at h
     have ⟨ψ⟩ := h
+    have hva : a ∈ v := by sorry
+    have : List.length u < List.length (u * FreeMonoid.of a) := by -- ∀h
+      rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
+      simp [show FreeMonoid.toList u = u by rfl]
+    simp [toDepGraphIndiv, toRep] at ψ
+    have ha : ψ.map ⟨u.length, this⟩ = List.cancelRight_idx v a hva := by
+      induction v using List.right_induction with
+      | nil =>
+        replace hva : a ∈ [] := by exact hva
+        simp at hva
+      | cons v b ih =>
+        simp at ih
+
+
+
     apply Quotient.sound
+
     refine ⟨?_, ?_, ?_⟩
     · have : a ∈ u * FreeMonoid.of a := by
         rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
         apply List.mem_append.mpr
         simp
-      have hn := List.cancelRight_mapGet v a (toDepGraphIndiv_preserves_mem this ψ)
-      have ⟨n, hn⟩ := hn
+      have hva : a ∈ v := by sorry
+      -- have hn := List.cancelRight_mapGet v a (toDepGraphIndiv_preserves_mem this ψ)
+      -- have ⟨n, hn⟩ := hn
+      simp [toDepGraphIndiv, toRep] at ψ
       refine ⟨?_, ?_, ?_, ?_⟩
-      · exact fun ⟨i, hi⟩ =>
-          let ⟨j, hj⟩ := φ.map ⟨i, by simp; omega⟩
-          ⟨j, by sorry⟩
+      · exact fun ⟨i, hi⟩ => by
+          let j := (ψ.map ⟨i, by
+            rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
+            simp [show FreeMonoid.toList u = u by rfl]
+            omega⟩)
+          -- have : j ≠ List.cancelRight_idx' v a hva := by
+          let ⟨j, hj⟩ := j
+          refine ⟨?_, ?_⟩
+          · exact if j < List.cancelRight_idx' v a hva then j else j - 1
+          · by_cases hjv : j < List.cancelRight_idx' v a hva
+            · simp only [hjv]
+              simp
+              apply show j + 1 < (List.cancelRight v a).length + 1 → j < (List.cancelRight v a).length by simp
+              rw [List.cancelRight_length_sub v a hva]
+              have := List.cancelRight_idx'_le v a hva
+              omega
+            · simp only [hjv]
+              simp
+              apply show j - 1 + 1 < (List.cancelRight v a).length + 1 → j - 1 < (List.cancelRight v a).length by simp
+              rw [List.cancelRight_length_sub]
+
+          -- let ⟨j, hj⟩ := φ.map ⟨i, by simp; omega⟩
+          -- ⟨j, by sorry⟩
       · sorry
       · sorry
     -- use the isomorphism in `h` (restricted to omit `a`)
