@@ -2060,6 +2060,16 @@ theorem has_max_vertex [Nonempty V] (G : D.DependenceGraph V) : ∃ v, max_verte
   simp [DependenceGraph.reverse] at hv
   exact ⟨v, hv⟩
 
+omit [Fintype V₁] [Fintype V₂] in
+theorem max_vertex_iso {G : D.DependenceGraph V₁} {H : D.DependenceGraph V₂}
+    (ψ : DepGraphIso G H) (v : V₁) (h : max_vertex G v) :
+    max_vertex H (ψ.map v) := by
+  simp [max_vertex] at h ⊢
+  intro u
+  have hp := ψ.arcs v (ψ.map.symm u)
+  simp at hp
+  exact (iff_false_right fun a ↦ h (ψ.map.symm u) a).mp (id (Iff.symm hp))
+
 theorem Relation.transGen_sub_iso {α β : Type*} (p : α → α → Prop) (q : β → β → Prop) (f : α → β)
     (h : ∀ x y, p x y → q (f x) (f y)) :
     (∀ x y, Relation.TransGen p x y → Relation.TransGen q (f x) (f y)) := by
@@ -2090,7 +2100,7 @@ def omit_vertex (G : D.DependenceGraph V) (v : V) : D.DependenceGraph {x // x �
     simp
     exact G.dep u v
 
-def omit_max_compose {G : D.DependenceGraph V} {v : V} (h : ∀ u, ¬ G.adj v u) [DecidableEq V] :
+def omit_max_compose {G : D.DependenceGraph V} {v : V} (h : max_vertex G v) [DecidableEq V] :
     DepGraphIso (compose (omit_vertex G v) (toDepGraphIndiv [G.φ v])) G := by
   refine ⟨?_, ?_, ?_⟩
   · refine ⟨?_, ?_, ?_, ?_⟩
@@ -2105,7 +2115,8 @@ def omit_max_compose {G : D.DependenceGraph V} {v : V} (h : ∀ u, ¬ G.adj v u)
       by_cases h : x = v
       all_goals simp [h]
   · simp [compose, omit_vertex, toDepGraphIndiv]
-  · simp [compose, omit_vertex, toDepGraphIndiv, h]
+  · simp [max_vertex] at h
+    simp [compose, omit_vertex, toDepGraphIndiv, h]
     intro u hu
     have := G.dep u v
     simp [h, hu] at this
@@ -2137,7 +2148,7 @@ lemma compose_singleton_invariant {G H : D.DependenceGraph V} {a : α}
 -/
 
 -- We can still make a construction in which we do not use reflexivity.
-def compose_singleton_restrict {G H : D.DependenceGraph V} {a : α}
+def compose_singleton_restrict {G : D.DependenceGraph V₁} {H : D.DependenceGraph V₂} {a : α}
     (ψ : DepGraphIso (compose G (toDepGraphIndiv [a])) (compose H (toDepGraphIndiv [a]))) :
     DepGraphIso G H where
   map := by
@@ -2695,6 +2706,60 @@ lemma cancelRight_mapGet [DecidableEq α] (w : List α) (a : α) (h : a ∈ w) :
 
 end List
 
+theorem toDepGraph_cons_max [DecidableEq α] (s : List α) (a : α) :
+    (@max_vertex _ _ D _ (toDepGraphIndiv (s ++ [a])) (⟨s.length, by simp⟩)) := by
+  simp [max_vertex, toDepGraphIndiv]
+  intro ⟨u, hu⟩ hsu
+  simp at hu hsu
+  omega
+
+def toDepGraph_cons_compose_iso [DecidableEq α] (s : List α) (a : α) :
+    @DepGraphIso _ _ D _ _ (toDepGraphIndiv (s ++ [a]))
+    (compose (toDepGraphIndiv s) (toDepGraphIndiv [a])) where
+  map := by
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · exact fun n => if hn : n < s.length then Sum.inl ⟨n, hn⟩ else Sum.inr ⟨0, by simp⟩
+    · exact fun n => match n with
+      | Sum.inl ⟨n, hn⟩ => ⟨n, by simp; omega⟩
+      | Sum.inr _ => ⟨s.length, by simp⟩
+    · simp [Function.LeftInverse]
+      intro ⟨x, hx⟩
+      by_cases hxs : x < s.length
+      · simp [hxs]
+      · simp [hxs]
+        simp at hx
+        omega
+    · simp [Function.RightInverse, Function.LeftInverse]
+      exact fun b ↦ Eq.symm (Fin.fin_one_eq_zero b)
+
+  label := by
+    intro ⟨v, hv⟩
+    simp [toDepGraphIndiv, compose]
+    by_cases hvs : v < s.length
+    · simp [hvs]
+    · simp [hvs]
+      simp at hv
+      replace hv : v = s.length := by omega
+      simp [hv]
+
+  arcs := by
+    intro ⟨u, hu⟩ ⟨v, hv⟩
+    simp at hu hv
+    simp [toDepGraphIndiv, compose]
+    by_cases hus : u < s.length <;> by_cases hvs : v < s.length
+    · simp [hus, hvs]
+    · simp [hus, hvs]
+      replace hv : v = s.length := by omega
+      simp [hv, hus]
+    · simp [hus, hvs]
+      replace hu : u = s.length := by omega
+      simp [hu]
+      omega
+    · simp [hus, hvs]
+      replace hu : u = s.length := by omega
+      replace hv : v = s.length := by omega
+      simp [hu, hv]
+
 /- If a graph of some string `s` has a max vertex labelled with `a`,
  then `s.cancelRight_idx a` is also one such max vertex.
 
@@ -2753,6 +2818,62 @@ theorem toDepGraph_cancelRightIdx_max_ifExists [DecidableEq α] (s : List α) (a
         replace hm := hm ⟨t.length, by simp⟩ hnm
         simp [hmeq] at hm
         exact hm
+
+
+def omit_max_cancelRight [DecidableEq α] (s : List α) (a : α) (h : a ∈ s)
+    (h_rMax : @max_vertex _ _ D _ (toDepGraphIndiv s) (List.cancelRight_idx s a h)) :
+    @DepGraphIso _ _ D _ _ (omit_vertex (toDepGraphIndiv s) (List.cancelRight_idx s a h))
+    (toDepGraphIndiv (s.cancelRight a)) where
+  map := by
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · exact fun ⟨⟨x, hnx⟩, hx⟩ => if hx : x < List.cancelRight_idx s a h
+        then ⟨x, by
+          -- have : s.length <= (s.eraseIdx ↑(List.cancelRight_idx s a h)).length + 1 := by
+          --   rw [s.eraseIdx]
+          --   exact?
+          sorry
+        ⟩
+        else ⟨x - 1, by sorry⟩
+    · exact fun ⟨x, hnx⟩ => if hx : x < List.cancelRight_idx s a h
+        then ⟨⟨x, by sorry⟩, by sorry⟩
+        else ⟨⟨x + 1, by sorry⟩, by sorry⟩
+    · simp [Function.LeftInverse]
+      intro x hxc
+      by_cases hx : x < List.cancelRight_idx s a h
+      · simp [hx]
+      · simp [hx]
+        -- replace hx : x > List.cancelRight_idx s a h := by omega
+        have hx' : ¬ (x.val - 1 < List.cancelRight_idx s a h) := by omega
+        have hx'' : x.val > 0 := by omega
+        simp [hx']
+        have : x.val = x.val - 1 + 1 := by exact (Nat.sub_eq_iff_eq_add hx'').mp rfl
+        sorry
+    · simp [Function.RightInverse, Function.LeftInverse]
+      intro x
+      by_cases hx : x.val < List.cancelRight_idx s a h
+      · simp [hx]
+        sorry
+      · simp [hx]
+        sorry
+
+  label := by
+    intro ⟨⟨v, hnv⟩, hv⟩
+    simp
+    by_cases hv : ⟨v, hnv⟩ < List.cancelRight_idx s a h
+    · simp [hv, omit_vertex, toDepGraphIndiv]
+      sorry
+    · simp [hv, omit_vertex, toDepGraphIndiv]
+      sorry
+  arcs := by
+    intro ⟨⟨u, hnu⟩, hu⟩ ⟨⟨v, hnv⟩, hv⟩
+    simp
+    by_cases hu : ⟨u, hnu⟩ < List.cancelRight_idx s a h
+    <;> by_cases hv : ⟨v, hnv⟩ < List.cancelRight_idx s a h
+    all_goals simp [hu, hv, omit_vertex, toDepGraphIndiv]
+    · sorry
+    · sorry
+    · sorry
+    · sorry
 
 /- theorem toDepGraph_mem_max (s : List α) (a : α) (h : a ∈ s) : ∃ v,
     (@max_vertex _ _ D _ (toDepGraphIndiv s) v) ∧ (@toDepGraphIndiv _ _ D s).φ v = a := by
@@ -2859,96 +2980,56 @@ def toDependencyMorphism [DecidableEq α] : D.independency.DependencyMorphism (D
         simp [hu, hv]
         rfl
 
-  /- prop3 := by
-    intro a u v h
-    simp [toDepGraph, Quotient.mk''] at h
-    simp [toDepGraph, Quotient.mk'', toRep] at ⊢
-    apply @Quotient.exact _ DepGraphRepSetoid _ at h
-    have ⟨ψ⟩ := h
-    simp [toRep] at ψ
-    have ζ : @DepGraphIso _ _ D _ _
-        (toDepGraphIndiv ((u * FreeMonoid.of a).cancelRight a))
-        (toDepGraphIndiv (v.cancelRight a)) := by
-      sorry
-    rw [show u * FreeMonoid.of a = FreeMonoid.toList u ++ [a] by rfl] at ζ
-    rw [List.cancelRight_prop] at ζ
-    simp [toDepGraphIndiv] at ζ
-    apply Quotient.sound
-    exact ⟨ζ⟩
-    have hva : a ∈ v := by sorry
-    have : List.length u < List.length (u * FreeMonoid.of a) := by -- ∀h
-      rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
-      simp [show FreeMonoid.toList u = u by rfl]
-    have ha : ψ.map ⟨u.length, this⟩ = List.cancelRight_idx v a hva := by sorry -/
-
   /- .. -/
   prop3 := by
     intro a u v h
-    simp [toDepGraph, Quotient.mk''] at h
-    simp [toDepGraph, Quotient.mk'', toRep] at ⊢
+    simp [toDepGraph, Quotient.mk''] at h ⊢
     apply @Quotient.exact _ DepGraphRepSetoid _ at h
-    have ⟨ψ⟩ := h
-    have hva : a ∈ v := by sorry
-    have : List.length u < List.length (u * FreeMonoid.of a) := by -- ∀h
-      rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
-      simp [show FreeMonoid.toList u = u by rfl]
-    simp [toDepGraphIndiv, toRep] at ψ
-    have ha : ψ.map ⟨u.length, this⟩ = List.cancelRight_idx v a hva := by
-      induction v using List.right_induction with
-      | nil =>
-        replace hva : a ∈ [] := by exact hva
-        simp at hva
-      | cons v b ih =>
-        simp at ih
-
-
-
     apply Quotient.sound
 
-    refine ⟨?_, ?_, ?_⟩
-    · have : a ∈ u * FreeMonoid.of a := by
-        rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
-        apply List.mem_append.mpr
-        simp
+    have he1 : @toRep _ _ D _ _ (compose (toDepGraphIndiv u) (toDepGraphIndiv [a])) ≈
+        toRep (toDepGraphIndiv (u * FreeMonoid.of a)) := by
+      have ⟨va, ⟨hva, hvam⟩⟩ := @toDepGraph_tail_max _ _ D u a
+      have π := (@toDepGraph_cons_compose_iso _ _ D _ u a).symm
+      exact ⟨π⟩
+
+    have he2 : @toRep _ _ D _ _ (toDepGraphIndiv v) ≈
+        toRep (compose (toDepGraphIndiv (v.cancelRight a)) (toDepGraphIndiv [a])) := by
       have hva : a ∈ v := by sorry
-      -- have hn := List.cancelRight_mapGet v a (toDepGraphIndiv_preserves_mem this ψ)
-      -- have ⟨n, hn⟩ := hn
-      simp [toDepGraphIndiv, toRep] at ψ
-      refine ⟨?_, ?_, ?_, ?_⟩
-      · exact fun ⟨i, hi⟩ => by
-          let j := (ψ.map ⟨i, by
-            rw [show u * FreeMonoid.of a = u.toList ++ [a] by rfl]
-            simp [show FreeMonoid.toList u = u by rfl]
-            omega⟩)
-          -- have : j ≠ List.cancelRight_idx' v a hva := by
-          let ⟨j, hj⟩ := j
-          refine ⟨?_, ?_⟩
-          · exact if j < List.cancelRight_idx' v a hva then j else j - 1
-          · by_cases hjv : j < List.cancelRight_idx' v a hva
-            · simp only [hjv]
-              simp
-              apply show j + 1 < (List.cancelRight v a).length + 1 → j < (List.cancelRight v a).length by simp
-              rw [List.cancelRight_length_sub v a hva]
-              have := List.cancelRight_idx'_le v a hva
-              omega
-            · simp only [hjv]
-              simp
-              apply show j - 1 + 1 < (List.cancelRight v a).length + 1 → j - 1 < (List.cancelRight v a).length by simp
-              rw [List.cancelRight_length_sub]
+      have ⟨ψ⟩ := h
+      have hm := @toDepGraph_cons_max _ _ D _ u a
+      have hmi := max_vertex_iso ψ ⟨List.length u, by
+        rw [show u * FreeMonoid.of a = (FreeMonoid.toList u) ++ [a] by rfl]
+        simp
+        exact Nat.lt_add_one (List.length u)⟩ hm
 
-          -- let ⟨j, hj⟩ := φ.map ⟨i, by simp; omega⟩
-          -- ⟨j, by sorry⟩
-      · sorry
-      · sorry
-    -- use the isomorphism in `h` (restricted to omit `a`)
+      have := @toDepGraph_cancelRightIdx_max_ifExists _ _ D _ v a hva
+          ⟨ψ.map ⟨u.length, by sorry⟩, by
+        apply And.intro
+        · exact hmi
+        · have := ψ.label ⟨u.length, by sorry⟩
+          simp [toRep, toDepGraphIndiv] at this
+          -- rw [show (u * FreeMonoid.of a) = (FreeMonoid.toList u ++ [a]) by rfl] at this
+          simp
+          sorry
+          -- rw [<- this]
+      ⟩
+      have hi1 := omit_max_compose this
+      have hca : ∀hva, (@toDepGraphIndiv _ _ D v).φ (List.cancelRight_idx v a hva) = a := by
+        intro hva
+        simp [toDepGraphIndiv]
+        exact List.cancelRight_idx''_elem v a hva
+      rw [hca] at hi1
+      have hi2 := omit_max_cancelRight v a hva this
+      replace hi2 := DepGraphIso.congr hi2 (DepGraphIso.refl (toDepGraphIndiv [a]))
+      have := DepGraphIso.trans (hi1.symm) hi2
+      exact ⟨this⟩
 
-    -- apply Quotient.sound
-    -- refine ⟨?_, ?_, ?_⟩
-    have ⟨w, hw⟩ := @toDepGraph_tail_max _ _ D u a
-    have hrel : I.trace_equiv ((u.toList ++ [a]).cancelRight a) (v.cancelRight a) :=
-      I.cancelRight_preserves_congruence a (Quotient.exact h)
-    simp at hrel
-    exact Quotient.sound hrel
+    replace h := Setoid.trans (Setoid.trans he1 h) he2
+    have ⟨ψ⟩ := h
+    simp [toRep] at ψ
+    replace ψ := compose_singleton_restrict ψ
+    exact ⟨ψ.map, ψ.label, ψ.arcs⟩
 
   prop4 := by
     intro a b u v hne h
@@ -2956,7 +3037,8 @@ def toDependencyMorphism [DecidableEq α] : D.independency.DependencyMorphism (D
     obtain ⟨⟨n, hn⟩, ⟨hja, hna⟩⟩ := toDepGraph_tail_max u a
     obtain ⟨⟨m, hm⟩, ⟨hjb, hmb⟩⟩ := toDepGraph_tail_max v b
     have hl : u.length = v.length := by
-      obtain h : (toDepGraph (u * FreeMonoid.of a)).card = (toDepGraph (v * FreeMonoid.of b)).card := by rw [h]
+      obtain h : (toDepGraph (u * FreeMonoid.of a)).card =
+          (toDepGraph (v * FreeMonoid.of b)).card := by rw [h]
       simp [card, toDepGraph, Quotient.mk'', toRep] at h
       have : List.length (u * FreeMonoid.of a) = u.length + 1 := by
         rw [show (u * FreeMonoid.of a) = (FreeMonoid.toList u) ++ [a] by rfl]
@@ -2970,7 +3052,6 @@ def toDependencyMorphism [DecidableEq α] : D.independency.DependencyMorphism (D
       rw [this] at h
       simp at h
       exact h
-    -- have hlc : (List.length (u * FreeMonoid.of a)) = (List.length (v * FreeMonoid.of b)) := by sorry
     simp [toDepGraph, Quotient.mk'', toRep] at h
     apply @Quotient.exact _ DepGraphRepSetoid _ at h
     have ⟨ψ⟩ := h; clear h
