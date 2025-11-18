@@ -695,13 +695,96 @@ lemma removeVertex_iso_congr {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g �
     dsimp [removeVertex]
     rw [h.some.preserves_arcs']
 
-lemma remove_sink_iso_cancelRight [DecidableEq α]
+lemma removeVertex_compose_inl_iso {γ₁ γ₂ : DependenceGraph D} (v : γ₁.V) :
+    removeVertex (compose γ₁ γ₂) (Sum.inl v) ≃g compose (removeVertex γ₁ v) γ₂ := by
+  apply Nonempty.intro
+  refine ⟨Equiv.mk ?_ ?_ ?_ ?_, ?_, ?_⟩
+  · intro ⟨u, hu⟩
+    dsimp [removeVertex, compose]
+    cases u with
+    | inl u₁ =>
+      refine Sum.inl ⟨u₁, ?_⟩
+      intro heq
+      apply hu
+      rw [heq]
+    | inr u₂ =>
+      exact Sum.inr u₂
+  · intro u
+    dsimp [removeVertex, compose] at u ⊢
+    cases u with
+    | inl u₁ =>
+      refine ⟨Sum.inl u₁.val, ?_⟩
+      simp [u₁.property]
+    | inr u₂ =>
+      refine ⟨Sum.inr u₂, ?_⟩
+      simp
+  · intro ⟨u, _⟩
+    cases u <;> rfl
+  · intro u
+    cases u <;> rfl
+  · intro ⟨u, hu⟩
+    dsimp [compose, removeVertex]
+    cases u <;> rfl
+  · intro ⟨u₁, hu₁⟩ ⟨u₂, hu₂⟩
+    dsimp [compose, removeVertex]
+    cases u₁ <;> cases u₂ <;> rfl
+
+lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
     (w : List α) (a : α)
     (sink : (fromString D w).V)
     (h_sink : IsSink (fromString D w) sink)
     (h_label : (fromString D w).φ sink = a) :
     removeVertex (fromString D w) sink ≃g fromString D (w ÷ a) := by
-  sorry
+  induction w using List.induction_right with
+  | nil =>
+    dsimp [fromString, emptyGraph] at sink
+    contradiction
+  | snoc w' b ih =>
+    generalize hγ : fromString D (w' ++ [b]) = γ at sink h_sink h_label ⊢
+    rw [fromString_concat] at hγ
+    subst hγ
+    by_cases heq : b = a
+    · subst heq
+      simp
+      have h_is_last : sink = Sum.inr () := by
+        cases sink with
+        | inl u₁ =>
+          exfalso
+          have h_edge :
+              (compose (fromString D w') (singletonGraph D b)).R (Sum.inl u₁) (Sum.inr ()) := by
+            dsimp [compose, singletonGraph] at h_label ⊢
+            rw [h_label]
+            exact D.refl b
+          exact h_sink (Sum.inr ()) h_edge
+        | inr u₂ =>
+          rfl
+      subst h_is_last
+      exact remove_singleton_iso_self w' b
+    · have heq' : ¬a = b := fun a_1 => heq (Eq.symm a_1)
+      simp [List.cancel_right_over_concat, heq']
+      rw [fromString_concat]
+      have h_is_left : ∃ u, sink = Sum.inl u := by
+        cases sink with
+        | inl u₁ =>
+          use u₁
+        | inr u₂ =>
+          dsimp [compose, singletonGraph] at h_label
+          contradiction
+      have ⟨u, hu⟩ := h_is_left
+      subst hu
+      have h_sink_u : IsSink (fromString D w') u := by
+        intro v h_edge
+        have h_edge' :
+            (compose (fromString D w') (singletonGraph D b)).R (Sum.inl u) (Sum.inl v) := by
+          dsimp [compose]
+          exact h_edge
+        exact h_sink (Sum.inl v) h_edge'
+      have h_label_u : (fromString D w').φ u = a := by
+        dsimp [compose] at h_label
+        exact h_label
+      have h_iso := ih u h_sink_u h_label_u
+      apply isomorphic_trans (removeVertex_compose_inl_iso u)
+      exact compose_congr h_iso (isomorphic_refl _)
 
 -- Proposition (1.4.7)
 def dependenceGraphDependenceMorphism [DecidableEq α] :
@@ -772,7 +855,7 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
     have h₃ :
         removeVertex (fromString D w₂) img_a ≃g
         fromString D (w₂ ÷ a) :=
-      remove_sink_iso_cancelRight w₂ a img_a h_img_a_sink h_img_a_label
+      removeVertex_sink_iso_cancelRight w₂ a img_a h_img_a_sink h_img_a_label
     apply Quotient.sound
     exact isomorphic_trans (isomorphic_trans h₁ h₂) h₃
 
