@@ -640,6 +640,11 @@ def mk' : List α →* GraphMonoid D where
     apply Quotient.sound
     exact fromString_append_iso_compose _ _
 
+lemma sink_of_compose_singleton (γ : DependenceGraph D) (a : α) :
+    IsSink (compose γ (singletonGraph D a)) (Sum.inr Unit.unit) := by
+  intro w h_edge
+  cases w <;> dsimp [compose, singletonGraph] at h_edge
+
 -- Proposition (1.4.7)
 def dependenceGraphDependenceMorphism [DecidableEq α] :
     DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
@@ -686,7 +691,33 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
   A3 := sorry
   A4 := by
     intro w₁ w₂ a b ⟨h_iso, hab⟩
-    replace h_iso := Quotient.exact h_iso
-    sorry
+    dsimp [inducedIndependence]
+    replace ⟨h_iso⟩ := Quotient.exact h_iso
+    have h_a_sink := sink_of_compose_singleton (fromString D w₁) a
+    have h_b_sink := sink_of_compose_singleton (fromString D w₂) b
+    rw [fromString_concat, fromString_concat] at h_iso
+    let node_a : ((fromString D w₁).compose (singletonGraph D a)).V := Sum.inr Unit.unit
+    let node_b : ((fromString D w₂).compose (singletonGraph D b)).V := Sum.inr Unit.unit
+    let img_a := h_iso.toEquiv node_a
+    have h_img_a_sink : IsSink ((fromString D w₂).compose (singletonGraph D b)) img_a := by
+      intro w' h_edge
+      rw [← h_iso.toEquiv.apply_symm_apply w'] at h_edge
+      rw [← h_iso.preserves_arcs'] at h_edge
+      exact h_a_sink _ h_edge
+    have h_label_a : ((fromString D w₂).compose (singletonGraph D b)).φ img_a = a := by
+      rw [← h_iso.preserves_label']
+      rfl
+    cases h_img_a : img_a with
+    | inl u =>
+      have h_no_edge := h_img_a_sink node_b
+      rw [h_img_a] at h_no_edge h_label_a
+      dsimp [compose, singletonGraph, node_b] at h_no_edge h_label_a
+      rw [h_label_a] at h_no_edge
+      exact h_no_edge
+    | inr v =>
+      exfalso
+      rw [h_img_a] at h_label_a
+      dsimp [compose, singletonGraph] at h_label_a
+      exact hab (Eq.symm h_label_a)
 
 end DependenceGraph
