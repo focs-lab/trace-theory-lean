@@ -645,6 +645,64 @@ lemma sink_of_compose_singleton (γ : DependenceGraph D) (a : α) :
   intro w h_edge
   cases w <;> dsimp [compose, singletonGraph] at h_edge
 
+lemma remove_singleton_iso_self (w : List α) (a : α) :
+    let γ := compose (fromString D w) (singletonGraph D a)
+    let v_last : γ.V := Sum.inr ()
+    removeVertex γ v_last ≃g fromString D w := by
+  apply isomorphic_symm
+  apply Nonempty.intro
+  refine ⟨Equiv.mk ?_ ?_ ?_ ?_, ?_, ?_⟩
+  · intro v
+    dsimp [compose, removeVertex]
+    refine ⟨Sum.inl v, ?_⟩
+    simp only [reduceCtorEq, not_false_eq_true]
+  · intro ⟨u, hu⟩
+    dsimp [compose, removeVertex] at u
+    cases u with
+    | inl u₁ =>
+      exact u₁
+    | inr PUnit.unit =>
+      exfalso
+      apply hu
+      rfl
+  · intro v
+    rfl
+  · intro ⟨u, hu⟩
+    dsimp [compose, removeVertex] at u
+    cases u with
+    | inl u₁ =>
+      rfl
+    | inr PUnit.unit =>
+      exfalso
+      apply hu
+      rfl
+  · intro v
+    rfl
+  · intro v₁ v₂
+    rfl
+
+lemma removeVertex_iso_congr {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) (v : γ₁.V) :
+    removeVertex γ₁ v ≃g removeVertex γ₂ (h.some.toEquiv v) := by
+  apply Nonempty.intro
+  refine ⟨?_, ?_, ?_⟩
+  · refine Equiv.subtypeEquiv h.some.toEquiv ?_
+    intro u
+    rw [@not_iff_not, Equiv.apply_eq_iff_eq]
+  · intro u
+    dsimp [removeVertex]
+    rw [h.some.preserves_label']
+  · intro u₁ u₂
+    dsimp [removeVertex]
+    rw [h.some.preserves_arcs']
+
+lemma remove_sink_iso_cancelRight [DecidableEq α]
+    (w : List α) (a : α)
+    (sink : (fromString D w).V)
+    (h_sink : IsSink (fromString D w) sink)
+    (h_label : (fromString D w).φ sink = a) :
+    removeVertex (fromString D w) sink ≃g fromString D (w ÷ a) := by
+  sorry
+
 -- Proposition (1.4.7)
 def dependenceGraphDependenceMorphism [DecidableEq α] :
     DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
@@ -688,13 +746,41 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
           exact Iff.symm (iff_false_intro h_indep)
         · cases u₂
         · rfl
-  A3 := sorry
+  A3 := by
+    intro w₁ w₂ a heq
+    have h_iso := Quotient.exact heq
+    have h_a_sink := sink_of_compose_singleton (fromString D w₁) a
+    rw [fromString_concat] at h_iso
+    let node_a : ((fromString D w₁).compose (singletonGraph D a)).V := Sum.inr Unit.unit
+    let img_a := h_iso.some.toEquiv node_a
+    have h_a_label : ((fromString D w₁).compose (singletonGraph D a)).φ node_a = a := by rfl
+    have h_img_a_sink : IsSink (fromString D w₂) img_a := by
+      intro u h_edge
+      rw [← h_iso.some.toEquiv.apply_symm_apply u, ← h_iso.some.preserves_arcs'] at h_edge
+      exact h_a_sink ((Nonempty.some h_iso).toEquiv.symm u) h_edge
+    have h_img_a_label : (fromString D w₂).φ img_a = a := by
+      rw [← h_iso.some.preserves_label']
+      exact h_a_label
+    have h₁ :
+        fromString D w₁ ≃g
+        removeVertex ((fromString D w₁).compose (singletonGraph D a)) node_a :=
+      isomorphic_symm (remove_singleton_iso_self w₁ a)
+    have h₂ :
+        removeVertex ((fromString D w₁).compose (singletonGraph D a)) node_a ≃g
+        removeVertex (fromString D w₂) img_a :=
+      removeVertex_iso_congr h_iso node_a
+    have h₃ :
+        removeVertex (fromString D w₂) img_a ≃g
+        fromString D (w₂ ÷ a) :=
+      remove_sink_iso_cancelRight w₂ a img_a h_img_a_sink h_img_a_label
+    apply Quotient.sound
+    exact isomorphic_trans (isomorphic_trans h₁ h₂) h₃
+
   A4 := by
     intro w₁ w₂ a b ⟨h_iso, hab⟩
     dsimp [inducedIndependence]
     replace ⟨h_iso⟩ := Quotient.exact h_iso
     have h_a_sink := sink_of_compose_singleton (fromString D w₁) a
-    have h_b_sink := sink_of_compose_singleton (fromString D w₂) b
     rw [fromString_concat, fromString_concat] at h_iso
     let node_a : ((fromString D w₁).compose (singletonGraph D a)).V := Sum.inr Unit.unit
     let node_b : ((fromString D w₂).compose (singletonGraph D b)).V := Sum.inr Unit.unit
