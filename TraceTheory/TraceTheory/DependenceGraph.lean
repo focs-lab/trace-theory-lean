@@ -858,7 +858,6 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
       removeVertex_sink_iso_cancelRight w₂ a img_a h_img_a_sink h_img_a_label
     apply Quotient.sound
     exact isomorphic_trans (isomorphic_trans h₁ h₂) h₃
-
   A4 := by
     intro w₁ w₂ a b ⟨h_iso, hab⟩
     dsimp [inducedIndependence]
@@ -888,5 +887,23 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
       rw [h_img_a] at h_label_a
       dsimp [compose, singletonGraph] at h_label_a
       exact hab (Eq.symm h_label_a)
+
+-- Theorem (1.4.8)
+noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
+    Trace (inducedIndependence D) ≃* GraphMonoid D := by
+  apply dependenceMorphismIso
+    (traceDependenceMorphism)
+    (Quotient.mk_surjective)
+    (dependenceGraphDependenceMorphism)
+    (by
+      intro γ_q
+      induction γ_q using Quotient.inductionOn with
+      | h γ =>
+        have ⟨w, hw⟩ := fromString_surjective γ
+        use w
+        dsimp [dependenceGraphDependenceMorphism, mk']
+        apply Quotient.sound
+        exact hw
+    )
 
 end DependenceGraph
