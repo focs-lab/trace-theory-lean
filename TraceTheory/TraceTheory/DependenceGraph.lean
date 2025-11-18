@@ -6,8 +6,7 @@ import TraceTheory.Trace
 
 open Trace
 
-variable {α : Type*} [DecidableEq α]
-variable {D : Dependence α}
+variable {α : Type*} {D : Dependence α}
 
 variable (D) in
 structure DependenceGraph where
@@ -156,7 +155,8 @@ end EdgeSubset
 
 instance (γ : DependenceGraph D) : Fintype γ.V := γ.fintype
 
-def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D := -- (1.4.4)
+-- Proposition (1.4.4)
+def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D :=
   let Vcomp := γ₁.V ⊕ γ₂.V
   let Rcomp := fun u v =>
     match u, v with
@@ -265,7 +265,6 @@ def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D := -- (1.4.4)
 def Isomorphic (γ₁ γ₂ : DependenceGraph D) : Prop := Nonempty (Iso γ₁ γ₂)
 infix:50 " ≃g " => Isomorphic
 
-omit [DecidableEq α] in
 @[refl]
 lemma isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
   Nonempty.intro {
@@ -278,7 +277,6 @@ lemma isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
       rfl
   }
 
-omit [DecidableEq α] in
 @[symm]
 lemma isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) : γ₂ ≃g γ₁ :=
   Nonempty.intro {
@@ -292,7 +290,6 @@ lemma isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) :
       rw [h.some.toEquiv.apply_symm_apply v₂, h.some.toEquiv.apply_symm_apply w₂]
   }
 
-omit [DecidableEq α] in
 @[trans]
 lemma isomorphic_trans {γ₁ γ₂ γ₃ : DependenceGraph D} (h₁ : γ₁ ≃g γ₂) (h₂ : γ₂ ≃g γ₃) : γ₁ ≃g γ₃ :=
   Nonempty.intro {
@@ -323,7 +320,6 @@ def emptyGraph (D : Dependence α) : DependenceGraph D where
 def one (D : Dependence α) : GraphMonoid D :=
   Quotient.mk (isomorphicSetoid D) (emptyGraph D)
 
-omit [DecidableEq α] in
 lemma compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
     (h₁ : γ₁ ≃g γ₁') (h₂ : γ₂ ≃g γ₂') :
     (compose γ₁ γ₂) ≃g (compose γ₁' γ₂') := by
@@ -353,7 +349,6 @@ def mul (D : Dependence α) : GraphMonoid D → GraphMonoid D → GraphMonoid D 
       exact compose_congr h h'
     )
 
-omit [DecidableEq α] in
 lemma compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
     (compose (compose γ₁ γ₂) γ₃) ≃g (compose γ₁ (compose γ₂ γ₃)) := by
   apply Nonempty.intro
@@ -382,7 +377,6 @@ lemma compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
     · dsimp [compose]
       rfl
 
-omit [DecidableEq α] in
 lemma empty_compose_iso (γ : DependenceGraph D) :
     compose (emptyGraph D) γ ≃g γ := by
   apply Nonempty.intro
@@ -403,7 +397,6 @@ lemma empty_compose_iso (γ : DependenceGraph D) :
     · dsimp [compose, emptyGraph]
       rfl
 
-omit [DecidableEq α] in
 lemma compose_empty_iso (γ : DependenceGraph D) :
     compose γ (emptyGraph D) ≃g γ := by
   apply Nonempty.intro
@@ -424,7 +417,8 @@ lemma compose_empty_iso (γ : DependenceGraph D) :
     · cases v₁
     · cases v₁
 
-instance : Monoid (GraphMonoid D) where -- (1.4.5)
+-- Theorem (1.4.5)
+instance : Monoid (GraphMonoid D) where
   mul := mul D
   one := one D
   mul_assoc := by
@@ -463,7 +457,6 @@ def fromString (w : List α) : DependenceGraph D :=
 def IsSink (γ : DependenceGraph D) (v : γ.V) : Prop :=
   ∀ w, ¬ γ.R v w
 
-omit [DecidableEq α] in
 lemma exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty γ.V) :
     ∃ v, IsSink γ v := by
   classical
@@ -510,23 +503,21 @@ noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceG
         exact Relation.TransGen.single h_step
       | tail h_before h_step ih =>
         exact Relation.TransGen.tail ih h_step
-    exact γ.acyclic u (h_lift u u h )
+    exact γ.acyclic u (h_lift u u h)
   d_conn := by
     intro ⟨u, hu⟩ ⟨w, hw⟩
     simp only [ne_eq, Subtype.mk.injEq]
     exact γ.d_conn u w
 
-omit [DecidableEq α] in
 lemma fromString_empty : fromString D [] = emptyGraph D := by rfl
 
-omit [DecidableEq α] in
 lemma fromString_concat (w : List α) (a : α) :
     fromString D (w ++ [a]) = compose (fromString D w) (singletonGraph D a) := by
   dsimp [fromString]
   rw [List.foldl_concat]
 
-omit [DecidableEq α] in
-lemma fromString_surjective : -- (1.4.6)
+-- Proposition (1.4.6)
+lemma fromString_surjective :
     ∀ (γ : DependenceGraph D), ∃ (w : List α), fromString D w ≃g γ := by
   intro γ
   let size_lt (γ₁ γ₂ : DependenceGraph D) : Prop := Fintype.card γ₁.V < Fintype.card γ₂.V
@@ -603,7 +594,6 @@ lemma fromString_surjective : -- (1.4.6)
           intro h
           exact γ.acyclic a (Relation.TransGen.single h)
 
-omit [DecidableEq α] in
 lemma fromString_append_iso_compose (w₁ w₂ : List α) :
     fromString D (w₁ ++ w₂) ≃g compose (fromString D w₁) (fromString D w₂) := by
   induction w₂ using List.induction_right with
@@ -615,20 +605,17 @@ lemma fromString_append_iso_compose (w₁ w₂ : List α) :
     apply isomorphic_trans (compose_congr ih (isomorphic_refl (singletonGraph D a)))
     exact compose_assoc_iso _ _ _
 
-omit [DecidableEq α] in
 lemma card_eq_of_iso {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) :
     Fintype.card γ₁.V = Fintype.card γ₂.V := by
   apply Fintype.card_eq.mpr
   apply Nonempty.intro
   exact h.some.toEquiv
 
-omit [DecidableEq α] in
 lemma card_compose_eq_sum (γ₁ γ₂ : DependenceGraph D) :
     Fintype.card (compose γ₁ γ₂).V = Fintype.card γ₁.V + Fintype.card γ₂.V := by
   dsimp [compose]
   exact Fintype.card_sum
 
-omit [DecidableEq α] in
 lemma card_fromString_eq_length (w : List α) :
     Fintype.card (fromString D w).V = w.length := by
   induction w using List.induction_right with
@@ -639,7 +626,6 @@ lemma card_fromString_eq_length (w : List α) :
     dsimp [singletonGraph]
     simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
 
-omit [DecidableEq α] in
 lemma fromString_length_eq_of_iso {w₁ w₂ : List α} (h : fromString D w₁ ≃g fromString D w₂) :
     w₁.length = w₂.length := by
   rw [← card_fromString_eq_length, ← card_fromString_eq_length]
@@ -654,7 +640,8 @@ def mk' : List α →* GraphMonoid D where
     apply Quotient.sound
     exact fromString_append_iso_compose _ _
 
-def dependenceGraphDependenceMorphism : -- (1.4.7)
+-- Proposition (1.4.7)
+def dependenceGraphDependenceMorphism [DecidableEq α] :
     DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
   toFun := mk'
   A1 := by
@@ -697,6 +684,9 @@ def dependenceGraphDependenceMorphism : -- (1.4.7)
         · cases u₂
         · rfl
   A3 := sorry
-  A4 := sorry
+  A4 := by
+    intro w₁ w₂ a b ⟨h_iso, hab⟩
+    replace h_iso := Quotient.exact h_iso
+    sorry
 
 end DependenceGraph
