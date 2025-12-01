@@ -9,22 +9,34 @@ open Trace
 variable {α : Type} {D : Dependence α}
 
 variable (D) in
+/-- A `DependenceGraph` over `D` is a triple $\gamma=(V,R,\varphi)$ where $V$ is a finite set,
+$R\subseteq V\times V$ and $\varphi:V\to \Sigma$ is a labeling of the vertices.-/
 structure DependenceGraph where
+  /-- The finite set of vertices of the graph. -/
   V : Type
+  /-- The requirement that the vertex set be finite. -/
   [fintype : Fintype V]
+  /-- The set of arcs between vertices. `R u v` means there is an edge from `u` to `v`. -/
   R : V → V → Prop
+  /-- The labeling function mapping each vertex to a symbol in the alphabet `α`. -/
   φ : V → α
   acyclic : ∀ v, ¬ Relation.TransGen R v v
   d_conn : ∀ v₁ v₂, R v₁ v₂ ∨ R v₂ v₁ ∨ v₁ = v₂ ↔ D.rel (φ v₁) (φ v₂)
 
+/-- A dependence relation `D₁` is a subset of `D₂` if every pair of symbols dependent in `D₁`
+is also dependent in `D₂`. -/
 def Dependence.Subset (D₁ D₂ : Dependence α) : Prop :=
   ∀ a b, D₁.rel a b → D₂.rel a b
 
+/-- Notation for `Dependence.Subset`. -/
 notation:50 D₁ " ⊆ " D₂ => Dependence.Subset D₁ D₂
 
 namespace DependenceGraph
 
+/-- An isomorphism between `γ₁` and `γ₂` consists of a bijection between their
+vertex sets that preserves both the vertex labels and the edge relation. -/
 structure Iso (γ₁ γ₂: DependenceGraph D) where
+  /-- The bijection between vertex sets. -/
   toEquiv : γ₁.V ≃ γ₂.V
   preserves_label' : ∀ v, γ₁.φ v = γ₂.φ (toEquiv v)
   preserves_arcs' : ∀ v₁ v₂, γ₁.R v₁ v₂ ↔ γ₂.R (toEquiv v₁) (toEquiv v₂)
@@ -36,17 +48,21 @@ section EdgeSubset
 
 variable {V : Type} [Fintype V]
 
+/-- Subset relation for arcs. -/
 def RelSubset (R₁ R₂ : V → V → Prop) : Prop :=
   ∀ v₁ v₂, R₁ v₁ v₂ → R₂ v₁ v₂
 
+/-- Notation for subset of arcs. -/
 notation:50 R₁ " ⊆ " R₂ => RelSubset R₁ R₂
 
+/-- An auxiliary relation on `Fin 2` used to construct a counterexample. -/
 def counterexample_D_rel : Fin 2 → Fin 2 → Prop
   | 0, 0 => True
   | 0, 1 => True
   | 1, 0 => True
   | 1, 1 => True
 
+/-- A specific dependence relation on `Fin 2` (full relation) used for a counterexample. -/
 def D₁ : Dependence (Fin 2) where
   rel := counterexample_D_rel
   refl := by
@@ -56,18 +72,23 @@ def D₁ : Dependence (Fin 2) where
     intro a b h
     fin_cases a <;> fin_cases b <;> simp [counterexample_D_rel]
 
+/-- A copy of `D₁` used for a counterexample. -/
 def D₂ := D₁
 
+/-- Identity labeling function for the counterexample. -/
 def φ' : Fin 2 → Fin 2 := id
 
+/-- A specific edge relation (0 -> 1) used for the counterexample. -/
 def R₁ : Fin 2 → Fin 2 → Prop
   | 0, 1 => True
   | _, _ => False
 
+/-- A specific edge relation (1 -> 0) used for the counterexample. -/
 def R₂ : Fin 2 → Fin 2 → Prop
   | 1, 0 => True
   | _, _ => False
 
+-- Falsity of Proposition (1.4.2)
 lemma not_edge_subset_of_dep_subset :
   ¬ (∀ {V α : Type} [Fintype V] (φ : V → α) (R₁ R₂ : V → V → Prop) (D₁ D₂ : Dependence α),
     (∀ v, ¬ Relation.TransGen R₁ v v) →
@@ -156,6 +177,10 @@ end EdgeSubset
 instance (γ : DependenceGraph D) : Fintype γ.V := γ.fintype
 
 -- Proposition (1.4.4)
+/-- The composition of two dependence graphs `γ₁` and `γ₂` over dependence `D`.
+The vertex set is the disjoint union of `γ₁.V` and `γ₂.V`.
+Arcs are preserved within the original graphs, and new arcs are added from `γ₁` to `γ₂`
+whenever the labels of the vertices are dependent in `D`. -/
 def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D :=
   let Vcomp := γ₁.V ⊕ γ₂.V
   let Rcomp := fun u v =>
@@ -262,7 +287,10 @@ def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D :=
           exact γ₂.d_conn v₁ v₂
   }
 
+/-- Two dependence graphs are isomorphic if there exists an `Iso` between them. -/
 def Isomorphic (γ₁ γ₂ : DependenceGraph D) : Prop := Nonempty (Iso γ₁ γ₂)
+
+/-- Notation for dependence graph isomorphism. -/
 infix:50 " ≃g " => Isomorphic
 
 @[refl]
@@ -303,12 +331,16 @@ lemma isomorphic_trans {γ₁ γ₂ γ₃ : DependenceGraph D} (h₁ : γ₁ ≃
       rw [h₁.some.toEquiv.trans_apply, h₁.some.toEquiv.trans_apply]
   }
 
+/-- The setoid structure on graphs defined by the graph isomorphism equivalence relation over `D`.
+This serves as the basis for constructing the quotient type `GraphMonoid`.-/
 instance isomorphicSetoid (D : Dependence α) : Setoid (DependenceGraph D) where
   r := Isomorphic
   iseqv := ⟨isomorphic_refl, isomorphic_symm, isomorphic_trans⟩
 
+/-- The algebra of dependence graphs modulo isomorphism with composition. -/
 def GraphMonoid (D : Dependence α) := Quotient (isomorphicSetoid D)
 
+/-- The empty dependence graph, acting as the identity element for graph composition. -/
 def emptyGraph (D : Dependence α) : DependenceGraph D where
   V := Empty
   fintype := inferInstance
@@ -317,6 +349,7 @@ def emptyGraph (D : Dependence α) : DependenceGraph D where
   acyclic := by simp
   d_conn := by simp
 
+/-- The identity element of the `GraphMonoid`, represented by the class of the empty graph. -/
 def one (D : Dependence α) : GraphMonoid D :=
   Quotient.mk (isomorphicSetoid D) (emptyGraph D)
 
@@ -340,6 +373,7 @@ lemma compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
     · rfl
     . rw [h₂.some.preserves_arcs']
 
+/-- Multiplication in the `GraphMonoid`, induced by the `compose` operation on dependence graphs. -/
 def mul (D : Dependence α) : GraphMonoid D → GraphMonoid D → GraphMonoid D :=
   Quotient.lift₂
     (fun γ₁ γ₂ => ⟦compose γ₁ γ₂⟧)
@@ -438,6 +472,7 @@ instance : Monoid (GraphMonoid D) where
     exact compose_empty_iso _
 
 variable (D) in
+/-- A dependence graph consisting of a single vertex labeled with `a`. -/
 def singletonGraph (a : α) : DependenceGraph D where
   V := Unit
   fintype := inferInstance
@@ -451,9 +486,12 @@ def singletonGraph (a : α) : DependenceGraph D where
     simp only [or_true, D.refl]
 
 variable (D) in
+/-- Constructs the canonical dependence graph corresponding to a word `w`.
+Defined by folding `compose` over the list, starting with the empty graph. -/
 def fromString (w : List α) : DependenceGraph D :=
   List.foldl (fun γ a => compose γ (singletonGraph D a)) (emptyGraph D) w
 
+/-- A vertex is a sink if it has no outgoing edges. -/
 def IsSink (γ : DependenceGraph D) (v : γ.V) : Prop :=
   ∀ w, ¬ γ.R v w
 
@@ -487,6 +525,8 @@ lemma exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty γ
   dsimp [flip] at hv
   exact hv hw
 
+/-- Removes a vertex `v` from the dependence graph `γ`,
+returning the induced subgraph on $V \setminus \{v\}$. -/
 noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceGraph D where
   V := {u : γ.V // u ≠ v}
   fintype := Fintype.ofFinite {u : γ.V // u ≠ v}
@@ -631,6 +671,7 @@ lemma fromString_length_eq_of_iso {w₁ w₂ : List α} (h : fromString D w₁ �
   rw [← card_fromString_eq_length, ← card_fromString_eq_length]
   exact card_eq_of_iso h
 
+/-- The canonical homomorphism from the free monoid of strings to the `GraphMonoid`. -/
 def mk' : List α →* GraphMonoid D where
   toFun := fun w => ⟦fromString D w⟧
   map_one' := by rfl
@@ -787,6 +828,8 @@ lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
       exact compose_congr h_iso (isomorphic_refl _)
 
 -- Proposition (1.4.7)
+/-- The homomorphism from the free monoided of strings onto the graph monoid defined as
+$\phi(w)=\langle w\rangle$ is a dependence morphism. -/
 def dependenceGraphDependenceMorphism [DecidableEq α] :
     DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
   toFun := mk'
@@ -889,6 +932,7 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
       exact hab (Eq.symm h_label_a)
 
 -- Theorem (1.4.8)
+/-- The trace monoid and `GraphMonoid` are isomorphic. -/
 noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
     Trace (inducedIndependence D) ≃* GraphMonoid D := by
   apply dependenceMorphismIso
@@ -907,3 +951,5 @@ noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
     )
 
 end DependenceGraph
+
+#lint
