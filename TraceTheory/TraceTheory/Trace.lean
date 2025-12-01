@@ -5,19 +5,19 @@ import TraceTheory.Basic
 namespace Trace
 
 /-- A dependence is a finite, reflexive, and symmetric relation. -/
-structure Dependence (α : Type*) where
+structure Dependence (α : Type) where
   rel : α → α → Prop
   refl : ∀ a, rel a a
   symm: ∀ a b, rel a b → rel b a
 
 /-- An independence is a finite, irreflexive, and symmetric relation. -/
-structure Independence (α : Type*) where
+structure Independence (α : Type) where
   rel : α → α → Prop
   irrefl : ∀ a, ¬ rel a a
   symm : ∀ a b, rel a b → rel b a
 
 /-- The Independence relation induced by a Dependence `D`. -/
-def inducedIndependence {α : Type*} (D : Dependence α) : Independence α where
+def inducedIndependence {α : Type} (D : Dependence α) : Independence α where
   rel := fun a b => ¬ D.rel a b
   irrefl := by
     intro a h
@@ -26,7 +26,7 @@ def inducedIndependence {α : Type*} (D : Dependence α) : Independence α where
     intro a b hab hba
     exact hab (D.symm b a hba)
 
-variable {α : Type*} {I : Independence α}
+variable {α : Type} {I : Independence α}
 
 /--
 The trace equivalence relation is the least congruence $\equiv$ such that for all symbols

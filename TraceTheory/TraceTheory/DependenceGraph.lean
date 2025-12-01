@@ -6,7 +6,7 @@ import TraceTheory.Trace
 
 open Trace
 
-variable {α : Type*} {D : Dependence α}
+variable {α : Type} {D : Dependence α}
 
 variable (D) in
 structure DependenceGraph where
