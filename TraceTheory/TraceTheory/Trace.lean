@@ -828,7 +828,7 @@ lemma image_eq_of_image_eq
         rw [ψ.A2 h_indep]
 
 -- Theorem (1.3.8)
-/-- Two monoids `M` and `N` are isomorphism given surjective dependence morphisms w.r.t. the
+/-- Two monoids `M` and `N` are isomorphic given surjective dependence morphisms w.r.t. the
 same dependency into them. -/
 noncomputable def dependenceMorphismIso
     (ϕ : DependenceMorphism I M) (hϕ_surj : Function.Surjective ϕ.toFun)
