@@ -58,7 +58,7 @@ inductive TraceEquiv (I : Independence α) : List α → List α → Prop
       TraceEquiv I w₃ w₄ →
       TraceEquiv I (w₁ ++ w₃) (w₂ ++ w₄)
 
-lemma length_eq_of_equiv {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂):
+lemma length_eq_of_equiv {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂) :
     w₁.length = w₂.length := by
   induction h with
   | swap _ _ _ =>
@@ -216,7 +216,7 @@ lemma equiv_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
       contradiction
     · exact ih₁ hl₁.symm hl₂.symm
 
-lemma indep_of_equiv_of_ne {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a ≠ b):
+lemma indep_of_equiv_of_ne {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a ≠ b) :
     I.rel a b := by
   generalize hx : ([a, b] : List α) = x at h
   generalize hy : ([b, a] : List α) = y at h
@@ -832,7 +832,7 @@ lemma image_eq_of_image_eq
 same dependency into them. -/
 noncomputable def dependenceMorphismIso
     (ϕ : DependenceMorphism I M) (hϕ_surj : Function.Surjective ϕ.toFun)
-    (ψ : DependenceMorphism I N) (hψ_surj : Function.Surjective ψ.toFun):
+    (ψ : DependenceMorphism I N) (hψ_surj : Function.Surjective ψ.toFun) :
     M ≃* N := by
   let θ (m : M) : N := ψ (Classical.choose (hϕ_surj m))
   let θ_inv (n : N) : M := ϕ (Classical.choose (hψ_surj n))
