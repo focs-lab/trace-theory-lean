@@ -63,6 +63,7 @@ lemma distribution_mem_historyMonoid (Sigma : Fin n → Finset α) (w : List α)
     · exact ih
 
 -- Proposition (1.5.2)
+/-- The distribution function with codomain restricted to the monoid of histories. -/
 def distribution' (Sigma : Fin n → Finset α) : List α →* HistoryMonoid Sigma where
   toFun w := ⟨distribution Sigma w, distribution_mem_historyMonoid Sigma w⟩
   map_one' := Subtype.eq (distribution Sigma).map_one
@@ -91,3 +92,40 @@ lemma distribution'_surjective (Sigma : Fin n → Finset α) :
     apply SetLike.coe_eq_coe.mp
     rw [hu, hv]
     rfl
+
+/-- The dependence relation defined by a tuple of alphabets. -/
+def SigmaDependence (Sigma : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ Sigma i) :
+    Dependence α where
+  rel a b := ∃ i, a ∈ Sigma i ∧ b ∈ Sigma i
+  refl := by
+    intro a
+    have ⟨i, hi⟩ := h_cover a
+    use i, hi, hi
+  symm := by
+    intro a b ⟨i, ha, hb⟩
+    use i, hb, ha
+
+-- Theorem 1.5.3
+def historyDependenceMorphism (Sigma : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ Sigma i) :
+    DependenceMorphism
+      (inducedIndependence (SigmaDependence Sigma h_cover))
+      (HistoryMonoid Sigma) where
+  toFun := distribution' Sigma
+  A1 := by
+    intro w heq
+    have hw : distribution Sigma w = 1 := by
+      apply Subtype.ext_iff.mp heq
+    cases w with
+    | nil =>
+      rfl
+    | cons a w' =>
+      have ⟨i, hi⟩ := h_cover a
+      have h_proj : proj Sigma i (a :: w') = [] := by
+        have h_fun := congr_fun hw i
+        dsimp [distribution] at h_fun
+        exact h_fun
+      dsimp only [proj, MonoidHom.coe_mk, OneHom.coe_mk] at h_proj
+      simp [projChar, hi] at h_proj
+  A2 := sorry
+  A3 := sorry
+  A4 := sorry
