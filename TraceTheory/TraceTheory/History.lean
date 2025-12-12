@@ -105,7 +105,37 @@ def SigmaDependence (Sigma : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈
     intro a b ⟨i, ha, hb⟩
     use i, hb, ha
 
+lemma proj_cancel_right (Sigma : Fin n → Finset α) (i : Fin n) (w : List α) (a : α) :
+    proj Sigma i (w ÷ a) =
+      if h : a ∈ Sigma i then (proj Sigma i w) ÷ ⟨a, h⟩ else proj Sigma i w := by
+  simp [proj]
+  split_ifs with h
+  · induction w using List.induction_right with
+    | nil =>
+      rfl
+    | snoc w' b ih =>
+      by_cases hb : a = b
+      · subst hb
+        simp [projChar, h]
+      · simp [hb]
+        rw [ih]
+        simp only [right_eq_ite_iff]
+        intro h_proj
+        simp [projChar] at h_proj
+        exfalso
+        exact hb (Eq.symm h_proj.right)
+  · induction w using List.induction_right with
+    | nil =>
+      rfl
+    | snoc w' b ih =>
+      by_cases hb : a = b
+      · subst hb
+        simp [projChar, h]
+      · simp [hb]
+        exact ih
+
 -- Theorem 1.5.3
+/-- Distribution is a dependence morphism. -/
 def historyDependenceMorphism (Sigma : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ Sigma i) :
     DependenceMorphism
       (inducedIndependence (SigmaDependence Sigma h_cover))
@@ -126,6 +156,41 @@ def historyDependenceMorphism (Sigma : Fin n → Finset α) (h_cover : ∀ a, �
         exact h_fun
       dsimp only [proj, MonoidHom.coe_mk, OneHom.coe_mk] at h_proj
       simp [projChar, hi] at h_proj
-  A2 := sorry
-  A3 := sorry
-  A4 := sorry
+  A2 := by
+    intro a b h_indep
+    simp [distribution', distribution, proj]
+    funext i
+    rw [(show [a, b] = [a] ++ [b] from rfl), (show [b, a] = [b] ++ [a] from rfl)]
+    by_cases ha : a ∈ Sigma i <;> by_cases hb : b ∈ Sigma i
+    · exfalso
+      dsimp [inducedIndependence, SigmaDependence] at h_indep
+      exact h_indep ⟨i, ha, hb⟩
+    · simp [projChar, ha, hb]
+    · simp [projChar, ha, hb]
+    · simp [projChar, ha, hb]
+  A3 := by
+    intro w₁ w₂ a heq
+    simp [distribution', distribution]
+    funext i
+    have hi : proj Sigma i (w₁ ++ [a]) = proj Sigma i w₂ := by
+      rw [Subtype.ext_iff] at heq
+      exact congr_fun heq i
+    rw [proj_cancel_right]
+    by_cases h : a ∈ Sigma i
+    · have hi' : proj Sigma i (w₁ ++ [a]) ÷ ⟨a, h⟩ = proj Sigma i w₂ ÷ ⟨a, h⟩ := by rw [hi]
+      simp [proj, projChar, h] at hi' ⊢
+      exact hi'
+    · simp [proj, projChar, h] at hi ⊢
+      exact hi
+  A4 := by
+    intro w₁ w₂ a b ⟨heq, hne⟩ ⟨i, ha, hb⟩
+    have hi : proj Sigma i (w₁ ++ [a]) = proj Sigma i (w₂ ++ [b]) := by
+      rw [Subtype.ext_iff] at heq
+      exact congr_fun heq i
+    simp [proj, projChar, ha, hb] at hi
+    have h_last {β} {w₁ w₂ : List β} {a b : β} (h : w₁ ++ [a] = w₂ ++ [b]) : a = b := by
+      have hrev : (w₁ ++ [a]).reverse = (w₂ ++ [b]).reverse := congrArg List.reverse h
+      simp at hrev
+      exact hrev.left
+    have h_last_eq := Subtype.mk_eq_mk.mp (h_last hi)
+    contradiction
