@@ -194,3 +194,14 @@ def historyDependenceMorphism (Sigma : Fin n → Finset α) (h_cover : ∀ a, �
       exact hrev.left
     have h_last_eq := Subtype.mk_eq_mk.mp (h_last hi)
     contradiction
+
+-- Theorem 1.5.4
+/-- The trace monoid and `HistoryMonoid` are isomorphic. -/
+noncomputable def traceMonoidIsoHistoryMonoid
+    (Sigma : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ Sigma i) :
+    Trace (inducedIndependence (SigmaDependence Sigma h_cover)) ≃* HistoryMonoid (Sigma) := by
+  apply dependenceMorphismIso
+    traceDependenceMorphism
+    Quotient.mk_surjective
+    (historyDependenceMorphism Sigma h_cover)
+    (distribution'_surjective Sigma)
