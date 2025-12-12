@@ -205,3 +205,5 @@ noncomputable def traceMonoidIsoHistoryMonoid
     Quotient.mk_surjective
     (historyDependenceMorphism Sigma h_cover)
     (distribution'_surjective Sigma)
+
+#lint

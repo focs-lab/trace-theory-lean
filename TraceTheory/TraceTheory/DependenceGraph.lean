@@ -936,9 +936,9 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
 noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
     Trace (inducedIndependence D) ≃* GraphMonoid D := by
   apply dependenceMorphismIso
-    (traceDependenceMorphism)
-    (Quotient.mk_surjective)
-    (dependenceGraphDependenceMorphism)
+    traceDependenceMorphism
+    Quotient.mk_surjective
+    dependenceGraphDependenceMorphism
     (by
       intro γ_q
       induction γ_q using Quotient.inductionOn with
