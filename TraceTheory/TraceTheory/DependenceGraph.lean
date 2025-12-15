@@ -499,7 +499,7 @@ lemma exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty γ
     ∃ v, IsSink γ v := by
   classical
   have wf : WellFounded (flip γ.R) := by
-    let μ : γ.V → ℕ := fun v => (Finset.univ.filter (fun w => Relation.TransGen γ.R v w)).card
+    let μ : γ.V → ℕ := fun u => (Finset.univ.filter (fun v => Relation.TransGen γ.R u v)).card
     have μ_wf : WellFounded (Function.onFun Nat.lt μ) :=
       WellFounded.onFun wellFounded_lt
     apply WellFounded.mono μ_wf

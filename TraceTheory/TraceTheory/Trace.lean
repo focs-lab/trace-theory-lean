@@ -191,10 +191,10 @@ lemma equiv_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
   generalize hy : ([b] : List α) = y at h
   induction h generalizing a b with
   | swap _ _ _ =>
-    simp at hx
+    cases hx
   | refl _ =>
-    simp [← hy] at hx
-    exact hx
+    rw [← hy] at hx
+    injection hx
   | symm _ ih =>
     exact (ih hy hx).symm
   | trans t₁ t₂ _ _ =>
@@ -208,11 +208,11 @@ lemma equiv_singletons {a b : α} (h : TraceEquiv I [a] [b]) : a = b := by
     rcases List.singleton_eq_append_iff.mp hx with ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩
     <;> rcases List.singleton_eq_append_iff.mp hy with ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩
     · exact ih₂ hl₃.symm hl₄.symm
-    · have h_t₁ := length_eq_of_equiv t₁
-      rw [hl₁, hl₂] at h_t₁
+    · have ht₁ := length_eq_of_equiv t₁
+      rw [hl₁, hl₂] at ht₁
       contradiction
-    · have h_t₁ := length_eq_of_equiv t₁
-      rw [hl₁, hl₂] at h_t₁
+    · have ht₁ := length_eq_of_equiv t₁
+      rw [hl₁, hl₂] at ht₁
       contradiction
     · exact ih₁ hl₁.symm hl₂.symm
 
@@ -242,32 +242,32 @@ lemma indep_of_equiv_of_ne {a b : α} (h : TraceEquiv I [a, b] [b, a]) (hne: a �
     rename_i l₁ l₂ l₃ l₄
     have h_l₁l₃ : l₁.length + l₃.length = 2 := by simp [← List.length_append, ← hx]
     have h_l₂l₄ : l₂.length + l₄.length = 2 := by simp [← List.length_append, ← hy]
-    have h_t₁ := length_eq_of_equiv t₁
-    have h_t₂ := length_eq_of_equiv t₂
+    have ht₁ := length_eq_of_equiv t₁
+    have ht₂ := length_eq_of_equiv t₂
     rcases Nat.add_eq_two_iff.mp h_l₁l₃ with ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩ | ⟨hl₁, hl₃⟩
     <;> rcases Nat.add_eq_two_iff.mp h_l₂l₄ with ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩ | ⟨hl₂, hl₄⟩
     · rw [List.length_eq_zero_iff.mp hl₁, List.nil_append] at hx
       rw [List.length_eq_zero_iff.mp hl₂, List.nil_append] at hy
       exact ih₂ hne hx hy
-    · rw [hl₁, hl₂] at h_t₁
+    · rw [hl₁, hl₂] at ht₁
       contradiction
-    . rw [hl₁, hl₂] at h_t₁
+    . rw [hl₁, hl₂] at ht₁
       contradiction
-    · rw [hl₁, hl₂] at h_t₁
+    · rw [hl₁, hl₂] at ht₁
       contradiction
     · rcases List.length_eq_one_iff.mp hl₁ with ⟨c, hc⟩
       rcases List.length_eq_one_iff.mp hl₂ with ⟨d, hd⟩
       simp [hc] at hx
       simp [hd] at hy
       rw [hc, hd] at t₁
-      have h_cd := equiv_singletons t₁
-      rw [← hx.left, ← hy.left] at h_cd
+      have hcd := equiv_singletons t₁
+      rw [← hx.left, ← hy.left] at hcd
       contradiction
-    · rw [hl₁, hl₂] at h_t₁
+    · rw [hl₁, hl₂] at ht₁
       contradiction
-    · rw [hl₁, hl₂] at h_t₁
+    · rw [hl₁, hl₂] at ht₁
       contradiction
-    · rw [hl₁, hl₂] at h_t₁
+    · rw [hl₁, hl₂] at ht₁
       contradiction
     · rw [List.length_eq_zero_iff.mp hl₃, List.append_nil] at hx
       rw [List.length_eq_zero_iff.mp hl₄, List.append_nil] at hy
@@ -370,8 +370,9 @@ lemma equiv_comm_append_of_indep_symb
   | snoc w' b ih =>
     simp at h
     have haw' : independent I [a] w' := by
-      simp
-      intro b' hb'
+      intro a' ha' b' hb'
+      simp at ha'
+      subst ha'
       exact h b' (Or.intro_left (b' = b) hb')
     have ht := ih haw'
     have hb := ht.compat (TraceEquiv.refl [b])
@@ -391,7 +392,6 @@ lemma indep_of_indep_of_equiv
 
 lemma indep_of_concat {w₁ w₂ w₃: List α} (h : independent I w₁ (w₂ ++ w₃)) :
     independent I w₁ w₂ ∧ independent I w₁ w₃ := by
-  unfold independent at *
   constructor
   · intro a ha b hb
     apply h
