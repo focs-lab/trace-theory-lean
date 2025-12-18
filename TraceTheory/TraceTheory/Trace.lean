@@ -71,9 +71,9 @@ lemma eqvGen_append_right {u v w : List α}
   | rel x y h_comm =>
     apply Relation.EqvGen.rel
     rcases h_comm with ⟨x', y', a, b, h_indep⟩
-    have h := CommuteOnce.mk x' (y' ++ w) a b h_indep
-    rw [← List.append_assoc, ← List.append_assoc] at h
-    exact h
+    have h' := CommuteOnce.mk x' (y' ++ w) a b h_indep
+    rw [← List.append_assoc, ← List.append_assoc] at h'
+    exact h'
   | refl _ =>
     apply Relation.EqvGen.refl
   | symm _ _ _ ih =>
@@ -88,9 +88,8 @@ lemma eqvGen_append_left {u v w : List α}
   | rel x y h_comm =>
     apply Relation.EqvGen.rel
     rcases h_comm with ⟨x', y', a, b, h_indep⟩
-    have h := CommuteOnce.mk (w ++ x') y' a b h_indep
     simp only [← List.append_assoc]
-    exact h
+    exact CommuteOnce.mk (w ++ x') y' a b h_indep
   | refl _ =>
     apply Relation.EqvGen.refl
   | symm _ _ _ ih =>
@@ -102,12 +101,12 @@ lemma eqvGen_append_left {u v w : List α}
 theorem traceEquiv_iff_eqvGen_commuteOnce (u v : List α) :
     TraceEquiv I u v ↔ Relation.EqvGen (CommuteOnce I) u v := by
   constructor
-  · intro ht
-    induction ht with
+  · intro h
+    induction h with
     | swap a b h_indep =>
       apply Relation.EqvGen.rel
-      have h := by simpa using CommuteOnce.mk [] [] a b h_indep
-      exact h
+      have h' := by simpa using CommuteOnce.mk [] [] a b h_indep
+      exact h'
     | refl _ =>
       apply Relation.EqvGen.refl
     | symm _ ih =>
@@ -119,6 +118,20 @@ theorem traceEquiv_iff_eqvGen_commuteOnce (u v : List α) :
       apply Relation.EqvGen.trans (w₁ ++ w₃) (w₂ ++ w₃) (w₂ ++ w₄)
       · apply eqvGen_append_right ih₁
       · apply eqvGen_append_left ih₂
+  · intro h
+    induction h with
+    | rel x y h_comm =>
+      rcases h_comm with ⟨x', y', a, b, h_indep⟩
+      rw [List.append_assoc, List.append_assoc]
+      apply TraceEquiv.compat (TraceEquiv.refl x')
+      apply TraceEquiv.compat _ (TraceEquiv.refl y')
+      exact TraceEquiv.swap a b h_indep
+    | refl _ =>
+      apply TraceEquiv.refl
+    | symm _ _ _ ih =>
+      apply TraceEquiv.symm ih
+    | trans _ _ _ _ _ ih1 ih2 =>
+      apply TraceEquiv.trans ih1 ih2
 
 lemma length_eq_of_equiv {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂) :
     w₁.length = w₂.length := by
@@ -205,8 +218,8 @@ lemma cancellation_rule_left {w₁ w₂ : List α} [DecidableEq α] (a : α) (h 
   exact mirror_rule (cancellation_rule a (mirror_rule h))
 
 -- Fact (1.8)
-lemma projection_rule
-    {w₁ w₂ : List α} [DecidableEq α] (Sigma : Alphabet α) (h : TraceEquiv I w₁ w₂) :
+lemma projection_rule {w₁ w₂ : List α} [DecidableEq α]
+    (Sigma : Alphabet α) (h : TraceEquiv I w₁ w₂) :
     TraceEquiv I (w₁.proj Sigma) (w₂.proj Sigma) := by
   induction h with
   | swap a b h =>
