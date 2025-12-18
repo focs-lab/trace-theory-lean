@@ -86,7 +86,7 @@ lemma cancelRight_snoc (w : List α) (a b : α) :
     w ++ [b] ÷ a = if b = a then w else w ÷ a ++ [b] := by
   split_ifs with heq <;> simp [cancelRight, heq]
 
-lemma cancelRight_append {w₁ w₂ : List α} (a : α) :
+lemma append_cancelRight {w₁ w₂ : List α} (a : α) :
     (w₁ ++ w₂) ÷ a = if a ∈ w₂ then w₁ ++ (w₂ ÷ a) else (w₁ ÷ a) ++ w₂ := by
   induction w₂ using List.reverseRecOn with
   | nil =>
