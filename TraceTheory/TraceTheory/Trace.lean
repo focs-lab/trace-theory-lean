@@ -58,6 +58,68 @@ inductive TraceEquiv (I : Independence α) : List α → List α → Prop
       TraceEquiv I w₃ w₄ →
       TraceEquiv I (w₁ ++ w₃) (w₂ ++ w₄)
 
+/-- The binary relation $~$  such that $u~v$ if and only if there exists strings $x,y$ and symbols
+$a,b$ such that $u=xaby$ and $v=xbay$. -/
+inductive CommuteOnce (I : Independence α) : List α → List α → Prop
+  | mk : ∀ (x y : List α) (a b : α), I.rel a b →
+    CommuteOnce I (x ++ [a, b] ++ y) (x ++ [b, a] ++ y)
+
+lemma eqvGen_append_right {u v w : List α}
+    (h : Relation.EqvGen (CommuteOnce I) u v) :
+    Relation.EqvGen (CommuteOnce I) (u ++ w) (v ++ w) := by
+  induction h with
+  | rel x y h_comm =>
+    apply Relation.EqvGen.rel
+    rcases h_comm with ⟨x', y', a, b, h_indep⟩
+    have h := CommuteOnce.mk x' (y' ++ w) a b h_indep
+    rw [← List.append_assoc, ← List.append_assoc] at h
+    exact h
+  | refl _ =>
+    apply Relation.EqvGen.refl
+  | symm _ _ _ ih =>
+    apply Relation.EqvGen.symm _ _ ih
+  | trans _ _ _ _ _ ih1 ih2 =>
+    apply Relation.EqvGen.trans _ _ _ ih1 ih2
+
+lemma eqvGen_append_left {u v w : List α}
+    (h : Relation.EqvGen (CommuteOnce I) u v) :
+    Relation.EqvGen (CommuteOnce I) (w ++ u) (w ++ v) := by
+  induction h with
+  | rel x y h_comm =>
+    apply Relation.EqvGen.rel
+    rcases h_comm with ⟨x', y', a, b, h_indep⟩
+    have h := CommuteOnce.mk (w ++ x') y' a b h_indep
+    simp only [← List.append_assoc]
+    exact h
+  | refl _ =>
+    apply Relation.EqvGen.refl
+  | symm _ _ _ ih =>
+    apply Relation.EqvGen.symm _ _ ih
+  | trans _ _ _ _ _ ih1 ih2 =>
+    apply Relation.EqvGen.trans _ _ _ ih1 ih2
+
+/-- Trace equivalence is the equivalence closure of $~$. -/
+theorem traceEquiv_iff_eqvGen_commuteOnce (u v : List α) :
+    TraceEquiv I u v ↔ Relation.EqvGen (CommuteOnce I) u v := by
+  constructor
+  · intro ht
+    induction ht with
+    | swap a b h_indep =>
+      apply Relation.EqvGen.rel
+      have h := by simpa using CommuteOnce.mk [] [] a b h_indep
+      exact h
+    | refl _ =>
+      apply Relation.EqvGen.refl
+    | symm _ ih =>
+      apply Relation.EqvGen.symm _ _ ih
+    | trans _ _ ih₁ ih₂ =>
+      apply Relation.EqvGen.trans _ _ _ ih₁ ih₂
+    | compat _ _ ih₁ ih₂ =>
+      expose_names
+      apply Relation.EqvGen.trans (w₁ ++ w₃) (w₂ ++ w₃) (w₂ ++ w₄)
+      · apply eqvGen_append_right ih₁
+      · apply eqvGen_append_left ih₂
+
 lemma length_eq_of_equiv {w₁ w₂ : List α} (h : TraceEquiv I w₁ w₂) :
     w₁.length = w₂.length := by
   induction h with
@@ -827,6 +889,7 @@ lemma image_eq_of_image_eq
         rw [List.singleton_append, List.singleton_append]
         rw [ψ.A2 h_indep]
 
+-- TODO: Retry proving isomorphism using projection lemma
 -- Theorem (1.3.8)
 /-- Two monoids `M` and `N` are isomorphic given surjective dependence morphisms w.r.t. the
 same dependency into them. -/
