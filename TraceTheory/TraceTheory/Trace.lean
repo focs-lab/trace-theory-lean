@@ -369,8 +369,7 @@ lemma equiv_cancel_right {u v w : List α} [DecidableEq α] (h : TraceEquiv I (u
   exact h
 
 -- Fact (1.9)
-lemma indep_and_decomp_of_equiv_of_tail_ne
-    {u v : List α} {a b : α} [DecidableEq α]
+lemma indep_and_decomp_of_equiv_of_tail_ne {u v : List α} {a b : α} [DecidableEq α]
     (h : TraceEquiv I (u ++ [a]) (v ++ [b]))
     (hne : a ≠ b) :
     I.rel a b ∧
@@ -388,8 +387,8 @@ lemma indep_and_decomp_of_equiv_of_tail_ne
           ⟨h_cancel_b_concat_b, h_cancel_b⟩⟩⟩
 
 -- Fact (1.10)
-lemma equiv_cancel_left_right
-    {u v x y : List α} [DecidableEq α] (h : TraceEquiv I (x ++ u ++ y) (x ++ v ++ y)) :
+lemma equiv_cancel_left_right {u v x y : List α} [DecidableEq α]
+    (h : TraceEquiv I (x ++ u ++ y) (x ++ v ++ y)) :
     TraceEquiv I u v := by
   rw [List.append_assoc, List.append_assoc] at h
   exact equiv_cancel_right (equiv_cancel_left h)
@@ -399,8 +398,7 @@ lemma equiv_cancel_left_right
 def independent (I : Independence α) (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
 
 -- Proposition (1.3.3)
-lemma indep_of_equiv_rightmost_symbol
-    {u v w : List α} {a : α} [DecidableEq α]
+lemma indep_of_equiv_rightmost_symbol {u v w : List α} {a : α} [DecidableEq α]
     (h : TraceEquiv I (u ++ [a] ++ v) (w ++ [a])) (hav : a ∉ v) :
     independent I [a] v := by
   induction v using List.induction_right generalizing w with
@@ -436,8 +434,8 @@ lemma right_most_occurrence {w : List α} {a : α} (h : a ∈ w) :
       use w', w'' ++ [b]
       simp [h_concat, h_in, hab]
 
-lemma equiv_comm_append_of_indep_symb
-    {w : List α} {a : α} (h : independent I [a] w) :
+lemma equiv_comm_append_of_indep_symb {w : List α} {a : α}
+    (h : independent I [a] w) :
     TraceEquiv I (w ++ [a]) ([a] ++ w) := by
   induction w using List.induction_right with
   | nil =>
@@ -457,8 +455,8 @@ lemma equiv_comm_append_of_indep_symb
       exact (TraceEquiv.refl w').compat (TraceEquiv.swap b a (I.symm a b hr))
     exact hab.trans hb
 
-lemma indep_of_indep_of_equiv
-    {w₁ w₂ w₃: List α} (h : independent I w₁ w₂) (ht : TraceEquiv I w₂ w₃) :
+lemma indep_of_indep_of_equiv {w₁ w₂ w₃: List α}
+    (h : independent I w₁ w₂) (ht : TraceEquiv I w₂ w₃) :
     independent I w₁ w₃ := by
   intro a ha b hb
   have h_alph := mem_iff_mem b ht
@@ -600,10 +598,8 @@ variable (I) in
 a trace `⟦w⟧` such that `t₁` concatenated with `⟦w⟧` equals `t₂`. -/
 def isPrefix (t₁ t₂ : Trace I) := ∃ w, mul t₁ ⟦w⟧ = t₂
 
-lemma exists_gcp'
-    {I : Independence α} {u v w : List α} [DecidableEq α]
-    (hu : isPrefix I ⟦u⟧ ⟦w⟧)
-    (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+lemma exists_gcp' {I : Independence α} {u v w : List α} [DecidableEq α]
+    (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
     ∃ g, isPrefix I ⟦g⟧ ⟦u⟧ ∧ isPrefix I ⟦g⟧ ⟦v⟧
     ∧ (∀ g', isPrefix I ⟦g ++ g'⟧ ⟦u⟧ → isPrefix I ⟦g ++ g'⟧ ⟦v⟧ → g' = []) := by
   have ⟨u', hu'⟩ := hu
@@ -638,10 +634,8 @@ lemma exists_gcp'
       exact I.irrefl a h_absurd
 
 -- Proposition (1.3.5)
-lemma exists_gcp
-    {u v w : List α} [DecidableEq α]
-    (hu : isPrefix I ⟦u⟧ ⟦w⟧)
-    (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+lemma exists_gcp {u v w : List α} [DecidableEq α]
+    (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
     ∃ g, isPrefix I ⟦g⟧ ⟦u⟧ ∧ isPrefix I ⟦g⟧ ⟦v⟧
     ∧ (∀ g', isPrefix I ⟦g'⟧ ⟦u⟧ → isPrefix I ⟦g'⟧ ⟦v⟧ → isPrefix I ⟦g'⟧ ⟦g⟧) := by
   have ⟨u', hu'⟩ := hu
@@ -713,10 +707,8 @@ lemma equiv_comm_append_of_indep {w₁ w₂ : List α} (h : independent I w₁ w
     exact (ih (indep_symm h.left)).compat (TraceEquiv.refl [a])
 
 -- Proposition (1.3.5)
-lemma exists_lcd
-    {u v w : List α} [DecidableEq α]
-    (hu : isPrefix I ⟦u⟧ ⟦w⟧)
-    (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
+lemma exists_lcd {u v w : List α} [DecidableEq α]
+    (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
     ∃ d, isPrefix I ⟦u⟧ ⟦d⟧ ∧ isPrefix I ⟦v⟧ ⟦d⟧
     ∧ (∀ d', isPrefix I ⟦u⟧ ⟦d'⟧ → isPrefix I ⟦v⟧ ⟦d'⟧ → isPrefix I ⟦d⟧ ⟦d'⟧) := by
   have ⟨u', hu'⟩ := hu
@@ -847,8 +839,7 @@ def traceDependenceMorphism : DependenceMorphism I (Trace I) where
 variable {M N : Type*} [Monoid M] [Monoid N]
 
 -- Proposition (1.3.6)
-lemma decomp_of_image_eq_of_tail_ne
-    {ϕ : DependenceMorphism I M} {u v : List α} {a b : α}
+lemma decomp_of_image_eq_of_tail_ne {ϕ : DependenceMorphism I M} {u v : List α} {a b : α}
     (heq : ϕ (u ++ [a]) = ϕ (v ++ [b])) (hne : a ≠ b) :
     ∃ w, ϕ u = ϕ (w ++ [b]) ∧ ϕ v = ϕ (w ++ [a]) := by
   have hu : ϕ u = ϕ (v ÷ a ++ [b]) := by
