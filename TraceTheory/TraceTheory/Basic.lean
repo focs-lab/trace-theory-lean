@@ -97,7 +97,7 @@ lemma cancelRight_append {w₁ w₂ : List α} (a : α) :
     · simp [heq]
     · simp [heq]
     · simp [heq, h_mem, ih]
-    · simp [heq, h_mem, ih, (show ¬a = b from fun x => heq (Eq.symm x))]
+    · simp [heq, h_mem, ih, Ne.symm]
 
 @[simp]
 lemma singleton_cancelRight {a : α} : [a] ÷ a = [] := by simp [cancelRight]

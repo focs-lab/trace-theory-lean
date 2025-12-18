@@ -22,6 +22,7 @@ structure DependenceGraph where
   φ : V → α
   acyclic : ∀ v, ¬ Relation.TransGen R v v
   d_conn : ∀ v₁ v₂, R v₁ v₂ ∨ R v₂ v₁ ∨ v₁ = v₂ ↔ D.rel (φ v₁) (φ v₂)
+  -- TODO: Needs i < j
 
 /-- A dependence relation `D₁` is a subset of `D₂` if every pair of symbols dependent in `D₁`
 is also dependent in `D₂`. -/
@@ -802,7 +803,7 @@ lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
       subst h_is_last
       exact remove_singleton_iso_self w' b
     · have heq' : ¬a = b := fun a_1 => heq (Eq.symm a_1)
-      simp [List.cancel_right_over_concat, heq']
+      simp [List.cancelRight_append, heq']
       rw [fromString_concat]
       have h_is_left : ∃ u, sink = Sum.inl u := by
         cases sink with
@@ -828,7 +829,7 @@ lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
       exact compose_congr h_iso (isomorphic_refl _)
 
 -- Proposition (1.4.7)
-/-- The homomorphism from the free monoided of strings onto the graph monoid defined as
+/-- The homomorphism from the free monoid of strings onto the graph monoid defined as
 $\phi(w)=\langle w\rangle$ is a dependence morphism. -/
 def dependenceGraphDependenceMorphism [DecidableEq α] :
     DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
