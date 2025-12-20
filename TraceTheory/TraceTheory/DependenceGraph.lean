@@ -637,11 +637,11 @@ lemma fromString_surjective :
 
 lemma fromString_append_iso_compose (w₁ w₂ : List α) :
     fromString D (w₁ ++ w₂) ≃g compose (fromString D w₁) (fromString D w₂) := by
-  induction w₂ using List.induction_right with
+  induction w₂ using List.reverseRecOn with
   | nil =>
     simp only [List.append_nil, fromString_empty]
     exact isomorphic_symm (compose_empty_iso (fromString D w₁))
-  | snoc w' a ih =>
+  | append_singleton w' a ih =>
     rw [← List.append_assoc, fromString_concat, fromString_concat]
     apply isomorphic_trans (compose_congr ih (isomorphic_refl (singletonGraph D a)))
     exact compose_assoc_iso _ _ _
@@ -659,10 +659,10 @@ lemma card_compose_eq_sum (γ₁ γ₂ : DependenceGraph D) :
 
 lemma card_fromString_eq_length (w : List α) :
     Fintype.card (fromString D w).V = w.length := by
-  induction w using List.induction_right with
+  induction w using List.reverseRecOn with
   | nil =>
     simp [fromString, emptyGraph]
-  | snoc w' a ih =>
+  | append_singleton w' a ih =>
     rw [fromString_concat, card_compose_eq_sum, ih]
     dsimp [singletonGraph]
     simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
@@ -777,11 +777,11 @@ lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
     (h_sink : IsSink (fromString D w) sink)
     (h_label : (fromString D w).φ sink = a) :
     removeVertex (fromString D w) sink ≃g fromString D (w ÷ a) := by
-  induction w using List.induction_right with
+  induction w using List.reverseRecOn with
   | nil =>
     dsimp [fromString, emptyGraph] at sink
     contradiction
-  | snoc w' b ih =>
+  | append_singleton w' b ih =>
     generalize hγ : fromString D (w' ++ [b]) = γ at sink h_sink h_label ⊢
     rw [fromString_concat] at hγ
     subst hγ
@@ -803,7 +803,7 @@ lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
       subst h_is_last
       exact remove_singleton_iso_self w' b
     · have heq' : ¬a = b := fun a_1 => heq (Eq.symm a_1)
-      simp [List.cancelRight_append, heq']
+      simp [List.append_cancelRight, heq']
       rw [fromString_concat]
       have h_is_left : ∃ u, sink = Sum.inl u := by
         cases sink with
