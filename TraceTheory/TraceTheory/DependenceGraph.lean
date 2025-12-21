@@ -22,7 +22,6 @@ structure DependenceGraph where
   φ : V → α
   acyclic : ∀ v, ¬ Relation.TransGen R v v
   d_conn : ∀ v₁ v₂, R v₁ v₂ ∨ R v₂ v₁ ∨ v₁ = v₂ ↔ D.rel (φ v₁) (φ v₂)
-  -- TODO: Needs i < j
 
 /-- A dependence relation `D₁` is a subset of `D₂` if every pair of symbols dependent in `D₁`
 is also dependent in `D₂`. -/
