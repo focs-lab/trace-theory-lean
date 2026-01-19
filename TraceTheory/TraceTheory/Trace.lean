@@ -430,7 +430,7 @@ lemma rightmost_occurrence {w : List α} {a : α} (h : a ∈ w) :
     · use v, []
       simp [hab]
     · simp [hab] at h
-      have ⟨w', w'', ⟨h_concat, h_in⟩⟩ := ih h
+      have ⟨w', w'', h_concat, h_in⟩ := ih h
       use w', w'' ++ [b]
       simp [h_concat, h_in, hab]
 
