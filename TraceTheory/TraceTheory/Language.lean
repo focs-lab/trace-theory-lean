@@ -117,18 +117,22 @@ lemma lexNf_of_factorCondition
     (I : Independence α) (x : List α) (h : SatisfiesFactorCondition I x) :
     IsLexNf I x := by
   unfold IsLexNf
-  by_contra! h_not_nf
-  have ⟨w, h_equiv, hlt⟩ := h_not_nf
+  contrapose! h
+  have ⟨w, h_equiv, hlt⟩ := h
   have ⟨p, a, b, w', x', hw, hx, hlt'⟩ :=
     exists_decomp_of_lt_of_len_eq hlt (length_eq_of_equiv h_equiv).symm
   rw [hw, hx, List.append_assoc, List.append_assoc] at h_equiv
   replace h_equiv := (equiv_cancel_left h_equiv).symm
   have ⟨h_indep, u, v, hx', hu⟩ := indep_and_decomp_of_equiv_of_head_ne I h_equiv (ne_of_lt hlt')
-  unfold SatisfiesFactorCondition at h
+  unfold SatisfiesFactorCondition
+  push_neg
   simp only [hx', ← List.append_assoc] at hx
-  have ⟨c, hc_mem, hc_indep⟩ := h p u v a b hx h_indep hlt'
+  use p, u, v, a, b
+  apply And.intro hx
+  apply And.intro h_indep
+  apply And.intro hlt'
   simp at hu
-  exact hc_indep (hu c hc_mem)
+  exact hu
 
 /-- The characterization of strings in Lexicographic Normal Form. -/
 theorem isLexNf_iff_factorCondition (I : Independence α) (x : List α) :
@@ -136,5 +140,7 @@ theorem isLexNf_iff_factorCondition (I : Independence α) (x : List α) :
   constructor
   · apply factorCondition_of_lexNf
   · apply lexNf_of_factorCondition
+
+-- TODO proof that both NF are regular
 
 #lint
