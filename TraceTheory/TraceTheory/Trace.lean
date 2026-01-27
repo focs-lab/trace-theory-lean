@@ -320,7 +320,6 @@ lemma equiv_cancel_left_right
   exact equiv_cancel_right (equiv_cancel_left h)
 
 /-- Strings $u,v$ are independent if every symbol in $u$ is independent of every symbol in $v$. -/
-@[simp]
 def independent (I : Independence α) (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
 
 -- Proposition (1.3.3)
@@ -330,9 +329,9 @@ lemma indep_of_equiv_rightmost_symbol
     independent I [a] v := by
   induction v using List.induction_right generalizing w with
   | nil =>
-    simp
+    simp [independent]
   | snoc x b ih =>
-    simp
+    simp [independent]
     intro b' hb'
     simp at hb' hav
     rcases hav with ⟨hax, hab⟩
@@ -341,7 +340,7 @@ lemma indep_of_equiv_rightmost_symbol
     have hr := (indep_and_decomp_of_equiv_of_tail_ne h hab).left
     replace h := cancellation_rule b h
     replace h := by simpa only [List.cancel_right_snoc, hab, ↓reduceIte] using h
-    replace h := by simpa using ih h hax
+    replace h := by simpa [independent] using ih h hax
     rcases hb' with hb'x | hb'b
     · exact h b' hb'x
     · rw [← hb'b] at hr
@@ -368,7 +367,7 @@ lemma equiv_comm_append_of_indep_symb
   | nil =>
     exact TraceEquiv.refl [a]
   | snoc w' b ih =>
-    simp at h
+    simp [independent] at h
     have haw' : independent I [a] w' := by
       intro a' ha' b' hb'
       simp at ha'
@@ -414,7 +413,7 @@ theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEquiv I (u ++ 
   induction y using List.induction_right generalizing u v with
   | nil =>
     use u, [], v, []
-    simp [List.append_nil, TraceEquiv.refl]
+    simp [List.append_nil, TraceEquiv.refl, independent]
     simp [List.append_nil] at h
     exact TraceEquiv.symm h
   | snoc w e ih =>
@@ -455,7 +454,7 @@ theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEquiv I (u ++ 
         rcases ha with haz₂' | hae
         · exact h_indep a haz₂' b hb
         · have h_equiv := indep_of_indep_of_equiv (indep_of_concat h_indep_e).right ht₂
-          simp [← hae] at h_equiv
+          simp [← hae, independent] at h_equiv
           exact h_equiv b (Or.intro_left (b ∈ z₄') hb)
       use z₁', z₂' ++ [e], z₃', z₄', h_indep
       rw [hu, ← List.append_assoc]

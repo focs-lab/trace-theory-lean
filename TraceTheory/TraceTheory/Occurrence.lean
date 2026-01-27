@@ -95,12 +95,10 @@ variable {I : Trace.Independence α}
 def trace_intersect (I : Trace.Independence α) (w : List α) : (α × ℕ) × α × ℕ → Prop :=
   (∀ v : List α, Trace.TraceEquiv I v w → · ∈ (ord v))
 
-instance trace_intersect_decidable (w : List α) : DecidablePred (trace_intersect I w) := by
-  unfold DecidablePred trace_intersect
-  intro a
-  sorry
+noncomputable instance trace_intersect_decidable (w : List α) : DecidablePred (trace_intersect I w) := by
+  exact Classical.decPred (trace_intersect I w)
 
-def ord_trace (T : Trace I) : Finset ((α × ℕ) × (α × ℕ)) :=
+noncomputable def ord_trace (T : Trace I) : Finset ((α × ℕ) × (α × ℕ)) :=
   Quotient.lift (fun w => (ord w).filter (trace_intersect I w)) (by
     intro a b hab
     simp
