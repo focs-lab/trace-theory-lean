@@ -294,7 +294,6 @@ def Isomorphic (γ₁ γ₂ : DependenceGraph D) : Prop := Nonempty (Iso γ₁ �
 /-- Notation for dependence graph isomorphism. -/
 infix:50 " ≃g " => Isomorphic
 
-@[refl]
 theorem isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
   Nonempty.intro {
     toEquiv := Equiv.refl γ.V
@@ -306,7 +305,6 @@ theorem isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
       rfl
   }
 
-@[symm]
 theorem isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) : γ₂ ≃g γ₁ :=
   Nonempty.intro {
     toEquiv := h.some.toEquiv.symm
@@ -319,7 +317,6 @@ theorem isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂)
       rw [h.some.toEquiv.apply_symm_apply v₂, h.some.toEquiv.apply_symm_apply w₂]
   }
 
-@[trans]
 theorem isomorphic_trans {γ₁ γ₂ γ₃ : DependenceGraph D} (h₁ : γ₁ ≃g γ₂) (h₂ : γ₂ ≃g γ₃) : γ₁ ≃g γ₃ :=
   Nonempty.intro {
     toEquiv := h₁.some.toEquiv.trans h₂.some.toEquiv
