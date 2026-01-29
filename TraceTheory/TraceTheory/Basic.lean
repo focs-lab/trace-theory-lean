@@ -413,16 +413,16 @@ theorem indep_and_exists_of_equiv_of_tail_ne {u v : List α} {a b : α} [Decidab
 
 /-- Strings $u,v$ are independent if every symbol in $u$ is independent of every symbol in $v$. -/
 @[simp]
-def independent (I : Independence α) (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
+def Independent (I : Independence α) (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
 
-theorem independent_symm {u v : List α} (h : independent I u v) :
-    independent I v u := by
+theorem independent_symm {u v : List α} (h : Independent I u v) :
+    Independent I v u := by
   intro a ha b hb
   exact I.symm b a (h b hb a ha)
 
 theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
     (h : TraceEquiv I (u ++ [a] ++ v) (w ++ [a])) (h_mem : a ∉ v) :
-    independent I [a] v := by
+    Independent I [a] v := by
   induction v using List.reverseRecOn generalizing w with
   | nil =>
     simp
@@ -442,14 +442,14 @@ theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
     · subst h₂
       exact I.symm b' a' hr
 
-theorem comm_singleton_of_indep {w : List α} {a : α} (h : independent I [a] w) :
+theorem comm_singleton_of_indep {w : List α} {a : α} (h : Independent I [a] w) :
     TraceEquiv I (w ++ [a]) ([a] ++ w) := by
   induction w using List.reverseRecOn with
   | nil =>
     apply TraceEquiv.refl
   | append_singleton w' b ih =>
     simp at h
-    have haw' : independent I [a] w' := by
+    have haw' : Independent I [a] w' := by
       intro a' ha' b' hb'
       simp at ha'
       subst ha'
@@ -463,15 +463,15 @@ theorem comm_singleton_of_indep {w : List α} {a : α} (h : independent I [a] w)
     exact hab.trans hb
 
 theorem indep_of_indep_of_equiv {u v w: List α}
-    (h : independent I u v) (ht : TraceEquiv I v w) :
-    independent I u w := by
+    (h : Independent I u v) (ht : TraceEquiv I v w) :
+    Independent I u w := by
   intro a ha b hb
   have h_alph := mem_iff_mem b ht
   have h_mem := h_alph.mpr hb
   exact h a ha b h_mem
 
-theorem indep_of_indep_append_right {u v w: List α} (h : independent I w (u ++ v)) :
-    independent I w u ∧ independent I w v := by
+theorem indep_of_indep_append_right {u v w: List α} (h : Independent I w (u ++ v)) :
+    Independent I w u ∧ Independent I w v := by
   constructor
   · intro a ha b hb
     apply h
@@ -487,7 +487,7 @@ theorem indep_of_indep_append_right {u v w: List α} (h : independent I w (u ++ 
     exact hb
 
 theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEquiv I (u ++ v) (x ++ y)) :
-    ∃ z₁ z₂ z₃ z₄, independent I z₂ z₃
+    ∃ z₁ z₂ z₃ z₄, Independent I z₂ z₃
     ∧ TraceEquiv I u (z₁ ++ z₂) ∧ TraceEquiv I v (z₃ ++ z₄)
     ∧ TraceEquiv I x (z₁ ++ z₃) ∧ TraceEquiv I y (z₂ ++ z₄) := by
   induction y using List.reverseRecOn generalizing u v with
@@ -522,10 +522,10 @@ theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEquiv I (u ++ 
       simp [hev, hu''] at h_cancel
       rw [← List.append_assoc] at h_cancel
       have ⟨z₁', z₂', z₃', z₄', h_indep, ht₁, ht₂, ht₃, ht₄⟩ := ih h_cancel
-      have h_indep' : independent I [e] (u'' ++ v) := by
+      have h_indep' : Independent I [e] (u'' ++ v) := by
         rw [← List.append_assoc, List.append_assoc] at h
         exact indep_of_comm_singleton h (List.not_mem_append hu'' hev)
-      replace h_indep : independent I (z₂' ++ [e]) z₃' := by
+      replace h_indep : Independent I (z₂' ++ [e]) z₃' := by
         intro a ha b hb
         simp at ha
         rcases ha with h₁ | h₂
@@ -575,7 +575,7 @@ theorem projection_lemma {u v : List α} [DecidableEq α] (D : Dependence α) :
         rw [← hc]
         simp
       have ⟨v', v'', heq, hc⟩ := rightmost_occurrence hv
-      have h_indep : independent (inducedIndependence D) [c] v'' := by
+      have h_indep : Independent (inducedIndependence D) [c] v'' := by
         intro c hc b hb
         simp at hc
         subst hc
@@ -747,7 +747,7 @@ theorem exists_gcp {u v w : List α} [DecidableEq α]
     apply Quotient.sound
     exact (hy_g'.compat (TraceEquiv.refl y₃)).trans hy_z₁.symm
 
-theorem comm_append_of_indep {w₁ w₂ : List α} (h : independent I w₁ w₂) :
+theorem comm_append_of_indep {w₁ w₂ : List α} (h : Independent I w₁ w₂) :
     TraceEquiv I (w₁ ++ w₂) (w₂ ++ w₁) := by
   induction w₁ using List.reverseRecOn with
   | nil =>
@@ -797,7 +797,7 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
       exact append_cancel_left huvzw
     have ⟨y₁, y₂, y₃, y₄, _, hy_z₂, hy_w₁, hy_z₃, _⟩ := levi_lemma hzw
     have h_y₁_empty : y₁ = [] := by
-      have h_indep_yy : independent I (y₁ ++ y₂) (y₁ ++ y₃) := by
+      have h_indep_yy : Independent I (y₁ ++ y₂) (y₁ ++ y₃) := by
         intro a ha b hb
         exact h_indep a ((mem_iff_mem a hy_z₂).mpr ha) b ((mem_iff_mem b hy_z₃).mpr hb)
       by_cases he : y₁ = []
