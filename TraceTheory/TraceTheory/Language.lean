@@ -1,9 +1,6 @@
-import Mathlib.Data.List.Lex
-import TraceTheory.Trace
+import TraceTheory.Basic
 
-open Trace
-
-namespace Language
+namespace TraceTheory
 
 variable {α : Type} [LinearOrder α]
 
@@ -32,7 +29,7 @@ lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf 
   rw [hx]
   constructor
   · have h_comm_au : TraceEquiv I ([a] ++ u) (u ++ [a]) := by
-      apply equiv_comm_append_of_indep
+      apply comm_append_of_indep
       intro c hc
       simp at hc
       rw [hc]
@@ -49,51 +46,13 @@ lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf 
     left
     exact hlt
 
-lemma exists_decomp_of_lt_of_len_eq {w x : List α} (hlt : w < x) (h_len : w.length = x.length):
-    ∃ p a b w' x',
-      w = p ++ [a] ++ w' ∧
-      x = p ++ [b] ++ x' ∧
-      a < b := by
-  induction w generalizing x with
-  | nil =>
-    cases x <;> contradiction
-  | cons a w' ih =>
-    cases x with
-    | nil =>
-      contradiction
-    | cons b x' =>
-      cases hlt with
-      | rel hab =>
-        use [], a, b, w', x'
-        exact ⟨rfl, rfl, hab⟩
-      | cons h_lex =>
-        simp at h_len
-        have ⟨p', a', b', w'', x'', hw', hx', hlt'⟩ := ih (List.lex_lt.mp h_lex) h_len
-        use a :: p', a', b', w'', x''
-        simp [hw', hx', hlt']
-
 -- TODO: Move somewhere else?
-lemma leftmost_occurrence {w : List α} {a : α} (h : a ∈ w) :
-    ∃ w' w'', w = w' ++ [a] ++ w'' ∧ a ∉ w' := by
-  induction w with
-  | nil =>
-    contradiction
-  | cons b v ih =>
-    by_cases hab : a = b
-    · use [], v
-      simp [hab]
-    · simp [hab] at h
-      have ⟨w', w'', h_concat, h_in⟩ := ih h
-      use [b] ++ w', w''
-      simp [h_concat, h_in, hab]
-
--- TODO: Move somewhere else?
-lemma indep_and_decomp_of_equiv_of_head_ne {a b : α} {w x : List α}
+lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α}
     (I : Independence α) (h : TraceEquiv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
     I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ independent I [a] u := by
-  have h_rev := mirror_rule h
+  have h_rev := reverse_equiv_of_equiv h
   simp at h_rev
-  have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_decomp_of_equiv_of_tail_ne h_rev hne
+  have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_exists_of_equiv_of_tail_ne h_rev hne
   constructor
   · exact h_indep
   · have ha := (mem_iff_mem a hx_rev).mpr
@@ -109,7 +68,7 @@ lemma indep_and_decomp_of_equiv_of_head_ne {a b : α} {w x : List α}
       have h_mem_rev : a ∉ u.reverse := by
         rw [List.mem_reverse]
         exact hx.right
-      have h_indep_rev := indep_of_equiv_rightmost_symbol hx_rev h_mem_rev
+      have h_indep_rev := indep_of_comm_singleton hx_rev h_mem_rev
       simp [List.mem_reverse] at h_indep_rev ⊢
       exact h_indep_rev
 
@@ -122,8 +81,8 @@ lemma lexNf_of_factorCondition
   have ⟨p, a, b, w', x', hw, hx, hlt'⟩ :=
     exists_decomp_of_lt_of_len_eq hlt (length_eq_of_equiv h_equiv).symm
   rw [hw, hx, List.append_assoc, List.append_assoc] at h_equiv
-  replace h_equiv := (equiv_cancel_left h_equiv).symm
-  have ⟨h_indep, u, v, hx', hu⟩ := indep_and_decomp_of_equiv_of_head_ne I h_equiv (ne_of_lt hlt')
+  replace h_equiv := (append_cancel_left h_equiv).symm
+  have ⟨h_indep, u, v, hx', hu⟩ := indep_and_exists_of_equiv_of_head_ne I h_equiv (ne_of_lt hlt')
   unfold SatisfiesFactorCondition
   push_neg
   simp only [hx', ← List.append_assoc] at hx
@@ -142,5 +101,3 @@ theorem isLexNf_iff_factorCondition (I : Independence α) (x : List α) :
   · apply lexNf_of_factorCondition
 
 -- TODO proof that both NF are regular
-
-#lint

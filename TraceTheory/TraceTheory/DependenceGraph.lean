@@ -1,10 +1,11 @@
+import Mathlib.Computability.Language
 import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Fintype.Basic
 import Mathlib.Logic.Relation
 import Mathlib.Tactic.FinCases
-import TraceTheory.Trace
+import TraceTheory.Basic
 
-open Trace
+open TraceTheory
 
 variable {α : Type} {D : Dependence α}
 
@@ -294,7 +295,7 @@ def Isomorphic (γ₁ γ₂ : DependenceGraph D) : Prop := Nonempty (Iso γ₁ �
 infix:50 " ≃g " => Isomorphic
 
 @[refl]
-lemma isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
+theorem isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
   Nonempty.intro {
     toEquiv := Equiv.refl γ.V
     preserves_label' := by
@@ -306,7 +307,7 @@ lemma isomorphic_refl (γ : DependenceGraph D) : γ ≃g γ :=
   }
 
 @[symm]
-lemma isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) : γ₂ ≃g γ₁ :=
+theorem isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) : γ₂ ≃g γ₁ :=
   Nonempty.intro {
     toEquiv := h.some.toEquiv.symm
     preserves_label' := by
@@ -319,7 +320,7 @@ lemma isomorphic_symm {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) :
   }
 
 @[trans]
-lemma isomorphic_trans {γ₁ γ₂ γ₃ : DependenceGraph D} (h₁ : γ₁ ≃g γ₂) (h₂ : γ₂ ≃g γ₃) : γ₁ ≃g γ₃ :=
+theorem isomorphic_trans {γ₁ γ₂ γ₃ : DependenceGraph D} (h₁ : γ₁ ≃g γ₂) (h₂ : γ₂ ≃g γ₃) : γ₁ ≃g γ₃ :=
   Nonempty.intro {
     toEquiv := h₁.some.toEquiv.trans h₂.some.toEquiv
     preserves_label' := by
@@ -353,7 +354,7 @@ def emptyGraph (D : Dependence α) : DependenceGraph D where
 def one (D : Dependence α) : GraphMonoid D :=
   Quotient.mk (isomorphicSetoid D) (emptyGraph D)
 
-lemma compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
+theorem compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
     (h₁ : γ₁ ≃g γ₁') (h₂ : γ₂ ≃g γ₂') :
     (compose γ₁ γ₂) ≃g (compose γ₁' γ₂') := by
   apply Nonempty.intro
@@ -383,7 +384,7 @@ def mul (D : Dependence α) : GraphMonoid D → GraphMonoid D → GraphMonoid D 
       exact compose_congr h h'
     )
 
-lemma compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
+theorem compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
     (compose (compose γ₁ γ₂) γ₃) ≃g (compose γ₁ (compose γ₂ γ₃)) := by
   apply Nonempty.intro
   refine ⟨?_, ?_, ?_⟩
@@ -411,7 +412,7 @@ lemma compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
     · dsimp [compose]
       rfl
 
-lemma empty_compose_iso (γ : DependenceGraph D) :
+theorem empty_compose_iso (γ : DependenceGraph D) :
     compose (emptyGraph D) γ ≃g γ := by
   apply Nonempty.intro
   refine ⟨?_, ?_, ?_⟩
@@ -431,7 +432,7 @@ lemma empty_compose_iso (γ : DependenceGraph D) :
     · dsimp [compose, emptyGraph]
       rfl
 
-lemma compose_empty_iso (γ : DependenceGraph D) :
+theorem compose_empty_iso (γ : DependenceGraph D) :
     compose γ (emptyGraph D) ≃g γ := by
   apply Nonempty.intro
   refine ⟨?_, ?_, ?_⟩
@@ -495,7 +496,7 @@ def fromString (w : List α) : DependenceGraph D :=
 def IsSink (γ : DependenceGraph D) (v : γ.V) : Prop :=
   ∀ w, ¬ γ.R v w
 
-lemma exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty γ.V) :
+theorem exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty γ.V) :
     ∃ v, IsSink γ v := by
   classical
   have wf : WellFounded (flip γ.R) := by
@@ -549,15 +550,15 @@ noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceG
     simp only [ne_eq, Subtype.mk.injEq]
     exact γ.d_conn u w
 
-lemma fromString_empty : fromString D [] = emptyGraph D := by rfl
+theorem fromString_empty : fromString D [] = emptyGraph D := by rfl
 
-lemma fromString_concat (w : List α) (a : α) :
+theorem fromString_concat (w : List α) (a : α) :
     fromString D (w ++ [a]) = compose (fromString D w) (singletonGraph D a) := by
   dsimp [fromString]
   rw [List.foldl_concat]
 
 -- Proposition (1.4.6)
-lemma fromString_surjective :
+theorem fromString_surjective :
     ∀ (γ : DependenceGraph D), ∃ (w : List α), fromString D w ≃g γ := by
   intro γ
   let size_lt (γ₁ γ₂ : DependenceGraph D) : Prop := Fintype.card γ₁.V < Fintype.card γ₂.V
@@ -634,7 +635,7 @@ lemma fromString_surjective :
           intro h
           exact γ.acyclic a (Relation.TransGen.single h)
 
-lemma fromString_append_iso_compose (w₁ w₂ : List α) :
+theorem fromString_append_iso_compose (w₁ w₂ : List α) :
     fromString D (w₁ ++ w₂) ≃g compose (fromString D w₁) (fromString D w₂) := by
   induction w₂ using List.reverseRecOn with
   | nil =>
@@ -645,18 +646,18 @@ lemma fromString_append_iso_compose (w₁ w₂ : List α) :
     apply isomorphic_trans (compose_congr ih (isomorphic_refl (singletonGraph D a)))
     exact compose_assoc_iso _ _ _
 
-lemma card_eq_of_iso {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) :
+theorem card_eq_of_iso {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) :
     Fintype.card γ₁.V = Fintype.card γ₂.V := by
   apply Fintype.card_eq.mpr
   apply Nonempty.intro
   exact h.some.toEquiv
 
-lemma card_compose_eq_sum (γ₁ γ₂ : DependenceGraph D) :
+theorem card_compose_eq_sum (γ₁ γ₂ : DependenceGraph D) :
     Fintype.card (compose γ₁ γ₂).V = Fintype.card γ₁.V + Fintype.card γ₂.V := by
   dsimp [compose]
   exact Fintype.card_sum
 
-lemma card_fromString_eq_length (w : List α) :
+theorem card_fromString_eq_length (w : List α) :
     Fintype.card (fromString D w).V = w.length := by
   induction w using List.reverseRecOn with
   | nil =>
@@ -666,7 +667,7 @@ lemma card_fromString_eq_length (w : List α) :
     dsimp [singletonGraph]
     simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
 
-lemma fromString_length_eq_of_iso {w₁ w₂ : List α} (h : fromString D w₁ ≃g fromString D w₂) :
+theorem fromString_length_eq_of_iso {w₁ w₂ : List α} (h : fromString D w₁ ≃g fromString D w₂) :
     w₁.length = w₂.length := by
   rw [← card_fromString_eq_length, ← card_fromString_eq_length]
   exact card_eq_of_iso h
@@ -681,12 +682,12 @@ def mk' : List α →* GraphMonoid D where
     apply Quotient.sound
     exact fromString_append_iso_compose _ _
 
-lemma sink_of_compose_singleton (γ : DependenceGraph D) (a : α) :
+theorem sink_of_compose_singleton (γ : DependenceGraph D) (a : α) :
     IsSink (compose γ (singletonGraph D a)) (Sum.inr Unit.unit) := by
   intro w h_edge
   cases w <;> dsimp [compose, singletonGraph] at h_edge
 
-lemma remove_singleton_iso_self (w : List α) (a : α) :
+theorem remove_singleton_iso_self (w : List α) (a : α) :
     let γ := compose (fromString D w) (singletonGraph D a)
     let v_last : γ.V := Sum.inr ()
     removeVertex γ v_last ≃g fromString D w := by
@@ -722,7 +723,7 @@ lemma remove_singleton_iso_self (w : List α) (a : α) :
   · intro v₁ v₂
     rfl
 
-lemma removeVertex_iso_congr {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) (v : γ₁.V) :
+theorem removeVertex_iso_congr {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) (v : γ₁.V) :
     removeVertex γ₁ v ≃g removeVertex γ₂ (h.some.toEquiv v) := by
   apply Nonempty.intro
   refine ⟨?_, ?_, ?_⟩
@@ -736,7 +737,7 @@ lemma removeVertex_iso_congr {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g �
     dsimp [removeVertex]
     rw [h.some.preserves_arcs']
 
-lemma removeVertex_compose_inl_iso {γ₁ γ₂ : DependenceGraph D} (v : γ₁.V) :
+theorem removeVertex_compose_inl_iso {γ₁ γ₂ : DependenceGraph D} (v : γ₁.V) :
     removeVertex (compose γ₁ γ₂) (Sum.inl v) ≃g compose (removeVertex γ₁ v) γ₂ := by
   apply Nonempty.intro
   refine ⟨Equiv.mk ?_ ?_ ?_ ?_, ?_, ?_⟩
@@ -770,7 +771,7 @@ lemma removeVertex_compose_inl_iso {γ₁ γ₂ : DependenceGraph D} (v : γ₁.
     dsimp [compose, removeVertex]
     cases u₁ <;> cases u₂ <;> rfl
 
-lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
+theorem removeVertex_sink_iso_cancelRight [DecidableEq α]
     (w : List α) (a : α)
     (sink : (fromString D w).V)
     (h_sink : IsSink (fromString D w) sink)
@@ -802,7 +803,7 @@ lemma removeVertex_sink_iso_cancelRight [DecidableEq α]
       subst h_is_last
       exact remove_singleton_iso_self w' b
     · have heq' : ¬a = b := fun a_1 => heq (Eq.symm a_1)
-      simp [List.append_cancelRight, heq']
+      simp [append_cancelRight, heq']
       rw [fromString_concat]
       have h_is_left : ∃ u, sink = Sum.inl u := by
         cases sink with
@@ -951,5 +952,3 @@ noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
     )
 
 end DependenceGraph
-
-#lint

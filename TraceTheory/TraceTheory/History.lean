@@ -1,7 +1,8 @@
 import Mathlib.Algebra.Group.Submonoid.Basic
-import TraceTheory.Trace
+import Mathlib.Algebra.Group.Pi.Basic
+import TraceTheory.Basic
 
-open Trace
+open TraceTheory
 
 namespace History
 
@@ -45,11 +46,11 @@ def elementaryHistorySet (S : Fin n → Finset α) : Set (ProductMonoid S) :=
 def HistoryMonoid (S : Fin n → Finset α) : Submonoid (ProductMonoid S) :=
   Submonoid.closure (elementaryHistorySet S)
 
-lemma distribution.map_append (S : Fin n → Finset α) (w₁ w₂ : List α) :
+theorem distribution.map_append (S : Fin n → Finset α) (w₁ w₂ : List α) :
     distribution S (w₁ ++ w₂) = distribution S w₁ * distribution S w₂ :=
   (distribution S).map_mul w₁ w₂
 
-lemma distribution_mem_historyMonoid (S : Fin n → Finset α) (w : List α) :
+theorem distribution_mem_historyMonoid (S : Fin n → Finset α) (w : List α) :
     distribution S w ∈ HistoryMonoid S := by
   induction w with
   | nil =>
@@ -69,11 +70,11 @@ def distribution' (S : Fin n → Finset α) : List α →* HistoryMonoid S where
   map_one' := Subtype.eq (distribution S).map_one
   map_mul' x y := Subtype.eq ((distribution S).map_mul x y)
 
-lemma distribution'.map_append (S : Fin n → Finset α) (w₁ w₂ : List α) :
+theorem distribution'.map_append (S : Fin n → Finset α) (w₁ w₂ : List α) :
     distribution' S (w₁ ++ w₂) = distribution' S w₁ * distribution' S w₂ :=
   (distribution' S).map_mul w₁ w₂
 
-lemma distribution'_surjective (S : Fin n → Finset α) :
+theorem distribution'_surjective (S : Fin n → Finset α) :
     Function.Surjective (distribution' S) := by
   intro ⟨y, hy⟩
   induction hy using Submonoid.closure_induction with
@@ -105,11 +106,11 @@ def SigmaDependence (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ S i
     intro a b ⟨i, ha, hb⟩
     use i, hb, ha
 
-lemma proj_append (S : Fin n → Finset α) (i : Fin n) (w₁ w₂ : List α) :
+theorem proj_append (S : Fin n → Finset α) (i : Fin n) (w₁ w₂ : List α) :
     proj S i (w₁ ++ w₂) = (proj S i w₁) ++ (proj S i w₂) := by
   simp [proj]
 
-lemma proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (w : List α) (a : α) :
+theorem proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (w : List α) (a : α) :
     proj S i (w ÷ a) =
       if h : a ∈ S i then (proj S i w) ÷ ⟨a, h⟩ else proj S i w := by
   induction w using List.reverseRecOn with
@@ -120,8 +121,8 @@ lemma proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (w : List α) (a : 
     · subst heq
       simp [proj, projChar, h_mem]
     · simp [h_mem] at ih
-      simp [Ne.symm heq]
-      simp only [proj_append, ih, List.append_cancelRight]
+      simp [heq]
+      simp only [proj_append, ih, append_cancelRight]
       split_ifs with h_mem'
       · exfalso
         simp [proj, projChar] at h_mem'
@@ -130,7 +131,7 @@ lemma proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (w : List α) (a : 
     · subst heq
       simp [proj, projChar, h_mem]
     · simp [h_mem] at ih
-      simp [Ne.symm heq]
+      simp [heq]
       simp only [proj_append, ih]
 
 -- Theorem 1.5.3
@@ -204,5 +205,3 @@ noncomputable def traceMonoidIsoHistoryMonoid
     Quotient.mk_surjective
     (historyDependenceMorphism S h_cover)
     (distribution'_surjective S)
-
-#lint
