@@ -1,3 +1,4 @@
+import Mathlib.Computability.Language
 import TraceTheory.Basic
 
 namespace TraceTheory
@@ -49,7 +50,7 @@ lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf 
 -- TODO: Move somewhere else?
 lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α}
     (I : Independence α) (h : TraceEquiv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
-    I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ independent I [a] u := by
+    I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ Independent I [a] u := by
   have h_rev := reverse_equiv_of_equiv h
   simp at h_rev
   have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_exists_of_equiv_of_tail_ne h_rev hne
@@ -100,4 +101,30 @@ theorem isLexNf_iff_factorCondition (I : Independence α) (x : List α) :
   · apply factorCondition_of_lexNf
   · apply lexNf_of_factorCondition
 
--- TODO proof that both NF are regular
+open Computability
+
+variable (I : Independence α)
+
+/-- The language consisting of single letters that are independent of `a`. -/
+def IndependentLetters (a : α) : Language α :=
+  { w | ∃ c, I.rel a c ∧ w = [c] }
+
+/-- The language of words formed only by letters independent of 'a'. -/
+def IndependentStar (a : α) : Language α :=
+  (IndependentLetters I a)∗
+
+def Letter (a : α) : Language α :=
+  Set.singleton [a]
+
+/-- The "Forbidden Pattern" for a specific pair (a, b).
+Pattern: Σ* b (independent of a)* a Σ* -/
+def ForbiddenPattern (a b : α) : Language α :=
+  ⊤ * Letter b * IndependentStar I a * Letter a * ⊤
+
+/-- Union of all forbidden patterns for (a,b) ∈ I with a < b. -/
+def AllForbiddenPatterns : Language α :=
+  ⋃ (ab : { p : α × α // p.1 < p.2 ∧ I.rel p.1 p.2 }), ForbiddenPattern I ab.val.1 ab.val.2
+
+/-- LexNF is the complement of the forbidden patterns. -/
+def LexNfLanguage : Language α :=
+  (AllForbiddenPatterns I)ᶜ
