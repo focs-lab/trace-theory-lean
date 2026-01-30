@@ -1,3 +1,4 @@
+import Mathlib.Computability.DFA
 import Mathlib.Computability.Language
 import TraceTheory.Basic
 
@@ -113,13 +114,18 @@ def IndependentLetters (a : α) : Language α :=
 def IndependentStar (a : α) : Language α :=
   (IndependentLetters I a)∗
 
+/-- A single symbol. -/
 def Letter (a : α) : Language α :=
   Set.singleton [a]
+
+/-- The set of all symbols. -/
+def Sigma : Language α :=
+  Set.univ
 
 /-- The "Forbidden Pattern" for a specific pair (a, b).
 Pattern: Σ* b (independent of a)* a Σ* -/
 def ForbiddenPattern (a b : α) : Language α :=
-  ⊤ * Letter b * IndependentStar I a * Letter a * ⊤
+  Sigma∗ * Letter b * IndependentStar I a * Letter a * Sigma∗
 
 /-- Union of all forbidden patterns for (a,b) ∈ I with a < b. -/
 def AllForbiddenPatterns : Language α :=
@@ -128,3 +134,7 @@ def AllForbiddenPatterns : Language α :=
 /-- LexNF is the complement of the forbidden patterns. -/
 def LexNfLanguage : Language α :=
   (AllForbiddenPatterns I)ᶜ
+
+theorem IsRegular.lexNf : Language.IsRegular (LexNfLanguage I) := by
+  apply Language.IsRegular.compl
+  sorry
