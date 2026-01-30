@@ -67,8 +67,8 @@ theorem distribution_mem_historyMonoid (S : Fin n → Finset α) (w : List α) :
 /-- The distribution function with codomain restricted to the monoid of histories. -/
 def distribution' (S : Fin n → Finset α) : List α →* HistoryMonoid S where
   toFun w := ⟨distribution S w, distribution_mem_historyMonoid S w⟩
-  map_one' := Subtype.eq (distribution S).map_one
-  map_mul' x y := Subtype.eq ((distribution S).map_mul x y)
+  map_one' := Subtype.ext (distribution S).map_one
+  map_mul' x y := Subtype.ext ((distribution S).map_mul x y)
 
 theorem distribution'.map_append (S : Fin n → Finset α) (w₁ w₂ : List α) :
     distribution' S (w₁ ++ w₂) = distribution' S w₁ * distribution' S w₂ :=
@@ -178,21 +178,15 @@ def historyDependenceMorphism (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i,
     rw [proj_cancelRight]
     by_cases h : a ∈ S i
     · have hi' : proj S i (w₁ ++ [a]) ÷ ⟨a, h⟩ = proj S i w₂ ÷ ⟨a, h⟩ := by rw [hi]
-      simp [proj, projChar, h] at hi' ⊢
-      exact hi'
-    · simp [proj, projChar, h] at hi ⊢
-      exact hi
+      simpa [proj, projChar, h] using hi'
+    · simpa [proj, projChar, h] using hi
   A4 := by
     intro w₁ w₂ a b ⟨heq, hne⟩ ⟨i, ha, hb⟩
     have hi : proj S i (w₁ ++ [a]) = proj S i (w₂ ++ [b]) := by
       rw [Subtype.ext_iff] at heq
       exact congr_fun heq i
     simp [proj, projChar, ha, hb] at hi
-    have h_last {β} {w₁ w₂ : List β} {a b : β} (h : w₁ ++ [a] = w₂ ++ [b]) : a = b := by
-      have hrev : (w₁ ++ [a]).reverse = (w₂ ++ [b]).reverse := congrArg List.reverse h
-      simp at hrev
-      exact hrev.left
-    have h_last_eq := Subtype.mk_eq_mk.mp (h_last hi)
+    have ⟨_, h_absurd⟩ := hi
     contradiction
 
 -- Theorem 1.5.4
