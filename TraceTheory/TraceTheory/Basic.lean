@@ -57,7 +57,8 @@ inductive TraceEquiv (I : Independence α) : List α → List α → Prop
       TraceEquiv I w₃ w₄ →
       TraceEquiv I (w₁ ++ w₃) (w₂ ++ w₄)
 
-theorem TraceEquiv.context {u v : List α} (l r : List α) (h : TraceEquiv I u v) :
+theorem TraceEquiv.context {I : Independence α} {u v : List α}
+    (l r : List α) (h : TraceEquiv I u v) :
     TraceEquiv I (l ++ u ++ r) (l ++ v ++ r) :=
   TraceEquiv.compat (TraceEquiv.compat (TraceEquiv.refl l) h) (TraceEquiv.refl r)
 
