@@ -1,4 +1,5 @@
 import TraceTheory.Trace
+import Mathlib.Data.Finset.Pi
 
 namespace Trace
 
@@ -90,104 +91,127 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
 
 
 
--- temporary scratchwork for decidable levi lemma
--- (defining a levi lemma decomposition, and then proving properties as separate theorems)
+-- variable {M : Type} [Monoid M]
 
-/-
+def IsRecognizable {M : Type} [Monoid M] (S : Set M) : Prop :=
+  ∃ N : Type, ∃ _ : Monoid N, ∃ _ : Fintype N, ∃ φ : M →* N, S = φ⁻¹' (φ '' S)
 
-def left_most_occurrence_split {w : List α} {a : α} [DecidableEq α] (h : a ∈ w) : List α × List α :=
-  match w with
-  | [] => by
-    exfalso
-    exact (List.mem_nil_iff a).mp h
-  | b :: u =>
-    if hab : a = b then ([], u) else
-      let suf := left_most_occurrence_split (List.mem_of_ne_of_mem hab h)
-      (b :: suf.1, suf.2)
+-- (Deterministic) finite M-automaton.
+structure DFMA (α : Type) [Monoid α] (σ : Type) [Fintype σ] where
+  step : σ → α → σ
+  start : σ
+  accept : Set σ
+  idempotent (q : σ) : step q 1 = q
+  composition (q : σ) (u v : α) : step (step q u) v = step q (u * v)
 
-lemma left_most_occurrence_eq {w : List α} {a : α} [DecidableEq α] (h : a ∈ w) :
-    w = (left_most_occurrence_split h).1 ++ [a] ++ (left_most_occurrence_split h).2 ∧ a ∉ (left_most_occurrence_split h).1 := by
-  induction w with
-  | nil =>
-    exfalso
-    exact (List.mem_nil_iff a).mp h
-  | cons b u ih =>
-    by_cases hab : a = b
-    · simp [left_most_occurrence_split, hab]
-    · replace ih := (ih (List.mem_of_ne_of_mem (of_eq_false (eq_false hab)) h))
-      apply And.intro
-      · simp [left_most_occurrence_split, hab]
-        replace ih := ih.left
-        revert ih
-        simp
-      · simp [left_most_occurrence_split, hab]
-        exact ih.right
+namespace DFMA
 
-def right_most_occurrence_split {w : List α} {a : α} [DecidableEq α] (h : a ∈ w) : List α × List α :=
-  let rev_split := left_most_occurrence_split (List.mem_reverse.mpr h)
-  (rev_split.2.reverse, rev_split.1.reverse)
+variable {α : Type} [Monoid α] {σ : Type} [Fintype σ] (A : DFMA α σ)
 
-lemma right_most_occurrence_eq {w : List α} {a : α} [DecidableEq α] (h : a ∈ w) :
-    w = (right_most_occurrence_split h).1 ++ [a] ++ (right_most_occurrence_split h).2 ∧ a ∉ (right_most_occurrence_split h).2 := by
-  simp [right_most_occurrence_split]
-  have rev_result := left_most_occurrence_eq (List.mem_reverse.mpr h)
-  simp at rev_result
-  exact rev_result
+def eval (x : α) : σ := A.step A.start x
 
-structure levi_pair_result (α : Type) where
-  z₁ : List α
-  z₂ : List α
-  z₃ : List α
-  z₄ : List α
+def eval_set (S : Set α) : Set σ := S.image A.eval
 
-def levi_pair_decomp {u v x y : List α} [DecidableEq α] (h : TraceEquiv I (u ++ v) (x ++ y)) : levi_pair_result α :=
-  match u with
-  | [] => {z₁ := [], z₂ := [], z₃ := x, z₄ := y}
-  | a :: u' =>
-    if hax : a ∈ x then
-      let (x', x'') := right_most_occurrence_split hax
-      let h' : TraceEquiv I u' (x' ++ x'') := by
+def accepts : Set α := {x | A.eval x ∈ A.accept}
 
-      let res := levi_pair_decomp ()
+end DFMA
 
-      sorry
-    else
-      sorry
-  sorry
+def IsRecognizableDFMA {M : Type} [Monoid M] (S : Set M) : Prop :=
+  ∃ σ : Type, ∃ _ : Fintype σ, ∃ A : DFMA M σ, S = A.accepts
 
+lemma recognizable_is_recognizableDFMA {M : Type} [Monoid M] (S : Set M) :
+    IsRecognizable S → IsRecognizableDFMA S := by
+  unfold IsRecognizable IsRecognizableDFMA
+  intro ⟨N, N_mon, N_fin, φ, h⟩
+  use N, N_fin
+  use {
+    step := fun n m => n * (φ m)
+    start := 1
+    accept := φ '' S
+    idempotent := by simp
+    composition := by
+      intro q u v
+      rw [map_mul φ u v]
+      exact mul_assoc q (φ u) (φ v)
+  }
+  unfold DFMA.accepts DFMA.eval DFMA.step
+  simp
+  apply Set.ext_iff.mpr
+  intro x
+  apply Iff.intro
+  · intro hx
+    apply Set.mem_setOf.mpr
+    use x
+  · intro hx
+    apply Set.mem_setOf.mp at hx
+    rcases hx with ⟨y, hy, hy_eq⟩
+    rw [h, Set.mem_preimage, ← hy_eq]
+    exact ⟨y, hy, rfl⟩
 
-def levi_decomp (u v : List α) (ts : List (List α)) [DecidableEq α] (h : TraceEquiv I (u ++ v) (ts.foldl List.append [])) :
-    List (List α) × List (List α) :=
-  match ts with
-  | [] => ([], [])
-  | t :: tsuf =>
-    let equiv_split : TraceEquiv I (u ++ v) (t ++ (tsuf.foldl List.append [])) := by
-      unfold List.foldl at h
-      simp at h
-      rw [foldl_append_eq _ _] at h
-      exact h
-    let lv := levi_lemma equiv_split
-    let ⟨p, psuf, q, qsuf, ⟨h_ind, h_up, h_vq, h_t, h_ih⟩⟩ := lv
-    let ⟨ps, qs⟩ := levi_decomp psuf qsuf tsuf h_ih.symm
-    (p :: ps, q :: qs)
+def fintype_to_fintype_is_fintype (α β : Type) [Fintype α] [Fintype β] [DecidableEq α] :
+    Fintype (α → β) := by
+  rename_i hα hβ _
+  refine ⟨?_, ?_⟩
+  · have proj := (@Fintype.elems α).pi fun _ => @Fintype.elems β hβ
+    exact proj.map {
+      toFun f := fun a => f a (Fintype.complete a)
+      inj' := by
+        simp [Function.Injective]
+        intro f g h
+        apply funext
+        intro a
+        have h_eq_at : (fun a => f a (Fintype.complete a)) a = (fun a => g a (Fintype.complete a)) a := by rw[h]
+        simp at h_eq_at
+        exact funext fun x => h_eq_at
+    }
+  · intro f
+    simp
+    use fun a h => f a
+    simp
+    exact fun a h => Fintype.complete (f a)
 
-lemma levi_decomp_len {u v : List α} {ts : List (List α)} {h : TraceEquiv I (u ++ v) (ts.foldl List.append [])} :
-    (levi_decomp u v ts h).1.length = ts.length ∧ (levi_decomp u v ts h).2.length = ts.length := by sorry
-
-lemma levi_decomp_UEqP {u v : List α} {ts : List (List α)} {h : TraceEquiv I (u ++ v) (ts.foldl List.append [])} :
-    TraceEquiv I u ((levi_decomp u v ts h).1.foldl List.append []) := by sorry
-
-lemma levi_decomp_VEqQ {u v : List α} {ts : List (List α)} {h : TraceEquiv I (u ++ v) (ts.foldl List.append [])} :
-    TraceEquiv I v ((levi_decomp u v ts h).2.foldl List.append []) := by sorry
-
-lemma levi_decomp_TEqPQ {u v : List α} {ts : List (List α)} {h : TraceEquiv I (u ++ v) (ts.foldl List.append [])} :
-    ∀ i : Fin ts.length, TraceEquiv I ts[i]
-    ((levi_decomp u v ts h).1[i]'(by simp [levi_decomp_len]) ++ (levi_decomp u v ts h).2[i]'(by simp [levi_decomp_len])) := by sorry
-
-lemma levi_decomp_ind {u v : List α} {ts : List (List α)} {h : TraceEquiv I (u ++ v) (ts.foldl List.append [])} :
-    ∀ i j : Fin ts.length, i < j →
-    independent I ((levi_decomp u v ts h).1[i]'(by simp [levi_decomp_len])) ((levi_decomp u v ts h).2[i]'(by simp [levi_decomp_len])) := by sorry
-
--/
+lemma recognizableDFMA_is_recognizable {M : Type} [Monoid M] (S : Set M) :
+    IsRecognizableDFMA S → IsRecognizable S := by
+  unfold IsRecognizable IsRecognizableDFMA
+  intro ⟨σ, σ_fin, A, hA⟩
+  use σ → σ
+  let fn_mon : Monoid (σ → σ) := {
+    mul := fun f g => g ∘ f
+    mul_assoc := fun f g h => rfl
+    one := id
+    one_mul := fun f => rfl
+    mul_one := fun f => rfl
+  }
+  use fn_mon
+  haveI : DecidableEq σ := by sorry
+  use @fintype_to_fintype_is_fintype σ σ σ_fin σ_fin _
+  use {
+    toFun := fun m => (fun x => A.step x m)
+    map_one' := by apply funext A.idempotent
+    map_mul' := by
+      intro f g
+      apply funext
+      intro x
+      rw [<- A.composition]
+      rfl
+  }
+  simp [hA, DFMA.accepts, DFMA.eval]
+  apply Set.ext_iff.mpr
+  intro m
+  apply Iff.intro
+  · intro hm
+    apply Set.mem_setOf.mp at hm
+    apply Set.mem_setOf.mpr
+    simp
+    use m
+  · intro hm
+    apply Set.mem_setOf.mpr
+    apply Set.mem_setOf.mp at hm
+    simp at hm
+    rcases hm with ⟨m', hm', hm_eq⟩
+    replace hm_eq : (fun x => A.step x m') A.start = (fun x => A.step x m) A.start := by rw [hm_eq]
+    simp at hm_eq
+    rw [hm_eq] at hm'
+    exact hm'
 
 end Trace
