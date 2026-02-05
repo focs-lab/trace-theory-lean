@@ -1,6 +1,8 @@
+import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 import Mathlib.Computability.DFA
 import Mathlib.Computability.Language
 import TraceTheory.Basic
+import TraceTheory.Computability
 
 namespace TraceTheory
 
@@ -104,23 +106,23 @@ theorem isLexNf_iff_factorCondition (I : Independence α) (x : List α) :
 
 open Computability
 
-variable (I : Independence α)
+variable (I : Independence α) [DecidableEq α] [Fintype α] [DecidableRel I.rel]
+
+/-- A single symbol. -/
+def Letter (a : α) : Language α :=
+  { [a] }
+
+/-- The set of all symbols. -/
+def Sigma : Language α :=
+  ⊤
 
 /-- The language consisting of single letters that are independent of `a`. -/
 def IndependentLetters (a : α) : Language α :=
-  { w | ∃ c, I.rel a c ∧ w = [c] }
+  ∑ c ∈ (Finset.univ.filter (fun c => I.rel a c)), Letter c
 
 /-- The language of words formed only by letters independent of 'a'. -/
 def IndependentStar (a : α) : Language α :=
   (IndependentLetters I a)∗
-
-/-- A single symbol. -/
-def Letter (a : α) : Language α :=
-  Set.singleton [a]
-
-/-- The set of all symbols. -/
-def Sigma : Language α :=
-  Set.univ
 
 /-- The "Forbidden Pattern" for a specific pair (a, b).
 Pattern: Σ* b (independent of a)* a Σ* -/
@@ -129,12 +131,44 @@ def ForbiddenPattern (a b : α) : Language α :=
 
 /-- Union of all forbidden patterns for (a,b) ∈ I with a < b. -/
 def AllForbiddenPatterns : Language α :=
-  ⋃ (ab : { p : α × α // p.1 < p.2 ∧ I.rel p.1 p.2 }), ForbiddenPattern I ab.val.1 ab.val.2
+  ∑ p ∈ (Finset.univ.filter (fun (p : α × α) => p.1 < p.2 ∧ I.rel p.1 p.2)),
+    ForbiddenPattern I p.1 p.2
 
 /-- LexNF is the complement of the forbidden patterns. -/
 def LexNfLanguage : Language α :=
   (AllForbiddenPatterns I)ᶜ
 
-theorem IsRegular.lexNf : Language.IsRegular (LexNfLanguage I) := by
+omit [LinearOrder α] in
+lemma isRegular_independentStar (a : α) : Language.IsRegular (IndependentStar I a) := by
+  unfold IndependentStar IndependentLetters
+  apply Language.IsRegular.kstar
+  apply Finset.sum_induction
+  · apply Language.IsRegular.add
+  · apply Language.IsRegular.zero
+  · intro b _
+    exact Language.IsRegular.singleton
+
+omit [LinearOrder α] in
+lemma isRegular_forbiddenPattern (a b : α) : Language.IsRegular (ForbiddenPattern I a b) := by
+  unfold ForbiddenPattern Sigma Letter
+  repeat apply Language.IsRegular.mul
+  · apply Language.IsRegular.kstar
+    exact Language.IsRegular.top
+  · exact Language.IsRegular.singleton
+  · apply isRegular_independentStar
+  · exact Language.IsRegular.singleton
+  · apply Language.IsRegular.kstar
+    exact Language.IsRegular.top
+
+lemma isRegular_allForbiddenPatterns : Language.IsRegular (AllForbiddenPatterns I) := by
+  unfold AllForbiddenPatterns
+  apply Finset.sum_induction
+  · apply Language.IsRegular.add
+  · apply Language.IsRegular.zero
+  · intro ⟨a, b⟩ _
+    simp
+    apply isRegular_forbiddenPattern
+
+theorem isRegular_lexNf : Language.IsRegular (LexNfLanguage I) := by
   apply Language.IsRegular.compl
-  sorry
+  apply isRegular_allForbiddenPatterns
