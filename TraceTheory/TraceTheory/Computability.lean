@@ -18,7 +18,27 @@ theorem IsRegular.top : IsRegular (⊤ : Language α) := by
   exact IsRegular.zero
 
 theorem IsRegular.one : IsRegular (1 : Language α) := by
-  sorry
+  apply isRegular_iff.mpr
+  use Fin 2, inferInstance, ⟨fun _ _ => 1, 0, { 0 }⟩
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  ext x
+  rw [Set.mem_setOf_eq]
+  cases x with
+  | nil =>
+    simp
+  | cons _ x' =>
+    simp
+    intro h
+    have h_dead_state : ∀ w : List α, List.foldl (fun (_ : Fin 2) _ => 1) 1 w = 1 := by
+      intro w
+      induction w with
+      | nil =>
+        simp
+      | cons b w' ih =>
+        simp [ih]
+    have h_absurd := h_dead_state x'
+    rw [h] at h_absurd
+    contradiction
 
 theorem IsRegular.mul {L₁ L₂ : Language α}
     (h₁ : IsRegular L₁) (h₂ : IsRegular L₂) :
