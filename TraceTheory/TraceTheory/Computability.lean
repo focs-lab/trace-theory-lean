@@ -40,9 +40,33 @@ theorem IsRegular.one : IsRegular (1 : Language α) := by
     rw [h] at h_absurd
     contradiction
 
-theorem IsRegular.mul {L₁ L₂ : Language α}
+theorem IsRegular.mul {L₁ L₂ : Language α} [DecidableEq α]
     (h₁ : IsRegular L₁) (h₂ : IsRegular L₂) :
     IsRegular (L₁ * L₂) := by
+  classical
+  have ⟨σ₁, _, M₁, hM₁⟩ := h₁
+  have ⟨σ₂, _, M₂, hM₂⟩ := h₂
+  have εM₁ := M₁.toNFA.toεNFA
+  have εM₂ := M₂.toNFA.toεNFA
+  let step (q : σ₁ ⊕ σ₂) (ox : Option α) : Set (σ₁ ⊕ σ₂) :=
+    match q, ox with
+    | Sum.inl q₁, some x =>
+      { Sum.inl (M₁.step q₁ x) }
+    | Sum.inl q₁, none =>
+      if (q₁ ∈ M₁.accept) then { Sum.inr M₂.start } else {}
+    | Sum.inr q₂, some x =>
+      { Sum.inr (M₂.step q₂ x)}
+    | Sum.inr q₂, none =>
+      {}
+  let εM : εNFA α (σ₁ ⊕ σ₂) := {
+    step := step
+    start := { Sum.inl M₁.start }
+    accept := { q | ∃ q₂, q = Sum.inr q₂ ∧ q₂ ∈ M₂.accept }
+  }
+  have M := εM.toNFA.toDFA
+  apply isRegular_iff.mpr
+  use Set (σ₁ ⊕ σ₂), inferInstance, M
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
   sorry
 
 theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) := by
@@ -50,12 +74,13 @@ theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) :
 
 theorem IsRegular.singleton {a : α} [DecidableEq α] : IsRegular ({ [a] }) := by
   apply isRegular_iff.mpr
-  let σ (n : Fin 3) (x : α) : Fin 3 := match n.val with
-  | Nat.zero =>
-    if (x = a) then 1 else 2
-  | Nat.succ n' =>
-    2
-  use Fin 3, inferInstance, ⟨σ, 0, { 1 }⟩
+  let step (n : Fin 3) (x : α) : Fin 3 :=
+    match n.val with
+    | Nat.zero =>
+      if (x = a) then 1 else 2
+    | Nat.succ n' =>
+      2
+  use Fin 3, inferInstance, ⟨step, 0, { 1 }⟩
   ext x
   simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
   constructor
@@ -65,13 +90,13 @@ theorem IsRegular.singleton {a : α} [DecidableEq α] : IsRegular ({ [a] }) := b
     | nil =>
       simp at h
     | cons b x' =>
-      have h_dead_state : ∀ w, List.foldl σ 2 w = 2 := by
+      have h_dead_state : ∀ w, List.foldl step 2 w = 2 := by
         intro w
         induction w with
         | nil =>
           simp
         | cons b w' ih =>
-          simp [σ, ih]
+          simp [step, ih]
       by_cases heq : b = a
       · subst heq
         cases x' with
