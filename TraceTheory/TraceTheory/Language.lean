@@ -91,13 +91,18 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
 
 
 
--- variable {M : Type} [Monoid M]
+variable {M : Type} [Monoid M]
+variable {α : Type} [Monoid α]
+variable {σ : Type}
 
-def IsRecognizable {M : Type} [Monoid M] (S : Set M) : Prop :=
-  ∃ N : Type, ∃ _ : Monoid N, ∃ _ : Fintype N, ∃ φ : M →* N, S = φ⁻¹' (φ '' S)
+-- We need [DecidableEq N] to match the definition of `IsRecognizableDFMA`; see the latter.
+def IsRecognizable (S : Set M) : Prop :=
+  ∃ N : Type, ∃ _ : Monoid N, ∃ _ : Fintype N, ∃ _ : DecidableEq N, ∃ φ : M →* N, S = φ⁻¹' (φ '' S)
 
--- (Deterministic) finite M-automaton.
-structure DFMA (α : Type) [Monoid α] (σ : Type) [Fintype σ] where
+variable (α σ) in
+/-- (Deterministic) M-automaton. Following the convention of `Mathlib.Computability.DFA`,
+  the finiteness of `σ` is not imposed here and should be handled separately. -/
+structure DFMA where
   step : σ → α → σ
   start : σ
   accept : Set σ
@@ -106,7 +111,7 @@ structure DFMA (α : Type) [Monoid α] (σ : Type) [Fintype σ] where
 
 namespace DFMA
 
-variable {α : Type} [Monoid α] {σ : Type} [Fintype σ] (A : DFMA α σ)
+variable {A : DFMA α σ}
 
 def eval (x : α) : σ := A.step A.start x
 
@@ -116,14 +121,16 @@ def accepts : Set α := {x | A.eval x ∈ A.accept}
 
 end DFMA
 
-def IsRecognizableDFMA {M : Type} [Monoid M] (S : Set M) : Prop :=
-  ∃ σ : Type, ∃ _ : Fintype σ, ∃ A : DFMA M σ, S = A.accepts
+-- We need [DecidableEq σ] to derive the finiteness of (σ → σ) through `Finset.pi`.
+def IsRecognizableDFMA (S : Set M) : Prop :=
+  ∃ σ : Type, ∃ _ : Fintype σ, ∃ _ : DecidableEq σ, ∃ A : DFMA M σ, S = A.accepts
 
-lemma recognizable_is_recognizableDFMA {M : Type} [Monoid M] (S : Set M) :
+/-- Prop 4.1 (i) => (iii) -/
+theorem recognizable_is_recognizableDFMA (S : Set M) :
     IsRecognizable S → IsRecognizableDFMA S := by
   unfold IsRecognizable IsRecognizableDFMA
-  intro ⟨N, N_mon, N_fin, φ, h⟩
-  use N, N_fin
+  intro ⟨N, N_mon, N_fin, N_dec, φ, h⟩
+  use N, N_fin, N_dec
   use {
     step := fun n m => n * (φ m)
     start := 1
@@ -170,10 +177,11 @@ def fintype_to_fintype_is_fintype (α β : Type) [Fintype α] [Fintype β] [Deci
     simp
     exact fun a h => Fintype.complete (f a)
 
-lemma recognizableDFMA_is_recognizable {M : Type} [Monoid M] (S : Set M) :
+/-- Prop 4.1 (iii) => (i) -/
+theorem recognizableDFMA_is_recognizable (S : Set M) :
     IsRecognizableDFMA S → IsRecognizable S := by
   unfold IsRecognizable IsRecognizableDFMA
-  intro ⟨σ, σ_fin, A, hA⟩
+  intro ⟨σ, σ_fin, σ_dec, A, hA⟩
   use σ → σ
   let fn_mon : Monoid (σ → σ) := {
     mul := fun f g => g ∘ f
@@ -182,9 +190,7 @@ lemma recognizableDFMA_is_recognizable {M : Type} [Monoid M] (S : Set M) :
     one_mul := fun f => rfl
     mul_one := fun f => rfl
   }
-  use fn_mon
-  haveI : DecidableEq σ := by sorry
-  use @fintype_to_fintype_is_fintype σ σ σ_fin σ_fin _
+  use fn_mon, fintype_to_fintype_is_fintype σ σ, instDecidableEqOfLawfulBEq
   use {
     toFun := fun m => (fun x => A.step x m)
     map_one' := by apply funext A.idempotent
@@ -213,5 +219,98 @@ lemma recognizableDFMA_is_recognizable {M : Type} [Monoid M] (S : Set M) :
     simp at hm_eq
     rw [hm_eq] at hm'
     exact hm'
+
+
+
+variable {T : Set M}
+
+def syntacticCongr (T : Set M) (x y : M) := ∀ u v : M, u * x * v ∈ T ↔ u * y * v ∈ T
+
+def syntacticSetoid (T : Set M) : Setoid (M) where
+  r := syntacticCongr T
+  iseqv := Equivalence.mk
+    (fun _ _ _ => Set.MapsTo.mem_iff (fun ⦃_⦄ a => a) fun ⦃_⦄ a => a)
+    (fun {_ _} a u v => (fun {_ _} => iff_comm.mp) (a u v))
+    (fun {_ _ _} a a_1 u v => Iff.trans (a u v) (a_1 u v))
+
+def syntacticMonoid (T : Set M) := Quotient (syntacticSetoid T)
+
+instance : Monoid (syntacticMonoid T) where
+  mul := Quotient.lift₂
+    (fun w₁ w₂ => ⟦w₁ * w₂⟧)
+    (by
+      intro a₁ b₁ a₂ b₂ ha hb
+      apply Quotient.sound
+      intro u v
+      have hT₁ := ha u (b₁ * v)
+      have hT₂ := hb (u * a₂) v
+      rename_i hM _
+      calc
+        u * (a₁ * b₁) * v ∈ T ↔ u * a₁ * (b₁ * v) ∈ T := by simp only [hM.mul_assoc]
+        _ ↔ u * a₂ * (b₁ * v) ∈ T := hT₁
+        _ ↔ u * a₂ * b₁ * v ∈ T := by simp only [hM.mul_assoc]
+        _ ↔ u * a₂ * b₂ * v ∈ T := hT₂
+        _ ↔ u * (a₂ * b₂) * v ∈ T := by simp only [hM.mul_assoc]
+    )
+  one := Quotient.mk (syntacticSetoid T) 1
+  mul_assoc := by
+    intro t₁ t₂ t₃
+    refine Quotient.inductionOn₃ t₁ t₂ t₃ (fun w₁ w₂ w₃ => ?_)
+    apply Quotient.sound
+    rename_i hM _
+    rw [hM.mul_assoc]
+    intro u v
+    rfl
+  one_mul := by
+    intro t
+    refine Quotient.inductionOn t (fun w => ?_)
+    apply Quotient.sound
+    rename_i hM _
+    rw [hM.one_mul]
+    intro u v
+    rfl
+  mul_one := by
+    intro t
+    refine Quotient.inductionOn t (fun w => ?_)
+    apply Quotient.sound
+    rename_i hM _
+    rw [hM.mul_one]
+    intro u v
+    rfl
+
+/-- Prop 4.1 (ii) => (i) -/
+theorem finSyntacticIndex_is_recognizable :
+    Finite (syntacticMonoid T) → IsRecognizable T := by
+  intro h
+  use syntacticMonoid T, by infer_instance, Fintype.ofFinite _, sorry
+  use {
+    toFun := fun m => ⟦m⟧
+    map_one' := by rfl
+    map_mul' := by intro x y; rfl
+  }
+  simp
+  apply Set.ext_iff.mpr
+  intro x
+  simp
+  apply Iff.intro
+  · intro hx
+    use x
+  · intro ⟨y, ⟨hy, hxy⟩⟩
+    apply @Quotient.exact _ _ y x at hxy
+    replace hxy := hxy 1 1
+    simp at hxy
+    exact hxy.mp hy
+
+/-- Prop 4.1 (i) => (ii) -/
+theorem recognizable_is_finSyntacticIndex :
+    IsRecognizable T → Finite (syntacticMonoid T) := by
+  unfold IsRecognizable
+  intro ⟨N, N_mon, N_fin, N_dec, φ, h⟩
+  have ψ : N →* syntacticMonoid T := {
+    toFun := _
+    map_one' := _
+    map_mul' := _
+  }
+
 
 end Trace
