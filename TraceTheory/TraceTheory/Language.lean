@@ -120,14 +120,10 @@ def Sigma : Language α :=
 def IndependentLetters (a : α) : Language α :=
   ∑ c ∈ (Finset.univ.filter (fun c => I.rel a c)), Letter c
 
-/-- The language of words formed only by letters independent of 'a'. -/
-def IndependentStar (a : α) : Language α :=
-  (IndependentLetters I a)∗
-
 /-- The "Forbidden Pattern" for a specific pair (a, b).
 Pattern: Σ* b (independent of a)* a Σ* -/
 def ForbiddenPattern (a b : α) : Language α :=
-  Sigma∗ * Letter b * IndependentStar I a * Letter a * Sigma∗
+  Sigma∗ * Letter b * (IndependentLetters I a)∗ * Letter a * Sigma∗
 
 /-- Union of all forbidden patterns for (a,b) ∈ I with a < b. -/
 def AllForbiddenPatterns : Language α :=
@@ -138,10 +134,9 @@ def AllForbiddenPatterns : Language α :=
 def LexNfLanguage : Language α :=
   (AllForbiddenPatterns I)ᶜ
 
-omit [LinearOrder α] in
-lemma isRegular_independentStar (a : α) : Language.IsRegular (IndependentStar I a) := by
-  unfold IndependentStar IndependentLetters
-  apply Language.IsRegular.kstar
+omit [DecidableEq α] [LinearOrder α] in
+lemma isRegular_independentLetters (a : α) : Language.IsRegular (IndependentLetters I a) := by
+  unfold IndependentLetters
   apply Finset.sum_induction
   · apply Language.IsRegular.add
   · apply Language.IsRegular.zero
@@ -155,7 +150,8 @@ lemma isRegular_forbiddenPattern (a b : α) : Language.IsRegular (ForbiddenPatte
   · apply Language.IsRegular.kstar
     exact Language.IsRegular.top
   · exact Language.IsRegular.singleton
-  · apply isRegular_independentStar
+  · apply Language.IsRegular.kstar
+    apply isRegular_independentLetters
   · exact Language.IsRegular.singleton
   · apply Language.IsRegular.kstar
     exact Language.IsRegular.top
