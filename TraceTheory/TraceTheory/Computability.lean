@@ -1,9 +1,176 @@
 import Mathlib.Computability.EpsilonNFA
 import Mathlib.Computability.Language
 
-open Computability
+open Classical Computability
 
-variable {α : Type}
+variable {α : Type} {σ₁ σ₂ : Type*}
+
+section concat
+
+def concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) : εNFA α (σ₁ ⊕ σ₂) where
+  step q oa := match q, oa with
+    | Sum.inl q₁, some _ =>
+      (εM₁.step q₁ oa).image Sum.inl
+    | Sum.inl q₁, none =>
+      let internal := (εM₁.step q₁ none).image Sum.inl
+      if q₁ ∈ εM₁.accept then
+        internal ∪ (εM₂.start.image Sum.inr)
+      else
+        internal
+    | Sum.inr q₂, _ =>
+      (εM₂.step q₂ oa).image Sum.inr
+  start := εM₁.start.image Sum.inl
+  accept := εM₂.accept.image Sum.inr
+
+lemma IsPath.lift_inl {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₁} {x : List (Option α)}
+    (h : εM₁.IsPath s t x) : (concat εM₁ εM₂).IsPath (Sum.inl s) (Sum.inl t) x := by
+  induction h with
+  | nil _ =>
+    exact (εNFA.isPath_nil (concat εM₁ εM₂)).mpr rfl
+  | cons t' s' u oa x' h_step h_path ih =>
+    apply εNFA.IsPath.cons (Sum.inl t') (Sum.inl s') (Sum.inl u)
+    · simp [concat]
+      cases oa with
+      | some a =>
+        simpa
+      | none =>
+        by_cases h_mem : s' ∈ εM₁.accept <;> simp [h_mem, h_step]
+    · exact ih
+
+lemma IsPath.lift_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₂} {x : List (Option α)}
+    (h : εM₂.IsPath s t x) : (concat εM₁ εM₂).IsPath (Sum.inr s) (Sum.inr t) x := by
+  induction h with
+  | nil _ =>
+    exact (εNFA.isPath_nil (concat εM₁ εM₂)).mpr rfl
+  | cons t' s' u _ _ h_step _ ih =>
+    apply εNFA.IsPath.cons (Sum.inr t') (Sum.inr s') (Sum.inr u)
+    · simp [concat]
+      exact h_step
+    · exact ih
+
+lemma IsPath.proj_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂}  {s t : σ₂} {x : List (Option α)}
+    (h : (concat εM₁ εM₂).IsPath (Sum.inr s) (Sum.inr t) x) : εM₂.IsPath s t x := by
+  generalize hs' : Sum.inr s = s' at h
+  generalize ht' : Sum.inr t = t' at h
+  induction h generalizing s with
+  | nil u =>
+    simp
+    subst hs'
+    cases ht'
+    rfl
+  | cons _ s'' t'' _ _ h_step _ ih =>
+    subst hs' ht'
+    simp [concat] at h_step
+    rcases h_step with ⟨q, hq, rfl⟩
+    apply εNFA.IsPath.cons q s t
+    · exact hq
+    · simp [ih]
+
+lemma IsPath.split_inl_inr
+    {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s : σ₁} {t : σ₂} {x : List (Option α)}
+    (h : (concat εM₁ εM₂).IsPath (Sum.inl s) (Sum.inr t) x) :
+    ∃ u v s_acc s_start, x = u ++ [none] ++ v ∧
+    εM₁.IsPath s s_acc u ∧ s_acc ∈ εM₁.accept ∧
+    s_start ∈ εM₂.start ∧ εM₂.IsPath s_start t v := by
+  generalize hs' : Sum.inl s = s' at h
+  generalize ht' : Sum.inr t = t' at h
+  induction h generalizing s with
+  | nil u =>
+    subst ht'
+    cases hs'
+  | cons r s'' t'' oa x' h_step h_path ih =>
+    subst hs' ht'
+    cases oa with
+    | some a =>
+      simp [concat] at h_step
+      rcases h_step with ⟨q, hq, rfl⟩
+      have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ :=
+        ih (Eq.refl _) (Eq.refl _)
+      use some a :: u, v, s_acc, s_start
+      and_intros
+      · simp [hx']
+      · exact εNFA.IsPath.cons q s s_acc (some a) u hq h_path_rest
+      · exact h_acc
+      · exact h_bridge
+      · exact h_path_M₂
+    | none =>
+      by_cases h_mem : s ∈ εM₁.accept
+      · simp [concat, h_mem] at h_step
+        rcases h_step with ⟨q, hq, rfl⟩ | ⟨q, hq, rfl⟩
+        · have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ :=
+            ih (Eq.refl _) (Eq.refl _)
+          use none :: u, v, s_acc, s_start
+          and_intros
+          · simp [hx']
+          · exact εNFA.IsPath.cons q s s_acc none u hq h_path_rest
+          · exact h_acc
+          · exact h_bridge
+          · exact h_path_M₂
+        · use [], x', s, q
+          and_intros
+          · simp
+          · exact (εNFA.isPath_nil εM₁).mpr rfl
+          · exact h_mem
+          · exact hq
+          · exact IsPath.proj_inr h_path
+      · simp [concat, h_mem] at h_step
+        rcases h_step with ⟨q, hq, rfl⟩
+        have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ :=
+          ih (Eq.refl _) (Eq.refl _)
+        use none :: u, v, s_acc, s_start
+        and_intros
+        · simp [hx']
+        · exact εNFA.IsPath.cons q s s_acc none u hq h_path_rest
+        · exact h_acc
+        · exact h_bridge
+        · exact h_path_M₂
+
+theorem accepts_concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) :
+    (concat εM₁ εM₂).accepts = εM₁.accepts * εM₂.accepts := by
+  ext x
+  constructor
+  · intro h
+    have ⟨q₁, q₂, x', hq₁, hq₂, hx', hεM⟩ :=
+      (εNFA.mem_accepts_iff_exists_path (concat εM₁ εM₂)).mp h
+    simp [concat] at hq₁ hq₂
+    rcases hq₁ with ⟨s, hs, rfl⟩
+    rcases hq₂ with ⟨t, ht, rfl⟩
+    have ⟨u', v', s_acc, s_start, hx, h_path_M₁, h_acc_M₁, h_start_M₂, h_path_M₂⟩ :=
+      IsPath.split_inl_inr hεM
+    apply Language.mem_mul.mpr
+    use u'.reduceOption
+    constructor
+    · apply (εNFA.mem_accepts_iff_exists_path εM₁).mpr
+      use s, s_acc, u'
+    · use v'.reduceOption
+      constructor
+      · apply (εNFA.mem_accepts_iff_exists_path εM₂).mpr
+        use s_start, t, v'
+      · rw [← hx', ← List.reduceOption_append, hx]
+        simp [List.reduceOption_append, List.reduceOption_cons_of_none]
+  · simp [Language.mul_def, Set.image2]
+    rw [Set.mem_setOf_eq]
+    intro ⟨u, hu, v, hv, hx⟩
+    have ⟨uq₁, uq₂, u', huq₁, huq₂, hu', hεM₁⟩ := (εNFA.mem_accepts_iff_exists_path εM₁).mp hu
+    have ⟨vq₁, vq₂, v', hvq₁, hvq₂, hv', hεM₂⟩ := (εNFA.mem_accepts_iff_exists_path εM₂).mp hv
+    apply (εNFA.mem_accepts_iff_exists_path (concat εM₁ εM₂)).mpr
+    use Sum.inl uq₁, Sum.inr vq₂, u' ++ [none] ++ v'
+    and_intros
+    · simp [concat]
+      exact huq₁
+    · simp [concat]
+      exact hvq₂
+    · simp [List.reduceOption_append, hx, hu', hv']
+    · simp only [εNFA.isPath_append]
+      use (Sum.inr vq₁)
+      constructor
+      · use (Sum.inl uq₂)
+        constructor
+        · exact IsPath.lift_inl hεM₁
+        · simp [concat, huq₂, hvq₁]
+      · exact IsPath.lift_inr hεM₂
+
+end concat
 
 namespace Language
 
@@ -43,36 +210,23 @@ theorem IsRegular.one : IsRegular (1 : Language α) := by
 theorem IsRegular.mul {L₁ L₂ : Language α} [DecidableEq α]
     (h₁ : IsRegular L₁) (h₂ : IsRegular L₂) :
     IsRegular (L₁ * L₂) := by
-  classical
   have ⟨σ₁, _, M₁, hM₁⟩ := h₁
   have ⟨σ₂, _, M₂, hM₂⟩ := h₂
-  have εM₁ := M₁.toNFA.toεNFA
-  have εM₂ := M₂.toNFA.toεNFA
-  let step (q : σ₁ ⊕ σ₂) (ox : Option α) : Set (σ₁ ⊕ σ₂) :=
-    match q, ox with
-    | Sum.inl q₁, some x =>
-      { Sum.inl (M₁.step q₁ x) }
-    | Sum.inl q₁, none =>
-      if (q₁ ∈ M₁.accept) then { Sum.inr M₂.start } else {}
-    | Sum.inr q₂, some x =>
-      { Sum.inr (M₂.step q₂ x)}
-    | Sum.inr q₂, none =>
-      {}
-  let εM : εNFA α (σ₁ ⊕ σ₂) := {
-    step := step
-    start := { Sum.inl M₁.start }
-    accept := { q | ∃ q₂, q = Sum.inr q₂ ∧ q₂ ∈ M₂.accept }
-  }
-  have M := εM.toNFA.toDFA
+  let εM₁ := M₁.toNFA.toεNFA
+  let εM₂ := M₂.toNFA.toεNFA
+  let εM := concat εM₁ εM₂
   apply isRegular_iff.mpr
-  use Set (σ₁ ⊕ σ₂), inferInstance, M
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  sorry
+  use Set (σ₁ ⊕ σ₂), inferInstance, εM.toNFA.toDFA
+  subst hM₁ hM₂
+  rw [NFA.toDFA_correct, εNFA.toNFA_correct]
+  rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
+  rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
+  exact accepts_concat εM₁ εM₂
 
 theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) := by
   sorry
 
-theorem IsRegular.singleton {a : α} [DecidableEq α] : IsRegular ({ [a] }) := by
+theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   apply isRegular_iff.mpr
   let step (n : Fin 3) (x : α) : Fin 3 :=
     match n.val with
