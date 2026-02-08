@@ -26,7 +26,7 @@ def concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) : εNFA α (σ₁
   start := εM₁.start.image Sum.inl
   accept := εM₂.accept.image Sum.inr
 
-lemma IsPath.lift_inl {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₁} {x : List (Option α)}
+lemma IsPath.concat_lift_inl {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₁} {x : List (Option α)}
     (h : εM₁.IsPath s t x) : (concat εM₁ εM₂).IsPath (Sum.inl s) (Sum.inl t) x := by
   induction h with
   | nil _ =>
@@ -41,7 +41,7 @@ lemma IsPath.lift_inl {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t :
         by_cases h_mem : s' ∈ εM₁.accept <;> simp [h_mem, h_step]
     · exact ih
 
-lemma IsPath.lift_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₂} {x : List (Option α)}
+lemma IsPath.concat_lift_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₂} {x : List (Option α)}
     (h : εM₂.IsPath s t x) : (concat εM₁ εM₂).IsPath (Sum.inr s) (Sum.inr t) x := by
   induction h with
   | nil _ =>
@@ -52,7 +52,7 @@ lemma IsPath.lift_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t :
       exact h_step
     · exact ih
 
-lemma IsPath.proj_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂}  {s t : σ₂} {x : List (Option α)}
+lemma IsPath.concat_proj_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂}  {s t : σ₂} {x : List (Option α)}
     (h : (concat εM₁ εM₂).IsPath (Sum.inr s) (Sum.inr t) x) : εM₂.IsPath s t x := by
   generalize hs' : Sum.inr s = s' at h
   generalize ht' : Sum.inr t = t' at h
@@ -70,7 +70,7 @@ lemma IsPath.proj_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂}  {s t 
     · exact hq
     · simp [ih]
 
-lemma IsPath.split_inl_inr
+lemma IsPath.concat_split_inl_inr
     {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s : σ₁} {t : σ₂} {x : List (Option α)}
     (h : (concat εM₁ εM₂).IsPath (Sum.inl s) (Sum.inr t) x) :
     ∃ u v s_acc s_start, x = u ++ [none] ++ v ∧
@@ -116,7 +116,7 @@ lemma IsPath.split_inl_inr
           · exact (εNFA.isPath_nil εM₁).mpr rfl
           · exact h_mem
           · exact hq
-          · exact IsPath.proj_inr h_path
+          · exact IsPath.concat_proj_inr h_path
       · simp [concat, h_mem] at h_step
         rcases h_step with ⟨q, hq, rfl⟩
         have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ :=
@@ -129,7 +129,7 @@ lemma IsPath.split_inl_inr
         · exact h_bridge
         · exact h_path_M₂
 
-theorem accepts_concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) :
+theorem accepts_concat {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} :
     (concat εM₁ εM₂).accepts = εM₁.accepts * εM₂.accepts := by
   ext x
   constructor
@@ -140,7 +140,7 @@ theorem accepts_concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) :
     rcases hq₁ with ⟨s, hs, rfl⟩
     rcases hq₂ with ⟨t, ht, rfl⟩
     have ⟨u', v', s_acc, s_start, hx, h_path_M₁, h_acc_M₁, h_start_M₂, h_path_M₂⟩ :=
-      IsPath.split_inl_inr hεM
+      IsPath.concat_split_inl_inr hεM
     apply Language.mem_mul.mpr
     use u'.reduceOption
     constructor
@@ -170,15 +170,35 @@ theorem accepts_concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) :
       constructor
       · use (Sum.inl uq₂)
         constructor
-        · exact IsPath.lift_inl hεM₁
+        · exact IsPath.concat_lift_inl hεM₁
         · simp [concat, huq₂, hvq₁]
-      · exact IsPath.lift_inr hεM₂
+      · exact IsPath.concat_lift_inr hεM₂
 
 end concat
 
 section kstar
 
+variable {σ : Type*}
 
+def kstar (εM : εNFA α σ) : εNFA α (Unit ⊕ σ) where
+  step q oa := match q, oa with
+    | Sum.inl _, some _ =>
+      {}
+    | Sum.inl _, none =>
+      εM.start.image Sum.inr
+    | Sum.inr s, some a =>
+      (εM.step s (some a)).image Sum.inr
+    | Sum.inr s, none =>
+      let internal := (εM.step s none).image Sum.inr
+      if s ∈ εM.accept then
+        internal ∪ (εM.start.image Sum.inr)
+      else
+        internal
+  start := { Sum.inl () }
+  accept := { Sum.inl () } ∪ (εM.accept.image Sum.inr)
+
+theorem accepts_kstar {εM : εNFA α σ} : (kstar εM).accepts = (εM.accepts)∗ := by
+  sorry
 
 end kstar
 
@@ -198,7 +218,7 @@ def char (a : α) [DecidableEq α] : DFA α (Fin 3) where
   start := 0
   accept := {1}
 
-theorem accepts_char (a : α) : (char a).accepts = { [a] } := by
+theorem accepts_char {a : α} : (char a).accepts = { [a] } := by
   ext x
   simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
   constructor
@@ -289,15 +309,23 @@ theorem IsRegular.mul {L₁ L₂ : Language α} [DecidableEq α]
   rw [NFA.toDFA_correct, εNFA.toNFA_correct]
   rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
   rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
-  exact εNFA.accepts_concat εM₁ εM₂
+  exact εNFA.accepts_concat
 
 theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) := by
-  sorry
+  have ⟨σ, _, M, hM⟩ := h
+  let εM := M.toNFA.toεNFA
+  let εM_kstar := εNFA.kstar εM
+  apply isRegular_iff.mpr
+  use Set (Unit ⊕ σ), inferInstance, εM_kstar.toNFA.toDFA
+  subst hM
+  rw [NFA.toDFA_correct, εNFA.toNFA_correct]
+  rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
+  exact εNFA.accepts_kstar
 
 theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   apply isRegular_iff.mpr
   let M := DFA.char a
   use Fin 3, inferInstance, M
-  exact DFA.accepts_char a
+  exact DFA.accepts_char
 
 end Language
