@@ -1,5 +1,6 @@
 import Mathlib.Computability.EpsilonNFA
 import Mathlib.Computability.Language
+import Mathlib.Computability.RegularExpressions
 
 open Classical Computability
 
@@ -608,3 +609,28 @@ theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   exact DFA.accepts_char
 
 end Language
+
+namespace RegularExpressions
+
+theorem IsRegular.matches (P : RegularExpression α) : Language.IsRegular (P.matches') := by
+  induction P with
+  | zero =>
+    simp
+    exact Language.IsRegular.zero
+  | epsilon =>
+    simp
+    exact Language.IsRegular.one
+  | char =>
+    simp
+    exact Language.IsRegular.singleton
+  | plus _ _ ih₁ ih₂ =>
+    simp
+    exact Language.IsRegular.add ih₁ ih₂
+  | comp _ _ ih₁ ih₂ =>
+    simp
+    exact Language.IsRegular.mul ih₁ ih₂
+  | star _ ih =>
+    simp
+    exact Language.IsRegular.kstar ih
+
+end RegularExpressions
