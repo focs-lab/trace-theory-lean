@@ -213,7 +213,7 @@ lemma IsPath.kstar_lift_inr {εM : εNFA α σ} {s t : σ} {x : List (Option α)
         by_cases h_mem : s' ∈ εM.accept <;> simp [h_mem, h_step]
     · exact ih
 
-lemma exists_path_inr_of_flatten {εM : εNFA α σ}
+lemma exists_kstar_path_inr {εM : εNFA α σ}
     (L : List (List α)) (h_nonempty : L ≠ []) (h_all : ∀ y ∈ L, y ∈ εM.accepts) :
     ∃ (s : σ) (q : Unit ⊕ σ) (x : List (Option α)),
       s ∈ εM.start ∧
@@ -270,7 +270,7 @@ theorem accepts_kstar {εM : εNFA α σ} : (kstar εM).accepts = (εM.accepts)�
     | cons l L' =>
       expose_names
       have h_nonempty : l :: L' ≠ [] := by simp
-      have ⟨s, q, x', hs, hq, hL', hx'⟩ := exists_path_inr_of_flatten (l :: L') h_nonempty hL
+      have ⟨s, q, x', hs, hq, hL', hx'⟩ := exists_kstar_path_inr (l :: L') h_nonempty hL
       use Sum.inl (), q, none :: x'
       and_intros
       · simp [kstar]
