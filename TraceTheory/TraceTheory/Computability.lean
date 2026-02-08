@@ -197,8 +197,89 @@ def kstar (εM : εNFA α σ) : εNFA α (Unit ⊕ σ) where
   start := { Sum.inl () }
   accept := { Sum.inl () } ∪ (εM.accept.image Sum.inr)
 
+lemma IsPath.kstar_lift_inr {εM : εNFA α σ} {s t : σ} {x : List (Option α)}
+    (h : εM.IsPath s t x) :
+    εM.kstar.IsPath (Sum.inr s) (Sum.inr t) x := by
+  induction h with
+  | nil _ =>
+    exact (isPath_nil εM.kstar).mpr rfl
+  | cons t' s' u oa x' h_step h_path ih =>
+    apply εNFA.IsPath.cons (Sum.inr t') (Sum.inr s') (Sum.inr u)
+    · simp [kstar]
+      cases oa with
+      | some a =>
+        simp [h_step]
+      | none =>
+        by_cases h_mem : s' ∈ εM.accept <;> simp [h_mem, h_step]
+    · exact ih
+
+lemma exists_path_inr_of_flatten {εM : εNFA α σ}
+    (L : List (List α)) (h_nonempty : L ≠ []) (h_all : ∀ y ∈ L, y ∈ εM.accepts) :
+    ∃ (s : σ) (q : Unit ⊕ σ) (x : List (Option α)),
+      s ∈ εM.start ∧
+      q ∈ εM.kstar.accept ∧
+      x.reduceOption = L.flatten ∧
+      εM.kstar.IsPath (Sum.inr s) q x := by
+  induction L with
+  | nil =>
+    contradiction
+  | cons y L' ih =>
+    have hy := h_all y List.mem_cons_self
+    have ⟨s, t, x, hs, ht, hy', hx⟩ := (εNFA.mem_accepts_iff_exists_path εM).mp hy
+    subst hy'
+    cases L' with
+    | nil =>
+      use s, Sum.inr t, x
+      and_intros
+      · exact hs
+      · simp [kstar]
+        exact ht
+      · simp
+      · exact IsPath.kstar_lift_inr hx
+    | cons z L'' =>
+      have h_nonempty' : z :: L'' ≠ [] := by simp
+      have h_all' : ∀ y ∈ z :: L'', y ∈ εM.accepts := by
+        intro y hy
+        exact h_all y (by simp [hy])
+      have ⟨s', q, x', hs', hq, hL'', hx'⟩:= ih h_nonempty' h_all'
+      use s, q, x ++ [none] ++ x'
+      and_intros
+      · exact hs
+      · exact hq
+      · simp [hL'', List.reduceOption_append]
+      · rw [List.append_assoc, isPath_append]
+        use Sum.inr t
+        constructor
+        · exact IsPath.kstar_lift_inr hx
+        · apply IsPath.cons (Sum.inr s')
+          · simp [kstar, ht, hs']
+          · simp [hx']
+
 theorem accepts_kstar {εM : εNFA α σ} : (kstar εM).accepts = (εM.accepts)∗ := by
-  sorry
+  ext x
+  constructor
+  · sorry
+  · intro h
+    rw [Language.kstar_def, Set.mem_setOf_eq] at h
+    rcases h with ⟨L, hx, hL⟩
+    apply (mem_accepts_iff_exists_path εM.kstar).mpr
+    cases L with
+    | nil =>
+      use Sum.inl (), Sum.inl (), []
+      simp [kstar, hx]
+    | cons l L' =>
+      expose_names
+      have h_nonempty : l :: L' ≠ [] := by simp
+      have ⟨s, q, x', hs, hq, hL', hx'⟩ := exists_path_inr_of_flatten (l :: L') h_nonempty hL
+      use Sum.inl (), q, none :: x'
+      and_intros
+      · simp [kstar]
+      · exact hq
+      · simp [hx, hL']
+      · apply IsPath.cons (Sum.inr s)
+        · simp [kstar]
+          exact hs
+        · exact hx'
 
 end kstar
 
