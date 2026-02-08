@@ -1,10 +1,85 @@
 import Mathlib.Computability.EpsilonNFA
 import Mathlib.Computability.Language
 import Mathlib.Computability.RegularExpressions
+import Mathlib.Data.Fintype.Option
 
 open Classical Computability
 
 variable {α : Type}
+
+namespace DFA
+
+section epsilon
+
+def epsilon : DFA α (Option Unit) where
+  step := fun _ _ => none
+  start := some ()
+  accept := { some () }
+
+theorem accepts_epsilon : epsilon.accepts = (1 : Language α) := by
+  ext x
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  rw [Set.mem_setOf_eq]
+  cases x with
+  | nil =>
+    simp [epsilon]
+  | cons a x' =>
+    simp [epsilon]
+    have h_dead : ∀ w : List α, List.foldl (fun _ _ => none) (none : Option Unit) w = none := by
+      intro w; induction w <;> simp [*]
+    intro h_absurd
+    rw [h_dead] at h_absurd
+    contradiction
+
+end epsilon
+
+section singleton
+
+def char (a : α) [DecidableEq α] : DFA α (Option Bool) where
+  step (ob : Option Bool) (x : α) := match ob with
+    | some true  => none
+    | some false => if x = a then some true else none
+    | none       => none
+  start := some false
+  accept := { some true }
+
+@[simp]
+theorem char_step_start (a : α) [DecidableEq α] (x : α) :
+    (char a).step (some false) x = if x = a then some true else none := rfl
+
+@[simp]
+theorem char_step_accept (a : α) [DecidableEq α] (x : α) :
+    (char a).step (some true) x = none := rfl
+
+@[simp]
+theorem char_step_dead (a : α) [DecidableEq α] (x : α) :
+    (char a).step none x = none := rfl
+
+theorem accepts_char {a : α} : (char a).accepts = { [a] } := by
+  ext x
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  rw [Set.mem_setOf_eq, Set.mem_singleton_iff]
+  cases x with
+  | nil =>
+    simp [char]
+  | cons b x' =>
+    cases x' with
+    | nil =>
+      simp [char]
+    | cons c x'' =>
+      have h_dead : ∀ w, List.foldl (char a).step none w = none := by
+        intro w; induction w <;> simp [*]
+      simp [char] at *
+      split_ifs
+      all_goals(
+        intro h_absurd
+        rw [h_dead] at h_absurd
+        contradiction
+      )
+
+end singleton
+
+end DFA
 
 namespace εNFA
 
@@ -481,62 +556,6 @@ end kstar
 
 end εNFA
 
-namespace DFA
-
-section singleton
-
-def char (a : α) [DecidableEq α] : DFA α (Fin 3) where
-  step (n : Fin 3) (x : α) :=
-    match n.val with
-    | Nat.zero =>
-      if x = a then 1 else 2
-    | Nat.succ _ =>
-      2
-  start := 0
-  accept := {1}
-
-theorem accepts_char {a : α} : (char a).accepts = { [a] } := by
-  ext x
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  constructor
-  · intro h
-    rw [Set.mem_setOf_eq] at h
-    cases x with
-    | nil =>
-      simp [char] at h
-    | cons b x' =>
-      have h_dead_state : ∀ w, List.foldl (char a).step 2 w = 2 := by
-        intro w
-        induction w with
-        | nil =>
-          simp
-        | cons b w' ih =>
-          simp [char] at *
-          simp [ih]
-      by_cases heq : b = a
-      · subst heq
-        simp [char] at h h_dead_state
-        cases x' with
-        | nil =>
-          rfl
-        | cons c x'' =>
-          by_cases heq' : c = b
-          all_goals(
-            simp [heq'] at h
-            rw [h_dead_state] at h
-            contradiction
-          )
-      · simp [char, heq] at h h_dead_state
-        rw [h_dead_state] at h
-        contradiction
-  · rintro rfl
-    rw [Set.mem_setOf_eq]
-    simp [char]
-
-end singleton
-
-end DFA
-
 namespace Language
 
 theorem IsRegular.zero : IsRegular (0 : Language α) := by
@@ -544,33 +563,20 @@ theorem IsRegular.zero : IsRegular (0 : Language α) := by
   use Unit, inferInstance, ⟨fun _ _ => (), (), {}⟩
   rfl
 
+theorem IsRegular.one : IsRegular (1 : Language α) := by
+  apply isRegular_iff.mpr
+  use Option Unit, inferInstance, DFA.epsilon
+  exact DFA.accepts_epsilon
+
 theorem IsRegular.top : IsRegular (⊤ : Language α) := by
   rw [← compl_bot, bot_eq_zero]
   apply IsRegular.compl
   exact IsRegular.zero
 
-theorem IsRegular.one : IsRegular (1 : Language α) := by
+theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   apply isRegular_iff.mpr
-  use Fin 2, inferInstance, ⟨fun _ _ => 1, 0, { 0 }⟩
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  ext x
-  rw [Set.mem_setOf_eq]
-  cases x with
-  | nil =>
-    simp
-  | cons _ x' =>
-    simp
-    intro h
-    have h_dead_state : ∀ w : List α, List.foldl (fun (_ : Fin 2) _ => 1) 1 w = 1 := by
-      intro w
-      induction w with
-      | nil =>
-        simp
-      | cons b w' ih =>
-        simp [ih]
-    have h_absurd := h_dead_state x'
-    rw [h] at h_absurd
-    contradiction
+  use Option Bool, inferInstance, DFA.char a
+  exact DFA.accepts_char
 
 theorem IsRegular.mul {L₁ L₂ : Language α} [DecidableEq α]
     (h₁ : IsRegular L₁) (h₂ : IsRegular L₂) :
@@ -598,12 +604,6 @@ theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) :
   rw [NFA.toDFA_correct, εNFA.toNFA_correct]
   rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
   exact εNFA.accepts_kstar
-
-theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
-  apply isRegular_iff.mpr
-  let M := DFA.char a
-  use Fin 3, inferInstance, M
-  exact DFA.accepts_char
 
 end Language
 
