@@ -5,6 +5,8 @@ open Classical Computability
 
 variable {α : Type}
 
+namespace εNFA
+
 section concat
 
 variable {σ₁ σ₂ : Type*}
@@ -174,6 +176,16 @@ theorem accepts_concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) :
 
 end concat
 
+section kstar
+
+
+
+end kstar
+
+end εNFA
+
+namespace DFA
+
 section singleton
 
 def char (a : α) [DecidableEq α] : DFA α (Fin 3) where
@@ -226,6 +238,8 @@ theorem accepts_char (a : α) : (char a).accepts = { [a] } := by
 
 end singleton
 
+end DFA
+
 namespace Language
 
 theorem IsRegular.zero : IsRegular (0 : Language α) := by
@@ -268,22 +282,22 @@ theorem IsRegular.mul {L₁ L₂ : Language α} [DecidableEq α]
   have ⟨σ₂, _, M₂, hM₂⟩ := h₂
   let εM₁ := M₁.toNFA.toεNFA
   let εM₂ := M₂.toNFA.toεNFA
-  let εM := concat εM₁ εM₂
+  let εM := εNFA.concat εM₁ εM₂
   apply isRegular_iff.mpr
   use Set (σ₁ ⊕ σ₂), inferInstance, εM.toNFA.toDFA
   subst hM₁ hM₂
   rw [NFA.toDFA_correct, εNFA.toNFA_correct]
   rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
   rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
-  exact accepts_concat εM₁ εM₂
+  exact εNFA.accepts_concat εM₁ εM₂
 
 theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) := by
   sorry
 
 theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   apply isRegular_iff.mpr
-  let M := char a
+  let M := DFA.char a
   use Fin 3, inferInstance, M
-  exact accepts_char a
+  exact DFA.accepts_char a
 
 end Language
