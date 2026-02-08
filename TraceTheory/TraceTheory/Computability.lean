@@ -3,9 +3,11 @@ import Mathlib.Computability.Language
 
 open Classical Computability
 
-variable {α : Type} {σ₁ σ₂ : Type*}
+variable {α : Type}
 
 section concat
+
+variable {σ₁ σ₂ : Type*}
 
 def concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) : εNFA α (σ₁ ⊕ σ₂) where
   step q oa := match q, oa with
@@ -172,6 +174,58 @@ theorem accepts_concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) :
 
 end concat
 
+section singleton
+
+def char (a : α) [DecidableEq α] : DFA α (Fin 3) where
+  step (n : Fin 3) (x : α) :=
+    match n.val with
+    | Nat.zero =>
+      if x = a then 1 else 2
+    | Nat.succ _ =>
+      2
+  start := 0
+  accept := {1}
+
+theorem accepts_char (a : α) : (char a).accepts = { [a] } := by
+  ext x
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  constructor
+  · intro h
+    rw [Set.mem_setOf_eq] at h
+    cases x with
+    | nil =>
+      simp [char] at h
+    | cons b x' =>
+      have h_dead_state : ∀ w, List.foldl (char a).step 2 w = 2 := by
+        intro w
+        induction w with
+        | nil =>
+          simp
+        | cons b w' ih =>
+          simp [char] at *
+          simp [ih]
+      by_cases heq : b = a
+      · subst heq
+        simp [char] at h h_dead_state
+        cases x' with
+        | nil =>
+          rfl
+        | cons c x'' =>
+          by_cases heq' : c = b
+          all_goals(
+            simp [heq'] at h
+            rw [h_dead_state] at h
+            contradiction
+          )
+      · simp [char, heq] at h h_dead_state
+        rw [h_dead_state] at h
+        contradiction
+  · rintro rfl
+    rw [Set.mem_setOf_eq]
+    simp [char]
+
+end singleton
+
 namespace Language
 
 theorem IsRegular.zero : IsRegular (0 : Language α) := by
@@ -228,37 +282,8 @@ theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) :
 
 theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   apply isRegular_iff.mpr
-  let step (n : Fin 3) (x : α) : Fin 3 :=
-    match n.val with
-    | Nat.zero =>
-      if (x = a) then 1 else 2
-    | Nat.succ n' =>
-      2
-  use Fin 3, inferInstance, ⟨step, 0, { 1 }⟩
-  ext x
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  constructor
-  · intro h
-    rw [Set.mem_setOf_eq] at h
-    cases x with
-    | nil =>
-      simp at h
-    | cons b x' =>
-      have h_dead_state : ∀ w, List.foldl step 2 w = 2 := by
-        intro w
-        induction w with
-        | nil =>
-          simp
-        | cons b w' ih =>
-          simp [step, ih]
-      by_cases heq : b = a
-      · subst heq
-        cases x' with
-        | nil =>
-          rfl
-        | cons c x'' =>
-          grind
-      · grind
-  · grind
+  let M := char a
+  use Fin 3, inferInstance, M
+  exact accepts_char a
 
 end Language
