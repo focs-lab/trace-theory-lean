@@ -11,50 +11,65 @@ namespace εNFA
 section concat
 
 variable {σ₁ σ₂ : Type*}
+variable {M₁ : εNFA α σ₁} {M₂ : εNFA α σ₂}
 
-def concat (εM₁ : εNFA α σ₁) (εM₂ : εNFA α σ₂) : εNFA α (σ₁ ⊕ σ₂) where
+def concat (M₁ : εNFA α σ₁) (M₂ : εNFA α σ₂) : εNFA α (σ₁ ⊕ σ₂) where
   step q oa := match q, oa with
-    | Sum.inl q₁, some _ =>
-      (εM₁.step q₁ oa).image Sum.inl
-    | Sum.inl q₁, none =>
-      let internal := (εM₁.step q₁ none).image Sum.inl
-      if q₁ ∈ εM₁.accept then
-        internal ∪ (εM₂.start.image Sum.inr)
-      else
-        internal
-    | Sum.inr q₂, _ =>
-      (εM₂.step q₂ oa).image Sum.inr
-  start := εM₁.start.image Sum.inl
-  accept := εM₂.accept.image Sum.inr
+    | Sum.inl q₁, some _ => (M₁.step q₁ oa).image Sum.inl
+    | Sum.inl q₁, none   =>
+      (M₁.step q₁ none).image Sum.inl ∪
+      (if q₁ ∈ M₁.accept then (M₂.start.image Sum.inr) else ∅)
+    | Sum.inr q₂, _      => (M₂.step q₂ oa).image Sum.inr
+  start := M₁.start.image Sum.inl
+  accept := M₂.accept.image Sum.inr
 
-lemma IsPath.concat_lift_inl {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₁} {x : List (Option α)}
-    (h : εM₁.IsPath s t x) : (concat εM₁ εM₂).IsPath (Sum.inl s) (Sum.inl t) x := by
+@[simp]
+theorem concat_step_inl_none :
+    (concat M₁ M₂).step (Sum.inl q) none =
+    (M₁.step q none).image Sum.inl ∪
+    (if q ∈ M₁.accept then M₂.start.image Sum.inr else ∅) :=
+  rfl
+
+@[simp]
+theorem concat_step_inl_some :
+    (concat M₁ M₂).step (Sum.inl q) (some a) =
+    (M₁.step q (some a)).image Sum.inl :=
+  rfl
+
+@[simp]
+theorem concat_step_inr_none :
+    (concat M₁ M₂).step (Sum.inr q) none =
+    (M₂.step q none).image Sum.inr :=
+  rfl
+
+@[simp]
+theorem concat_step_inr_some :
+    (concat M₁ M₂).step (Sum.inr q) (some a) =
+    (M₂.step q (some a)).image Sum.inr :=
+  rfl
+
+lemma IsPath.concat_lift_inl
+    (h : M₁.IsPath s t x) : (concat M₁ M₂).IsPath (Sum.inl s) (Sum.inl t) x := by
   induction h with
   | nil _ =>
-    exact (isPath_nil (concat εM₁ εM₂)).mpr rfl
+    exact (isPath_nil (concat M₁ M₂)).mpr rfl
   | cons t' s' u oa x' h_step h_path ih =>
     apply IsPath.cons (Sum.inl t') (Sum.inl s') (Sum.inl u)
-    · simp [concat]
-      cases oa with
-      | some a =>
-        simpa
-      | none =>
-        by_cases h_mem : s' ∈ εM₁.accept <;> simp [h_mem, h_step]
+    · cases oa <;> simpa
     · exact ih
 
-lemma IsPath.concat_lift_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s t : σ₂} {x : List (Option α)}
-    (h : εM₂.IsPath s t x) : (concat εM₁ εM₂).IsPath (Sum.inr s) (Sum.inr t) x := by
+lemma IsPath.concat_lift_inr
+    (h : M₂.IsPath s t x) : (concat M₁ M₂).IsPath (Sum.inr s) (Sum.inr t) x := by
   induction h with
   | nil _ =>
-    exact (isPath_nil (concat εM₁ εM₂)).mpr rfl
+    exact (isPath_nil (concat M₁ M₂)).mpr rfl
   | cons t' s' u _ _ h_step _ ih =>
     apply IsPath.cons (Sum.inr t') (Sum.inr s') (Sum.inr u)
-    · simp [concat]
-      exact h_step
+    · simpa [concat]
     · exact ih
 
-lemma IsPath.concat_proj_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂}  {s t : σ₂} {x : List (Option α)}
-    (h : (concat εM₁ εM₂).IsPath (Sum.inr s) (Sum.inr t) x) : εM₂.IsPath s t x := by
+lemma IsPath.concat_proj_inr
+    (h : (concat M₁ M₂).IsPath (Sum.inr s) (Sum.inr t) x) : M₂.IsPath s t x := by
   generalize hs' : Sum.inr s = s' at h
   generalize ht' : Sum.inr t = t' at h
   induction h generalizing s with
@@ -72,106 +87,88 @@ lemma IsPath.concat_proj_inr {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂}
     · simp [ih]
 
 lemma IsPath.concat_split_inl_inr
-    {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} {s : σ₁} {t : σ₂} {x : List (Option α)}
-    (h : (concat εM₁ εM₂).IsPath (Sum.inl s) (Sum.inr t) x) :
-    ∃ u v s_acc s_start, x = u ++ [none] ++ v ∧
-    εM₁.IsPath s s_acc u ∧ s_acc ∈ εM₁.accept ∧
-    s_start ∈ εM₂.start ∧ εM₂.IsPath s_start t v := by
+    (h : (concat M₁ M₂).IsPath (Sum.inl s) (Sum.inr t) x) :
+    ∃ u v s_acc s_start,
+      x = u ++ [none] ++ v ∧
+      M₁.IsPath s s_acc u ∧
+      s_acc ∈ M₁.accept ∧
+      s_start ∈ M₂.start ∧
+      M₂.IsPath s_start t v := by
   generalize hs' : Sum.inl s = s' at h
   generalize ht' : Sum.inr t = t' at h
   induction h generalizing s with
   | nil u =>
-    subst ht'
+    cases ht'
     cases hs'
-  | cons r s'' t'' oa x' h_step h_path ih =>
+  | cons _ _ _ oa x' h_step h_path ih =>
     subst hs' ht'
     cases oa with
     | some a =>
-      simp [concat] at h_step
+      simp at h_step
       rcases h_step with ⟨q, hq, rfl⟩
-      have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ :=
-        ih (Eq.refl _) (Eq.refl _)
+      have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ := ih rfl rfl
       use some a :: u, v, s_acc, s_start
       and_intros
       · simp [hx']
-      · exact IsPath.cons q s s_acc (some a) u hq h_path_rest
+      · exact cons q s s_acc (some a) u hq h_path_rest
       · exact h_acc
       · exact h_bridge
       · exact h_path_M₂
     | none =>
-      by_cases h_mem : s ∈ εM₁.accept
-      · simp [concat, h_mem] at h_step
-        rcases h_step with ⟨q, hq, rfl⟩ | ⟨q, hq, rfl⟩
-        · have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ := ih rfl rfl
-          use none :: u, v, s_acc, s_start
-          and_intros
-          · simp [hx']
-          · exact IsPath.cons q s s_acc none u hq h_path_rest
-          · exact h_acc
-          · exact h_bridge
-          · exact h_path_M₂
-        · use [], x', s, q
-          and_intros
-          · simp
-          · exact (isPath_nil εM₁).mpr rfl
-          · exact h_mem
-          · exact hq
-          · exact IsPath.concat_proj_inr h_path
-      · simp [concat, h_mem] at h_step
-        rcases h_step with ⟨q, hq, rfl⟩
-        have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ := ih rfl rfl
+      simp at h_step
+      rcases h_step with ⟨q, hq, rfl⟩ | ⟨hs, q, hq, rfl⟩
+      · have ⟨u, v, s_acc, s_start, hx', h_path_rest, h_acc, h_bridge, h_path_M₂⟩ := ih rfl rfl
         use none :: u, v, s_acc, s_start
         and_intros
         · simp [hx']
-        · exact IsPath.cons q s s_acc none u hq h_path_rest
+        · exact cons q s s_acc none u hq h_path_rest
         · exact h_acc
         · exact h_bridge
         · exact h_path_M₂
+      · use [], x', s, q
+        and_intros
+        · simp
+        · exact (isPath_nil M₁).mpr rfl
+        · exact hs
+        · exact hq
+        · exact concat_proj_inr h_path
 
-theorem accepts_concat {εM₁ : εNFA α σ₁} {εM₂ : εNFA α σ₂} :
-    (concat εM₁ εM₂).accepts = εM₁.accepts * εM₂.accepts := by
+theorem accepts_concat : (concat M₁ M₂).accepts = M₁.accepts * M₂.accepts := by
   ext x
+  simp only [Language.mem_mul]
   constructor
   · intro h
-    have ⟨q₁, q₂, x', hq₁, hq₂, hx', hεM⟩ :=
-      (mem_accepts_iff_exists_path (concat εM₁ εM₂)).mp h
+    have ⟨q₁, q₂, x', hq₁, hq₂, hx', hM⟩ := (mem_accepts_iff_exists_path (concat M₁ M₂)).mp h
     simp [concat] at hq₁ hq₂
     rcases hq₁ with ⟨s, hs, rfl⟩
     rcases hq₂ with ⟨t, ht, rfl⟩
     have ⟨u', v', s_acc, s_start, hx, h_path_M₁, h_acc_M₁, h_start_M₂, h_path_M₂⟩ :=
-      IsPath.concat_split_inl_inr hεM
+      IsPath.concat_split_inl_inr hM
     apply Language.mem_mul.mpr
-    use u'.reduceOption
-    constructor
-    · apply (mem_accepts_iff_exists_path εM₁).mpr
+    refine ⟨u'.reduceOption, ?_, v'.reduceOption, ?_, ?_⟩
+    · apply (mem_accepts_iff_exists_path M₁).mpr
       use s, s_acc, u'
-    · use v'.reduceOption
-      constructor
-      · apply (mem_accepts_iff_exists_path εM₂).mpr
-        use s_start, t, v'
-      · rw [← hx', ← List.reduceOption_append, hx]
-        simp [List.reduceOption_append, List.reduceOption_cons_of_none]
-  · simp [Language.mul_def, Set.image2]
-    rw [Set.mem_setOf_eq]
-    intro ⟨u, hu, v, hv, hx⟩
-    have ⟨uq₁, uq₂, u', huq₁, huq₂, hu', hεM₁⟩ := (mem_accepts_iff_exists_path εM₁).mp hu
-    have ⟨vq₁, vq₂, v', hvq₁, hvq₂, hv', hεM₂⟩ := (mem_accepts_iff_exists_path εM₂).mp hv
-    apply (mem_accepts_iff_exists_path (concat εM₁ εM₂)).mpr
+    · apply (mem_accepts_iff_exists_path M₂).mpr
+      use s_start, t, v'
+    · subst hx' hx
+      simp [List.reduceOption_append, List.reduceOption_cons_of_none]
+  · intro ⟨u, hu, v, hv, hx⟩
+    have ⟨uq₁, uq₂, u', huq₁, huq₂, hu', hM₁⟩ := (mem_accepts_iff_exists_path M₁).mp hu
+    have ⟨vq₁, vq₂, v', hvq₁, hvq₂, hv', hM₂⟩ := (mem_accepts_iff_exists_path M₂).mp hv
+    apply (mem_accepts_iff_exists_path (concat M₁ M₂)).mpr
     use Sum.inl uq₁, Sum.inr vq₂, u' ++ [none] ++ v'
     and_intros
-    · simp [concat]
-      exact huq₁
-    · simp [concat]
-      exact hvq₂
+    · simpa [concat]
+    · simpa [concat]
     · simp [List.reduceOption_append, hx, hu', hv']
     · simp only [isPath_append]
-      use (Sum.inr vq₁)
+      use Sum.inr vq₁
       constructor
-      · use (Sum.inl uq₂)
+      · use Sum.inl uq₂
         constructor
-        · exact IsPath.concat_lift_inl hεM₁
-        · simp [concat, huq₂, hvq₁]
-      · exact IsPath.concat_lift_inr hεM₂
+        · exact IsPath.concat_lift_inl hM₁
+        · simp [huq₂, hvq₁]
+      · exact IsPath.concat_lift_inr hM₂
 
 end concat
 
