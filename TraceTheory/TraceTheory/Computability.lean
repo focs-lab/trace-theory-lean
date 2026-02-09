@@ -11,6 +11,7 @@ namespace DFA
 
 section epsilon
 
+/-- DFA which accepts the empty language. -/
 def epsilon : DFA α (Option Unit) where
   step := fun _ _ => none
   start := some ()
@@ -35,6 +36,7 @@ end epsilon
 
 section singleton
 
+/-- DFA which accepts the singleton language of `a`. -/
 def char (a : α) [DecidableEq α] : DFA α (Option Bool) where
   step (ob : Option Bool) (x : α) := match ob with
     | some true  => none
@@ -88,6 +90,7 @@ section concat
 variable {σ₁ σ₂ : Type*}
 variable {M₁ : εNFA α σ₁} {M₂ : εNFA α σ₂}
 
+/-- DFA which accepts the concatenation of the languages of `M₁` and `M₂`. -/
 def concat (M₁ : εNFA α σ₁) (M₂ : εNFA α σ₂) : εNFA α (σ₁ ⊕ σ₂) where
   step q oa := match q, oa with
     | Sum.inl q₁, some _ => (M₁.step q₁ oa).image Sum.inl
@@ -252,6 +255,7 @@ section kstar
 variable {σ : Type*}
 variable {M : εNFA α σ}
 
+/-- DFA which accepts the Kleene star of the language of `M`. -/
 def kstar (M : εNFA α σ) : εNFA α (Option σ) where
   step oq oa := match oq, oa with
     | none,   some _ => ∅
@@ -532,7 +536,7 @@ theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   use Option Bool, inferInstance, DFA.char a
   exact DFA.accepts_char
 
-theorem IsRegular.mul {L₁ L₂ : Language α} [DecidableEq α]
+theorem IsRegular.mul {L₁ L₂ : Language α}
     (h₁ : IsRegular L₁) (h₂ : IsRegular L₂) :
     IsRegular (L₁ * L₂) := by
   have ⟨σ₁, _, M₁, hM₁⟩ := h₁
@@ -563,6 +567,7 @@ end Language
 
 namespace RegularExpressions
 
+/-- The language matched by a regular expression is a regular language. -/
 theorem IsRegular.matches (P : RegularExpression α) : Language.IsRegular (P.matches') := by
   induction P with
   | zero =>
