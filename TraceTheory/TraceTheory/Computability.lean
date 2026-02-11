@@ -57,7 +57,7 @@ theorem char_step_accept (a : α) [DecidableEq α] (x : α) :
 theorem char_step_dead (a : α) [DecidableEq α] (x : α) :
     (char a).step none x = none := rfl
 
-theorem accepts_char {a : α} : (char a).accepts = { [a] } := by
+theorem accepts_char {a : α} [DecidableEq α] : (char a).accepts = { [a] } := by
   ext x
   simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
   rw [Set.mem_setOf_eq, Set.mem_singleton_iff]
@@ -89,9 +89,10 @@ section concat
 
 variable {σ₁ σ₂ : Type*}
 variable {M₁ : εNFA α σ₁} {M₂ : εNFA α σ₂}
+variable [DecidablePred (· ∈ M₁.accept)]
 
 /-- DFA which accepts the concatenation of the languages of `M₁` and `M₂`. -/
-def concat (M₁ : εNFA α σ₁) (M₂ : εNFA α σ₂) : εNFA α (σ₁ ⊕ σ₂) where
+def concat (M₁ : εNFA α σ₁) (M₂ : εNFA α σ₂) [DecidablePred (· ∈ M₁.accept)]: εNFA α (σ₁ ⊕ σ₂) where
   step q oa := match q, oa with
     | Sum.inl q₁, some _ => (M₁.step q₁ oa).image Sum.inl
     | Sum.inl q₁, none   =>
@@ -254,9 +255,10 @@ section kstar
 
 variable {σ : Type*}
 variable {M : εNFA α σ}
+variable [DecidablePred (· ∈ M.accept)]
 
 /-- DFA which accepts the Kleene star of the language of `M`. -/
-def kstar (M : εNFA α σ) : εNFA α (Option σ) where
+def kstar (M : εNFA α σ) [DecidablePred (· ∈ M.accept)] : εNFA α (Option σ) where
   step oq oa := match oq, oa with
     | none,   some _ => ∅
     | none,   none   => M.start.image some
@@ -531,7 +533,7 @@ theorem IsRegular.top : IsRegular (⊤ : Language α) := by
   apply IsRegular.compl
   exact IsRegular.zero
 
-theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
+theorem IsRegular.singleton {a : α} [DecidableEq α] : IsRegular ({ [a] }) := by
   apply isRegular_iff.mpr
   use Option Bool, inferInstance, DFA.char a
   exact DFA.accepts_char
