@@ -1,5 +1,7 @@
+import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 import Mathlib.Computability.EpsilonNFA
 import Mathlib.Computability.RegularExpressions
+import Mathlib.Data.Finset.Sort
 import Mathlib.Data.Fintype.Option
 
 open Classical Computability
@@ -665,7 +667,7 @@ section Kleene
 open RegularExpression
 
 variable {σ : Type*} [Fintype σ] [DecidableEq σ]
-variable {α : Type*} [Fintype α] [DecidableEq α]
+variable {α : Type*} [Fintype α] [DecidableEq α] [LinearOrder α]
 variable {M : εNFA α (ExtendedState σ)}
 
 local notation "n" => Fintype.card (ExtendedState σ)
@@ -679,8 +681,8 @@ noncomputable def directRegex (i j : Fin n) : RegularExpression α :=
   let s_i := e.symm i
   let s_j := e.symm j
   let char_transitions : RegularExpression α :=
-    (Finset.univ.toList).foldl (fun acc a =>
-      if s_j ∈ M.step s_i (some a) then acc + (char a) else acc
+    Finset.univ.sort.foldl (fun acc a =>
+      acc + (if s_j ∈ M.step s_i (some a) then char a else 0)
     ) 0
   let epsilon_transitions : RegularExpression α :=
     if s_j ∈ M.step s_i none ∨ i = j then 1 else 0
@@ -700,6 +702,30 @@ noncomputable def pathRegex : ℕ → Fin n → Fin n → RegularExpression α
       R_to_k * R_loop.star * R_from + R_old
     else
       pathRegex k i j
+
+omit [Fintype α] [DecidableEq α] [LinearOrder α] in
+theorem matches'_foldl_sum (L : List α) (f : α → RegularExpression α) :
+    (L.foldl (fun acc a => acc + f a) 0).matches' =
+    ((⋃ x ∈ L, (f x).matches') : Language α) := by
+  let g := fun (acc : RegularExpression α) (a : α) => acc + f a
+  let u : Language α := (⋃ x ∈ L, (f x).matches')
+  have h : ∀ acc, (L.foldl g acc).matches' = acc.matches' + u := by
+    dsimp [u]
+    induction L with
+    | nil =>
+      intro acc
+      simp
+      apply Set.empty_subset
+    | cons a L' ih =>
+      intro acc
+      dsimp [g]
+      rw [ih, matches'_add, add_assoc]
+      apply congr_arg
+      simp
+      rfl
+  specialize h 0
+  simp [g, u] at h
+  exact h
 
 variable (M) in
 /-- A path in the NFA restricted to intermediate states < k. -/
@@ -722,7 +748,17 @@ noncomputable def toRegex (M : εNFA a σ) : RegularExpression α :=
 
 theorem isRestrictedPath_iff_isPath {i j : Fin n} {x : List α} :
     IsRestrictedPath M n i j x ↔ M.IsPath (e.symm i) (e.symm j) x := by
-  sorry
+  constructor
+  · intro h
+    induction h with
+    | direct i' j' x' h_match =>
+      dsimp [directRegex] at h_match
+      simp only [matches'_foldl_sum] at h_match
+      simp only [Language.mem_add] at h_match
+      sorry
+    | trans k i' j' x₁ x₂ h₁ hlt h₂ ih₁ ih₂ =>
+      sorry
+  · sorry
 
 theorem accepts_toRegex (M : εNFA a σ) : (toRegex M).matches' = M.accepts := by
   sorry
