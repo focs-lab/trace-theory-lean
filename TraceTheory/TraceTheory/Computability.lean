@@ -756,7 +756,7 @@ theorem isRestrictedPath_iff_isPath {i j : Fin n} {x : List α} :
       simp only [matches'_foldl_sum] at h_match
       simp only [Language.mem_add] at h_match
       sorry
-    | trans k i' j' x₁ x₂ h₁ hlt h₂ ih₁ ih₂ =>
+    | trans i' j' m x₁ x₂ h₁ hlt h₂ ih₁ ih₂ =>
       sorry
   · sorry
 
