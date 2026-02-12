@@ -306,7 +306,6 @@ theorem recognizable_is_finSyntacticIndex :
     IsRecognizable T → Finite (syntacticMonoid T) := by
   unfold IsRecognizable
   intro ⟨N, N_mon, N_fin, N_dec, φ, h⟩
-  -- let f : φ '' Set.univ → syntacticMonoid T := fun ⟨n, hn⟩ => Quotient.mk (syntacticSetoid T) (Classical.choose hn)
   have : ∀ a b, φ a = φ b → syntacticCongr T a b := by
     intro a b hab u v
     rw [h]
@@ -317,18 +316,11 @@ theorem recognizable_is_finSyntacticIndex :
     have ⟨m, hm⟩ := Quotient.exists_rep q
     use ⟨φ m, Set.mem_image_of_mem φ trivial⟩
     rw [<- hm]
-    -- let ms := ⟦Classical.choose (Set.mem_image_of_mem φ (φ m ∈ ⇑φ '' Set.univ))⟧
     apply Quotient.sound
     intro u v
     apply this
-    -- have : ∀ a b, a ∈ φ ⁻¹' {φ b} → φ a = φ b := by exact fun a b a => a
-    -- apply Eq.symm
-    -- apply this
-
-    --exact @Classical.choose_spec _ (fun x => φ x = φ m)
-
-    sorry
+    have hm : φ m ∈ ⇑φ '' Set.univ := Set.mem_image_of_mem (⇑φ) trivial
+    exact (Classical.choose_spec hm).2
   exact Finite.of_surjective f f_surj
-
 
 end Trace
