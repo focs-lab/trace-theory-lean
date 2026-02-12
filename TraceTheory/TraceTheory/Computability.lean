@@ -1,5 +1,4 @@
 import Mathlib.Computability.EpsilonNFA
-import Mathlib.Computability.Language
 import Mathlib.Computability.RegularExpressions
 import Mathlib.Data.Fintype.Option
 
@@ -283,7 +282,7 @@ lemma kstar_step_some (q : σ) (a : Option α) :
     (if a = none ∧ q ∈ M.accept then M.start.image some else ∅) := by
   cases a <;> simp [kstar]
 
-lemma IsPath.kstar_lift_inr
+lemma IsPath.kstar_lift_some
     (h : M.IsPath s t x) :
     M.kstar.IsPath (some s) (some t) x := by
   induction h with
@@ -294,7 +293,7 @@ lemma IsPath.kstar_lift_inr
     · cases oa <;> simp [h_step]
     · exact ih
 
-lemma kstar_exists_path_inr
+lemma kstar_exists_path_some
     (L : List (List α)) (h_nonempty : L ≠ []) (h_all : ∀ y ∈ L, y ∈ M.accepts) :
     ∃ (s : σ) (q : Option σ) (x : List (Option α)),
       s ∈ M.start ∧
@@ -315,7 +314,7 @@ lemma kstar_exists_path_inr
       · exact hs
       · simpa [kstar]
       · simp
-      · exact IsPath.kstar_lift_inr hx
+      · exact IsPath.kstar_lift_some hx
     | cons z L'' =>
       have h_nonempty' : z :: L'' ≠ [] := by simp
       have h_all' : ∀ y ∈ z :: L'', y ∈ M.accepts := by aesop
@@ -328,7 +327,7 @@ lemma kstar_exists_path_inr
       · rw [List.append_assoc, isPath_append]
         use some t
         constructor
-        · exact IsPath.kstar_lift_inr hx
+        · exact IsPath.kstar_lift_some hx
         · apply IsPath.cons (some s')
           · simp [ht, hs']
           · simpa
@@ -353,7 +352,7 @@ lemma IsPath.kstar_path_from_none
       rcases h_step with ⟨s_start, hs_start, rfl⟩
       exact ⟨s_start, hs_start, h_path⟩
 
-lemma IsPath.kstar_split_inr
+lemma IsPath.kstar_split_some
     (h : (kstar M).IsPath (some s) (some t) x) :
     (∃ x', x'.reduceOption = x.reduceOption ∧ M.IsPath s t x') ∨
     (∃ (u v : List (Option α)) (s_acc s_next : σ),
@@ -430,7 +429,7 @@ lemma IsPath.kstar_exists_decomp
   generalize h_len : x.length = n
   induction n using Nat.strong_induction_on generalizing s x with
   | h n ih =>
-    rcases IsPath.kstar_split_inr h with
+    rcases IsPath.kstar_split_some h with
       ⟨x', hx, hx'⟩ |
       ⟨u, v, q_acc, s_next, hx, hu, h_acc, h_next, hv, hlt⟩
     · use [x'.reduceOption]
@@ -468,7 +467,7 @@ theorem accepts_kstar : (kstar M).accepts = (M.accepts)∗ := by
       cases h_path with
       | nil _ =>
         simpa using hx'
-      | cons t' s' u oa x'' h_step h_path' =>
+      | cons t' s' u oa x'' h_step h_rest =>
         cases oa with
         | some a =>
           simp at h_step
@@ -476,16 +475,16 @@ theorem accepts_kstar : (kstar M).accepts = (M.accepts)∗ := by
           exfalso
           simp at h_step
           rcases h_step with ⟨y, _, rfl⟩
-          exact IsPath.kstar_no_return h_path'
+          exact IsPath.kstar_no_return h_rest
     · cases h_path with
-      | cons t' s' u oa x'' h_step h_path' =>
+      | cons t' s' u oa x'' h_step h_rest =>
         cases oa with
         | some a =>
           simp [kstar] at h_step
         | none =>
           simp [kstar] at h_step
           rcases h_step with ⟨u', hu', rfl⟩
-          have ⟨L, hx'', hL⟩ := IsPath.kstar_exists_decomp h_path' hu' hq_start
+          have ⟨L, hx'', hL⟩ := IsPath.kstar_exists_decomp h_rest hu' hq_start
           use L
           constructor
           · simp at hx'
@@ -502,7 +501,7 @@ theorem accepts_kstar : (kstar M).accepts = (M.accepts)∗ := by
     | cons w L' ih =>
       expose_names
       have h_nonempty : w :: L' ≠ [] := by simp
-      have ⟨s, q, x', hs, hq, hL', hx'⟩ := kstar_exists_path_inr (w :: L') h_nonempty hL
+      have ⟨s, q, x', hs, hq, hL', hx'⟩ := kstar_exists_path_some (w :: L') h_nonempty hL
       use none, q, none :: x'
       and_intros
       · simp [kstar]
@@ -513,6 +512,222 @@ theorem accepts_kstar : (kstar M).accepts = (M.accepts)∗ := by
         · exact hx'
 
 end kstar
+
+section toSingleεNFA
+
+variable {σ : Type*}
+variable {M : εNFA α σ}
+
+/-- The extended state space with a new start state and accept state. -/
+inductive ExtendedState (σ : Type*)
+  | start : ExtendedState σ
+  | accept : ExtendedState σ
+  | state (s : σ) : ExtendedState σ
+  deriving DecidableEq, Fintype
+
+/-- Transform any `εNFA` into an `εNFA` with a single start state and accept state. -/
+def toSingleεNFA (M : εNFA α σ) : εNFA α (ExtendedState σ) where
+  step q oa := match q, oa with
+    | .start, some _   => ∅
+    | .start, none     => (M.start).image .state
+    | .accept, _       => ∅
+    | .state s, some a => (M.step s (some a)).image .state
+    | .state s, none   =>
+      (M.step s none).image .state ∪
+      if s ∈ M.accept then { ExtendedState.accept } else ∅
+  start := { .start }
+  accept := { .accept }
+
+@[simp]
+theorem toSingleεNFA_step_start_some : M.toSingleεNFA.step .start (some a) = ∅ :=
+  rfl
+
+@[simp]
+theorem toSingleεNFA_step_start_none : M.toSingleεNFA.step .start none = (M.start).image .state :=
+  rfl
+
+@[simp]
+theorem toSingleεNFA_step_accept : M.toSingleεNFA.step .accept oa = ∅ :=
+  rfl
+
+@[simp]
+theorem toSingleεNFA_step_state_some :
+    M.toSingleεNFA.step (.state s) (some a) = (M.step s (some a)).image .state :=
+  rfl
+
+@[simp]
+theorem toSingleεNFA_step_state_none :
+    M.toSingleεNFA.step (.state s) none =
+      (M.step s none).image .state ∪
+      if s ∈ M.accept then { ExtendedState.accept } else ∅ :=
+  rfl
+
+lemma IsPath.toSingleεNFA_lift_extendedState (h : M.IsPath s t x) :
+    M.toSingleεNFA.IsPath (.state s) (.state t) x := by
+  induction h with
+  | nil _ =>
+    simp
+  | cons t' s' u oa x' h_step h_path ih =>
+    apply cons (ExtendedState.state t') (.state s') (.state u)
+    · cases oa <;> simpa
+    · exact ih
+
+lemma IsPath.from_accept (h : M.toSingleεNFA.IsPath .accept u x) :
+    u = .accept ∧ x = [] := by
+  cases h with
+  | nil =>
+    simp
+  | cons _ _ _ _ _ h_step _ =>
+    simp at h_step
+
+lemma IsPath.state_accept (h : M.toSingleεNFA.IsPath (.state s) .accept x):
+    ∃ t x', t ∈ M.accept ∧ x = x' ++ [none] ∧ M.IsPath s t x' := by
+  generalize hs : (ExtendedState.state s) = ss at h
+  generalize ha : ExtendedState.accept = a' at h
+  induction h generalizing s with
+  | nil _ =>
+    cases hs
+    cases ha
+  | cons t' s' u oa x' h_step h_path ih =>
+    subst hs ha
+    cases oa with
+    | some a =>
+      simp at h_step
+      rcases h_step with ⟨t, ht, ht'⟩
+      subst ht'
+      have ⟨t', x'', ht', hx'', h_before⟩ := ih rfl rfl
+      use t', some a :: x''
+      and_intros
+      · exact ht'
+      · simpa
+      · exact cons t s t' (some a) x'' ht h_before
+    | none =>
+      simp at h_step
+      rcases h_step with ⟨t, ht, ht'⟩ | ⟨hs, ht'⟩
+      · subst ht'
+        have ⟨t', x'', ht', hx'', h_before⟩ := ih rfl rfl
+        use t', none :: x''
+        and_intros
+        · exact ht'
+        · simpa
+        · exact cons t s t' none x'' ht h_before
+      · subst ht'
+        rcases IsPath.from_accept h_path with ⟨_, rfl⟩
+        use s, []
+        simpa
+
+theorem accepts_toSingleεNFA : M.toSingleεNFA.accepts = M.accepts := by
+  ext x
+  constructor
+  · intro h
+    apply (mem_accepts_iff_exists_path M).mpr
+    have ⟨s₁, s₂, x', hs₁, hs₂, hx, h_path⟩ := (mem_accepts_iff_exists_path (M.toSingleεNFA)).mp h
+    simp [toSingleεNFA] at hs₁ hs₂
+    subst hx hs₁ hs₂
+    cases h_path with
+    | cons t' s' u oa x'' h_step h_rest =>
+      cases oa with
+      | some a =>
+        simp at h_step
+      | none =>
+        simp at h_step
+        rcases h_step with ⟨s, hs, rfl⟩
+        have ⟨t, y, ht, hy, h_before⟩ := IsPath.state_accept h_rest
+        subst hy
+        use s, t, y
+        and_intros
+        · exact hs
+        · exact ht
+        · simp [List.reduceOption_append]
+        · exact h_before
+  · intro h
+    apply (mem_accepts_iff_exists_path (M.toSingleεNFA)).mpr
+    have ⟨s₁, s₂, x', hs₁, hs₂, hx, hx'⟩ := (mem_accepts_iff_exists_path M).mp h
+    subst hx
+    use .start, .accept, [none] ++ x' ++ [none]
+    and_intros
+    · simp [toSingleεNFA]
+    · simp [toSingleεNFA]
+    · simp [List.reduceOption_append]
+    · simp only [isPath_append]
+      use .state s₂
+      constructor
+      · use .state s₁
+        constructor
+        · simpa
+        · exact IsPath.toSingleεNFA_lift_extendedState hx'
+      · simpa
+
+end toSingleεNFA
+
+section Kleene
+
+open RegularExpression
+
+variable {σ : Type*} [Fintype σ] [DecidableEq σ]
+variable {α : Type*} [Fintype α] [DecidableEq α]
+variable {M : εNFA α (ExtendedState σ)}
+
+local notation "n" => Fintype.card (ExtendedState σ)
+
+/-- The equivalence between the extended states and a finite set of states. -/
+noncomputable def e : ExtendedState σ ≃ Fin n := Fintype.equivFin _
+
+variable (M) in
+/-- The regex for a direct edge between indices i and j. -/
+noncomputable def directRegex (i j : Fin n) : RegularExpression α :=
+  let s_i := e.symm i
+  let s_j := e.symm j
+  let char_transitions : RegularExpression α :=
+    (Finset.univ.toList).foldl (fun acc a =>
+      if s_j ∈ M.step s_i (some a) then acc + (char a) else acc
+    ) 0
+  let epsilon_transitions : RegularExpression α :=
+    if s_j ∈ M.step s_i none ∨ i = j then 1 else 0
+  char_transitions + epsilon_transitions
+
+variable (M) in
+/-- The path regex using intermediate states < k. -/
+noncomputable def pathRegex : ℕ → Fin n → Fin n → RegularExpression α
+  | 0, i, j     => directRegex M i j
+  | k + 1, i, j =>
+    if hk : k < n then
+      let k' : Fin n := ⟨k, hk⟩
+      let R_to_k := pathRegex k i k'
+      let R_loop := pathRegex k k' k'
+      let R_from := pathRegex k k' j
+      let R_old  := pathRegex k i j
+      R_to_k * R_loop.star * R_from + R_old
+    else
+      pathRegex k i j
+
+variable (M) in
+/-- A path in the NFA restricted to intermediate states < k. -/
+inductive IsRestrictedPath (k : ℕ) : Fin n → Fin n → List α → Prop
+  | direct (i j : Fin n) (x : List α) :
+      x ∈ (directRegex M i j).matches' →
+      IsRestrictedPath k i j x
+  | trans (i j m : Fin (n)) (x₁ x₂ : List α) :
+      IsRestrictedPath k i m x₁ →
+      m.val < k →
+      IsRestrictedPath k m j x₂ →
+      IsRestrictedPath k i j (x₁ ++ x₂)
+
+theorem mem_pathRegex_iff_isRestrictedPath (k : ℕ) (i j : Fin n) (w : List α) :
+    w ∈ (pathRegex M k i j).matches' ↔ IsRestrictedPath M k i j w := by
+  sorry
+
+noncomputable def toRegex (M : εNFA a σ) : RegularExpression α :=
+  sorry
+
+theorem isRestrictedPath_iff_isPath {i j : Fin n} {x : List α} :
+    IsRestrictedPath M n i j x ↔ M.IsPath (e.symm i) (e.symm j) x := by
+  sorry
+
+theorem accepts_toRegex (M : εNFA a σ) : (toRegex M).matches' = M.accepts := by
+  sorry
+
+end Kleene
 
 end εNFA
 
@@ -567,7 +782,7 @@ theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) :
 
 end Language
 
-namespace RegularExpressions
+namespace RegularExpression
 
 /-- The language matched by a regular expression is a regular language. -/
 theorem IsRegular.matches (P : RegularExpression α) : Language.IsRegular (P.matches') := by
@@ -591,4 +806,4 @@ theorem IsRegular.matches (P : RegularExpression α) : Language.IsRegular (P.mat
     simp
     exact Language.IsRegular.kstar ih
 
-end RegularExpressions
+end RegularExpression
