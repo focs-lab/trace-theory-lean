@@ -709,72 +709,53 @@ end εNFA
 
 namespace Language
 
+/-- The empty language is regular. -/
 theorem IsRegular.zero : IsRegular (0 : Language α) :=
   ⟨Unit, inferInstance, ⟨fun _ _ => (), (), {}⟩, rfl⟩
 
+/-- The language of only the empty string is regular. -/
 theorem IsRegular.one : IsRegular (1 : Language α) :=
   ⟨Option Unit, inferInstance, DFA.epsilon, DFA.accepts_epsilon⟩
 
+/-- The language of all strings over an alpabet is regular. -/
 theorem IsRegular.top : IsRegular (⊤ : Language α) := by
   rw [← compl_bot, bot_eq_zero]
   apply IsRegular.compl
   exact IsRegular.zero
 
+/-- The language of only a single symbol is regular. -/
 theorem IsRegular.singleton {a : α} : IsRegular ({ [a] }) := by
   classical
   exact ⟨Option Bool, inferInstance, DFA.char a, DFA.accepts_char⟩
 
-theorem IsRegular.mul {L₁ L₂ : Language α}
-    (h₁ : IsRegular L₁) (h₂ : IsRegular L₂) :
+/-- Regular languages are closed under concatenation. -/
+theorem IsRegular.mul {L₁ L₂ : Language α} (h₁ : IsRegular L₁) (h₂ : IsRegular L₂) :
     IsRegular (L₁ * L₂) := by
+  classical
   have ⟨σ₁, _, M₁, hM₁⟩ := h₁
   have ⟨σ₂, _, M₂, hM₂⟩ := h₂
-  let N₁ := M₁.toNFA.toεNFA
-  let N₂ := M₂.toNFA.toεNFA
-  let N := εNFA.concat N₁ N₂
-  apply isRegular_iff.mpr
-  use Set (σ₁ ⊕ σ₂), inferInstance, N.toNFA.toDFA
-  subst hM₁ hM₂
-  rw [NFA.toDFA_correct, εNFA.toNFA_correct]
-  rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
-  rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
-  exact εNFA.accepts_concat
+  let M := εNFA.concat M₁.toNFA.toεNFA M₂.toNFA.toεNFA
+  exact ⟨Set (σ₁ ⊕ σ₂), inferInstance, M.toNFA.toDFA, by aesop⟩
 
-theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular (L∗) := by
+/-- Regular languages are closed under Kleene star. -/
+theorem IsRegular.kstar {L : Language α} (h : IsRegular L) : IsRegular L∗ := by
+  classical
   have ⟨σ, _, M, hM⟩ := h
-  let N₁ := M.toNFA.toεNFA
-  let N := εNFA.kstar N₁
-  apply isRegular_iff.mpr
-  use Set (Option σ), inferInstance, N.toNFA.toDFA
-  subst hM
-  rw [NFA.toDFA_correct, εNFA.toNFA_correct]
-  rw [← DFA.toNFA_correct, ← NFA.toεNFA_correct]
-  exact εNFA.accepts_kstar
+  let M := εNFA.kstar M.toNFA.toεNFA
+  exact ⟨Set (Option σ), inferInstance, M.toNFA.toDFA, by aesop⟩
 
 end Language
 
 namespace RegularExpression
 
 /-- The language matched by a regular expression is a regular language. -/
-theorem IsRegular.matches (P : RegularExpression α) : Language.IsRegular (P.matches') := by
+theorem IsRegular.matches' (P : RegularExpression α) : Language.IsRegular (P.matches') := by
   induction P with
-  | zero =>
-    simp
-    exact Language.IsRegular.zero
-  | epsilon =>
-    simp
-    exact Language.IsRegular.one
-  | char =>
-    simp
-    exact Language.IsRegular.singleton
-  | plus _ _ ih₁ ih₂ =>
-    simp
-    exact Language.IsRegular.add ih₁ ih₂
-  | comp _ _ ih₁ ih₂ =>
-    simp
-    exact Language.IsRegular.mul ih₁ ih₂
-  | star _ ih =>
-    simp
-    exact Language.IsRegular.kstar ih
+  | zero             => simp [Language.IsRegular.zero]
+  | epsilon          => simp [Language.IsRegular.one]
+  | char             => simp [Language.IsRegular.singleton]
+  | plus _ _ ih₁ ih₂ => simp only [RegularExpression.matches', Language.IsRegular.add ih₁ ih₂]
+  | comp _ _ ih₁ ih₂ => simp [Language.IsRegular.mul ih₁ ih₂]
+  | star _ ih        => simp [Language.IsRegular.kstar ih]
 
 end RegularExpression
