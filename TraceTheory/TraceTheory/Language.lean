@@ -106,7 +106,7 @@ theorem isLexNf_iff_factorCondition (I : Independence α) (x : List α) :
 
 open Computability
 
-variable (I : Independence α) [DecidableEq α] [Fintype α] [DecidableRel I.rel]
+variable (I : Independence α) [Fintype α] [DecidableRel I.rel]
 
 /-- A single symbol. -/
 def Letter (a : α) : Language α :=
@@ -134,7 +134,7 @@ def AllForbiddenPatterns : Language α :=
 def LexNfLanguage : Language α :=
   (AllForbiddenPatterns I)ᶜ
 
-omit [DecidableEq α] [LinearOrder α] in
+omit [LinearOrder α] in
 lemma isRegular_independentLetters (a : α) : Language.IsRegular (IndependentLetters I a) := by
   unfold IndependentLetters
   apply Finset.sum_induction
