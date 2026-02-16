@@ -714,10 +714,8 @@ theorem mem_pathRegex_iff_isRestrictedPath (k : ℕ) (i j : Fin n) (w : List α)
 noncomputable def toRegex (M : εNFA α σ) : RegularExpression α :=
   pathRegex M.toSingleεNFA n (e .start) (e .accept)
 
-#check And.intro
-
 omit [DecidableEq σ] [DecidableEq α] in
-theorem isRestrictedPath_iff_isPath {i j : Fin n} {x : (List α)} :
+theorem isRestrictedPath_iff_exists_isPath {i j : Fin n} {x : (List α)} :
     IsRestrictedPath M n i j x ↔
     ∃ y : List (Option α),
       M.IsPath (e.symm i) (e.symm j) y ∧
@@ -793,7 +791,22 @@ theorem isRestrictedPath_iff_isPath {i j : Fin n} {x : (List α)} :
       · exact ih (Equiv.symm_apply_apply _ _) rfl
 
 theorem accepts_toRegex (M : εNFA α σ) : (toRegex M).matches' = M.accepts := by
-  sorry
+  ext x
+  unfold toRegex
+  rw [mem_pathRegex_iff_isRestrictedPath, isRestrictedPath_iff_exists_isPath,
+    ← accepts_toSingleεNFA]
+  simp only [Equiv.symm_apply_apply]
+  constructor
+  · intro h
+    rcases h with ⟨y, h_path, rfl⟩
+    rw [mem_accepts_iff_exists_path]
+    use ExtendedState.start, ExtendedState.accept, y
+    simp_all [toSingleεNFA]
+  · intro h
+    rw [mem_accepts_iff_exists_path] at h
+    rcases h with ⟨s, t, y, hs, ht, rfl, h_path⟩
+    subst hs ht
+    use y
 
 end Kleene
 
