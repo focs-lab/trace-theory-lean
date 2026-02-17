@@ -686,16 +686,43 @@ inductive IsRestrictedPath (k : ℕ) : Fin n → Fin n → List α → Prop
       IsRestrictedPath k i j (x₁ ++ x₂)
 
 omit [DecidableEq σ] [DecidableEq α] [Nonempty α] in
-lemma IsRestrictedPath.mono {k k' : ℕ} (h_le : k ≤ k') {i j : Fin n} {w : List α}
-    (h : IsRestrictedPath M k i j w) : IsRestrictedPath M k' i j w := by
+lemma IsRestrictedPath.mono {k k' : ℕ} {i j : Fin n} {w : List α}
+    (h : IsRestrictedPath M k i j w) (hle : k ≤ k') : IsRestrictedPath M k' i j w := by
   induction h with
   | direct i' j' x hx => exact direct i' j' x hx
-  | trans i' j' m x₁ x₂ _ h_lt _ ih₁ ih₂ =>
-    exact trans i' j' m x₁ x₂ ih₁ (lt_of_lt_of_le h_lt h_le) ih₂
+  | trans i' j' m x₁ x₂ _ hlt _ ih₁ ih₂ =>
+    exact trans i' j' m x₁ x₂ ih₁ (lt_of_lt_of_le hlt hle) ih₂
 
+omit [DecidableEq σ] [DecidableEq α] [Nonempty α] in
+lemma IsRestrictedPath.pathRegex_kstar {k : Fin n} {w : List α}
+    (h : w ∈ (pathRegex M k k k).matches'∗)
+    (h_part : ∀ x, x ∈ (pathRegex M k k k).matches' → IsRestrictedPath M k k k x) :
+    IsRestrictedPath M (k + 1) k k w := by
+  rw [Language.mem_kstar] at h
+  rcases h with ⟨L, hL, hy⟩
+  induction L generalizing w with
+  | nil =>
+    cases hL
+    apply IsRestrictedPath.direct
+    simp only [directRegex, or_true, ↓reduceIte, matches', matches'_foldl_sum, Finset.mem_sort,
+      Finset.mem_univ, iUnion_true, add_eq_sup, List.flatten_nil]
+    right
+    simp [Language.one_def]
+  | cons a L' ih =>
+    rw [List.flatten_cons] at hL
+    subst hL
+    apply IsRestrictedPath.trans k k k
+    · simp only [List.mem_cons, forall_eq_or_imp] at hy
+      exact IsRestrictedPath.mono (h_part a hy.left) (by simp)
+    · simp
+    · apply ih rfl
+      simp only [List.mem_cons, forall_eq_or_imp] at hy
+      exact hy.right
+
+omit [DecidableEq σ] [DecidableEq α] [Nonempty α] in
 theorem mem_pathRegex_iff_isRestrictedPath (k : ℕ) (i j : Fin n) (w : List α) :
     w ∈ (pathRegex M k i j).matches' ↔ IsRestrictedPath M k i j w := by
-  induction k generalizing i j with
+  induction k generalizing i j w with
   | zero =>
     constructor
     · intro h
@@ -706,11 +733,146 @@ theorem mem_pathRegex_iff_isRestrictedPath (k : ℕ) (i j : Fin n) (w : List α)
       | direct _ _ _ hx => simp_all
       | trans _ _ m _ _ _ hlt => cases m; simp_all
   | succ k' ih =>
-    simp
+    simp only [pathRegex]
     split_ifs with hk'
-    · sorry
-    · sorry
+    · simp only [matches'_add, matches'_mul, matches'_star]
+      constructor
+      · intro h
+        rcases h with ⟨a, ⟨c, hc, d, hd, rfl⟩, b, hb, rfl⟩ | h
+        · rw [ih] at hb hc
+          apply IsRestrictedPath.trans i j ⟨k', hk'⟩
+          · apply IsRestrictedPath.trans i ⟨k', hk'⟩ ⟨k', hk'⟩
+            · exact IsRestrictedPath.mono hc (by simp)
+            · simp
+            · apply IsRestrictedPath.pathRegex_kstar (k := ⟨k', hk'⟩) hd
+              simp_all
+          · simp
+          · exact IsRestrictedPath.mono hb (by simp)
+        · rw [ih] at h
+          exact IsRestrictedPath.mono h (by simp)
+      · intro h
+        induction h with
+        | direct i' j' x hx =>
+          right
+          rw [ih]
+          exact IsRestrictedPath.direct i' j' x hx
+        | trans i' j' m x₁ x₂ h₁ hlt h₂ ih₁ ih₂ =>
+          simp only [Language.mem_add, Language.mem_mul]
+          rcases lt_or_eq_of_le (Nat.le_of_lt_succ hlt) with hmk | hmk
+          · rcases ih₁ with ⟨a1, ⟨c1, hc1, d1, hd1, rfl⟩, b1, hb1, rfl⟩ | h1_old
+            <;> rcases ih₂ with ⟨a2, ⟨c2, hc2, d2, hd2, rfl⟩, b2, hb2, rfl⟩ | h2_old
+            · simp only [List.append_assoc, ↓existsAndEq, and_true] at *
+              left
+              use c1, d1 ++ b1 ++ c2 ++ d2
+              and_intros
+              · exact hc1
+              · rcases hd1 with ⟨L₁, hL₁, hy₁⟩
+                rcases hd2 with ⟨L₂, hL₂, hy₂⟩
+                subst hL₁ hL₂
+                use L₁ ++ [b1 ++ c2] ++ L₂
+                simp only [List.append_assoc, List.cons_append, List.nil_append,
+                  List.flatten_append, List.flatten_cons, List.mem_append, List.mem_cons, true_and]
+                rintro z (hz | hz | hz)
+                · exact hy₁ z hz
+                · subst hz
+                  rw [ih] at hb1 hc2 ⊢
+                  exact IsRestrictedPath.trans ⟨k', hk'⟩ ⟨k', hk'⟩ m b1 c2 hb1 hmk hc2
+                · exact hy₂ z hz
+              · use b2
+                simpa
+            · simp only [List.append_assoc, ↓existsAndEq, and_true] at *
+              left
+              use c1, d1
+              and_intros
+              · exact hc1
+              · exact hd1
+              · use b1 ++ x₂
+                constructor
+                · rw [ih] at hb1 h2_old ⊢
+                  exact IsRestrictedPath.trans ⟨k', hk'⟩ j' m b1 x₂ hb1 hmk h2_old
+                · rfl
+            · simp only [List.append_assoc, ↓existsAndEq, and_true] at *
+              left
+              use x₁ ++ c2, d2
+              and_intros
+              · rw [ih] at h1_old hc2 ⊢
+                exact IsRestrictedPath.trans i' ⟨k', hk'⟩ m x₁ c2 h1_old hmk hc2
+              · exact hd2
+              · use b2
+                simpa
+            · right
+              rw [ih] at h1_old h2_old ⊢
+              exact IsRestrictedPath.trans i' j' m x₁ x₂ h1_old hmk h2_old
+          · subst hmk
+            left
+            rcases ih₁ with ⟨a1, ⟨c1, hc1, d1, hd1, rfl⟩, b1, hb1, rfl⟩ | h1_old
+            <;> rcases ih₂ with ⟨a2, ⟨c2, hc2, d2, hd2, rfl⟩, b2, hb2, rfl⟩ | h2_old
+            · simp only [lt_add_iff_pos_right, zero_lt_one, Fin.eta, List.append_assoc,
+                ↓existsAndEq, and_true] at *
+              use c1, d1 ++ b1 ++ c2 ++ d2
+              and_intros
+              · exact hc1
+              · rcases hd1 with ⟨L₁, hL₁, hy₁⟩
+                rcases hd2 with ⟨L₂, hL₂, hy₂⟩
+                subst hL₁ hL₂
+                use L₁ ++ [b1] ++ [c2] ++ L₂
+                simp only [List.append_assoc, List.cons_append, List.nil_append,
+                  List.flatten_append, List.flatten_cons, List.mem_append, List.mem_cons, true_and]
+                rintro z (hz | hz | hz | hz)
+                · exact hy₁ z hz
+                · simp_all
+                · simp_all
+                · exact hy₂ z hz
+              · use b2
+                simpa
+            · simp only [lt_add_iff_pos_right, zero_lt_one, Fin.eta, List.append_assoc,
+                ↓existsAndEq, and_true] at *
+              use c1, d1 ++ b1
+              and_intros
+              · exact hc1
+              · rcases hd1 with ⟨L, hL, hy⟩
+                subst hL
+                use L ++ [b1]
+                simp only [List.flatten_append, List.flatten_cons, List.flatten_nil,
+                  List.append_nil, List.mem_append, List.mem_cons, List.not_mem_nil, or_false,
+                  true_and]
+                rintro z (hz | hz)
+                · exact hy z hz
+                · simp_all
+              · use x₂
+                simpa
+            · simp only [lt_add_iff_pos_right, zero_lt_one, Fin.eta, List.append_assoc,
+                ↓existsAndEq, and_true] at *
+              use x₁, c2 ++ d2
+              and_intros
+              · exact h1_old
+              · rcases hd2 with ⟨L, hL, hy⟩
+                subst hL
+                use [c2] ++ L
+                simp_all
+              · use b2
+                simpa
+            · use x₁
+              constructor
+              · use x₁
+                simp only [Fin.eta, List.append_right_eq_self, exists_eq_right]
+                constructor
+                · exact h1_old
+                · use []
+                  simp
+              · use x₂
+    · rw [ih]
+      simp at hk'
+      constructor
+      · intro h
+        exact IsRestrictedPath.mono h (by simp)
+      · intro h
+        induction h with
+        | direct i' j' x hx => exact IsRestrictedPath.direct i' j' x hx
+        | trans i' j' m x₁ x₂ _ h_lt _ ih₁ ih₂ =>
+          exact IsRestrictedPath.trans i' j' m x₁ x₂ ih₁ (lt_of_lt_of_le m.isLt hk') ih₂
 
+/-- The regular expression that matches the language of `M`. -/
 noncomputable def toRegex (M : εNFA α σ) : RegularExpression α :=
   pathRegex M.toSingleεNFA n (e .start) (e .accept)
 
