@@ -5,13 +5,7 @@ namespace Trace
 
 variable {α : Type} {I : Independence α}
 
-lemma foldl_append_eq (a : List α) (bs : List (List α)) :
-    List.foldl List.append a bs = a ++ List.foldl List.append [] bs := by
-  induction bs using List.reverseRecOn with
-  | nil => simp
-  | append_singleton bsuf b ih => simp [ih]
-
-lemma indep_of_foldl {u : List α} {vs : List (List α)} (i : Fin vs.length) (h : independent I u (vs.foldl List.append [])) :
+lemma indep_of_flatten {u : List α} {vs : List (List α)} (i : Fin vs.length) (h : independent I u vs.flatten) :
     independent I u vs[i] := by
   replace ⟨i, hi⟩ := i
   induction vs generalizing i with
@@ -19,7 +13,6 @@ lemma indep_of_foldl {u : List α} {vs : List (List α)} (i : Fin vs.length) (h 
     simp at hi
   | cons v vs' ih =>
     simp at h ⊢
-    rw [foldl_append_eq] at h
     cases i with
     | zero => exact (indep_of_concat h).left
     | succ i =>
@@ -29,12 +22,12 @@ lemma indep_of_foldl {u : List α} {vs : List (List α)} (i : Fin vs.length) (h 
 /-- (i) → (ii) of Corollary (2.3) in `Partial Commutation and Traces`.
   Note that t₁, t₂, …, tₙ is expressed as a list [ts], and (t₁ ++ t₂ ++ … ++ tₙ) via [ts.foldl].
   Similarly, p₁, …, pₙ is [ps] and q₁, …, qₙ is [qs]. -/
-theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h : TraceEquiv I (u ++ v) (ts.foldl List.append [])) :
+theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h : TraceEquiv I (u ++ v) ts.flatten) :
     ∃ (ps qs : List (List α)),
     ps.length = ts.length
     ∧ qs.length = ts.length
-    ∧ TraceEquiv I u (ps.foldl List.append [])
-    ∧ TraceEquiv I v (qs.foldl List.append [])
+    ∧ TraceEquiv I u ps.flatten
+    ∧ TraceEquiv I v qs.flatten
     ∧ (∀ i : Fin (min ts.length (min ps.length qs.length)), TraceEquiv I ts[i] (ps[i] ++ qs[i]))
     ∧ ∀ i : Fin qs.length, ∀ j : Fin ps.length, i.val < j.val → independent I qs[i] ps[j] := by
   induction ts generalizing u v with
@@ -46,12 +39,7 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
     intro ⟨i, hi⟩
     simp at hi
   | cons t tsuf ih =>
-    have equiv_split : TraceEquiv I (u ++ v) (t ++ (tsuf.foldl List.append [])) := by
-      unfold List.foldl at h
-      simp at h
-      rw [foldl_append_eq _ _] at h
-      exact h
-    have ⟨p, psuf, q, qsuf, h_ind, h_up, h_vq, h_tpq, h_tpq_suf⟩ := levi_lemma equiv_split
+    have ⟨p, psuf, q, qsuf, h_ind, h_up, h_vq, h_tpq, h_tpq_suf⟩ := levi_lemma h
     replace ih := ih psuf qsuf h_tpq_suf.symm
     have ⟨ps_i, qs_i, ih_p_len, ih_q_len, ih_p, ih_q, ih_tpq, ih_ind⟩ := ih
     clear ih
@@ -61,11 +49,9 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
     · simp [ih_q_len]
     · apply TraceEquiv.trans h_up
       simp
-      rw [foldl_append_eq]
       exact TraceEquiv.compat (TraceEquiv.refl p) ih_p
     · apply TraceEquiv.trans h_vq
       simp
-      rw [foldl_append_eq]
       exact TraceEquiv.compat (TraceEquiv.refl q) ih_q
     · intro ⟨i, hi⟩
       by_cases hzi : i = 0
@@ -83,7 +69,7 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
         | zero =>
           simp at hj ⊢
           have h_ind_ps := indep_of_indep_of_equiv (indep_symm h_ind) ih_p
-          exact indep_of_foldl ⟨j, hj⟩ h_ind_ps
+          exact indep_of_flatten ⟨j, hj⟩ h_ind_ps
         | succ i =>
           simp at hi hj hij ⊢
           exact ih_ind ⟨i, hi⟩ ⟨j, hj⟩ hij
@@ -221,7 +207,6 @@ theorem recognizableDFMA_is_recognizable (S : Set M) :
     exact hm'
 
 
-
 variable {T : Set M}
 
 def syntacticCongr (T : Set M) (x y : M) := ∀ u v : M, u * x * v ∈ T ↔ u * y * v ∈ T
@@ -306,7 +291,7 @@ theorem recognizable_is_finSyntacticIndex :
     IsRecognizable T → Finite (syntacticMonoid T) := by
   unfold IsRecognizable
   intro ⟨N, N_mon, N_fin, N_dec, φ, h⟩
-  have : ∀ a b, φ a = φ b → syntacticCongr T a b := by
+  have h_img_syn : ∀ a b, φ a = φ b → syntacticCongr T a b := by
     intro a b hab u v
     rw [h]
     simp [hab]
@@ -318,9 +303,98 @@ theorem recognizable_is_finSyntacticIndex :
     rw [<- hm]
     apply Quotient.sound
     intro u v
-    apply this
+    apply h_img_syn
     have hm : φ m ∈ ⇑φ '' Set.univ := Set.mem_image_of_mem (⇑φ) trivial
     exact (Classical.choose_spec hm).2
   exact Finite.of_surjective f f_surj
+
+/-- Prop 4.1 (i) => (iv) -/
+theorem recognizable_has_recognizablePreImage (L : Type) [Monoid L] (φ : L →* M) :
+    IsRecognizable T → IsRecognizable (φ ⁻¹' T) := by
+  intro h
+  unfold IsRecognizable at h ⊢
+  rcases h with ⟨N, N_mon, N_fin, N_dec, ψ, hψ⟩
+  use N, N_mon, N_fin, N_dec
+  use {
+    toFun := ψ ∘ φ
+    map_one' := by simp
+    map_mul' := by simp
+  }
+  simp
+  ext x
+  apply Iff.intro
+  · intro hx
+    rw [Set.mem_preimage] at hx
+    rw [Set.mem_preimage, Set.mem_image]
+    use x
+    simp [hx]
+  · intro hx
+    rw [Set.mem_preimage, Set.mem_image] at hx
+    obtain ⟨y, hy, h⟩ := hx
+    have hφy : φ y ∈ T := by rwa [Set.mem_preimage] at hy
+    have : ψ (φ x) ∈ ψ '' T := by
+      rw [Set.mem_image]
+      exact ⟨φ y, hφy, h⟩
+    have : φ x ∈ ψ ⁻¹' (ψ '' T) := by rwa [Set.mem_preimage]
+    rw [← hψ] at this
+    rw [Set.mem_preimage]
+    exact this
+
+noncomputable def preImage_syntacticMonoid_iso (L : Type) [Monoid L] (φ : L →* M) (hφ : Function.Surjective φ) :
+    syntacticMonoid (φ ⁻¹' T) ≃* syntacticMonoid T := by
+  refine ⟨?_, ?_⟩
+  · refine ⟨?_, ?_, ?_, ?_⟩
+    · exact Quotient.lift (fun l => ⟦φ l⟧) (by
+        intro a b hab
+        simp
+        apply Quotient.sound
+        intro u v
+        have ⟨u', hu'⟩ := hφ u
+        have ⟨v', hv'⟩ := hφ v
+        replace hab := hab u' v'
+        rw [Set.mem_preimage] at hab
+        simp [hu', hv'] at hab
+        exact hab
+      )
+    · exact Quotient.lift (fun m => ⟦Classical.choose (hφ m)⟧) (by
+        intro a b hab
+        simp
+        apply Quotient.sound
+        intro u v
+        simp [Set.mem_preimage]
+        rw [Classical.choose_spec (hφ a), Classical.choose_spec (hφ b)]
+        exact hab (φ u) (φ v)
+      )
+    · intro x
+      rcases x
+      rename_i l
+      simp
+      apply Quotient.sound
+      intro u v
+      simp [Set.mem_preimage]
+      rw [Classical.choose_spec (hφ (φ l))]
+    · intro x
+      rcases x
+      rename_i m
+      simp
+      apply Quotient.sound
+      intro u v
+      rw [Classical.choose_spec (hφ m)]
+  · intro x y
+    rcases x
+    rcases y
+    rename_i l₁ l₂
+    apply Quotient.sound
+    intro u v
+    rw [MonoidHom.map_mul φ l₁ l₂]
+
+/-- Prop 4.1 (iv) => (i) -/
+theorem recognizablePreImage_is_recognizable (L : Type) [Monoid L] (φ : L →* M) (hφ : Function.Surjective φ) :
+    IsRecognizable (φ ⁻¹' T) → IsRecognizable T := by
+  intro h
+  apply recognizable_is_finSyntacticIndex at h
+  apply finSyntacticIndex_is_recognizable
+  have ψ := @preImage_syntacticMonoid_iso M _ T L _ φ hφ
+  exact ψ.finite_iff.mp h
 
 end Trace
