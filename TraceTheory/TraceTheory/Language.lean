@@ -6,6 +6,8 @@ import TraceTheory.Computability
 
 namespace TraceTheory
 
+section LexNf
+
 variable {α : Type} [LinearOrder α]
 
 /-- Lexicographic Normal Form.
@@ -168,3 +170,65 @@ lemma isRegular_allForbiddenPatterns : Language.IsRegular (AllForbiddenPatterns 
 theorem isRegular_lexNf : Language.IsRegular (LexNfLanguage I) := by
   apply Language.IsRegular.compl
   apply isRegular_allForbiddenPatterns
+
+end LexNf
+
+section rank
+
+variable {α : Type} {I : Independence α}
+
+/-- The `Language` of all strings trace equivalent to strings in language `X`. -/
+def traceClosure (I : Independence α) (X : Language α) : Language α :=
+  { y | ∃ x ∈ X, TraceEquiv I x y }
+
+/-- A language is `I`-closed if its trace closure under `I` is equal to itself. -/
+def IsClosed (I : Independence α) (X : Language α) : Prop :=
+  traceClosure I X = X
+
+theorem traceClosure.le_closure {X : Language α} : X ≤ traceClosure I X := by
+  intro x hx
+  exact ⟨x, hx, TraceEquiv.refl x⟩
+
+theorem traceClosure.mono {X Y : Language α} (h : X ≤ Y) :
+    traceClosure I X ≤ traceClosure I Y := by
+  intro x hx
+  rcases hx with ⟨w, hw, heqv⟩
+  exact ⟨w, h hw, heqv⟩
+
+theorem traceClosure.idem {X : Language α} :
+    traceClosure I (traceClosure I X) = traceClosure I X := by
+  apply le_antisymm
+  · intro x hx
+    rcases hx with ⟨y, ⟨z, hz, heqv_zy⟩, heqv_yx⟩
+    exact ⟨z, hz, TraceEquiv.trans heqv_zy heqv_yx⟩
+  · apply mono
+    apply le_closure
+
+/-- Helper to define rank. -/
+def IsValidFactorization
+    (I : Independence α) (X : Language α) (x y : List α) (xs ys : List (List α)) : Prop :=
+  xs.length = ys.length ∧
+  (List.zipWith (· ++ ·) xs ys).flatten ∈ X ∧
+  TraceEquiv I x xs.flatten ∧
+  TraceEquiv I y ys.flatten ∧
+  ∀ i : ℕ, ∀ (h : i + 1 < xs.length),
+    Independent I (xs[i]'(Nat.lt_of_succ_lt h)) ((ys.drop i).flatten)
+
+/-- Predicate for language `X` having rank at most `k`. -/
+def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
+  ∀ x y : List α, (x ++ y) ∈ traceClosure I X →
+    ∃ xs ys : List (List α),
+      xs.length ≤ k + 1 ∧
+      IsValidFactorization I X x y xs ys
+
+/-- Predicate for language `X` having finite rank. -/
+def HasFiniteRank (I : Independence α) (X : Language α) : Prop :=
+  ∃ k : ℕ, HasRankAtMost I X k
+
+theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h₂ : IsClosed I X₂) :
+    HasRankAtMost I (X₁ * X₂) 1 := by
+  sorry
+
+end rank
+
+end TraceTheory
