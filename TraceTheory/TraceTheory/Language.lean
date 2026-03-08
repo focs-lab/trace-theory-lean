@@ -1,4 +1,5 @@
 import TraceTheory.Trace
+import Mathlib.Computability.RegularExpressions
 import Mathlib.Data.Finset.Pi
 
 namespace Trace
@@ -263,11 +264,12 @@ instance : Monoid (syntacticMonoid T) where
     intro u v
     rfl
 
+
 /-- Prop 4.1 (ii) => (i) -/
 theorem finSyntacticIndex_is_recognizable :
     Finite (syntacticMonoid T) → IsRecognizable T := by
   intro h
-  use syntacticMonoid T, by infer_instance, Fintype.ofFinite _, sorry
+  use syntacticMonoid T, by infer_instance, Fintype.ofFinite _, Classical.typeDecidableEq (syntacticMonoid T)
   use {
     toFun := fun m => ⟦m⟧
     map_one' := by rfl
@@ -396,5 +398,418 @@ theorem recognizablePreImage_is_recognizable (L : Type) [Monoid L] (φ : L →* 
   apply finSyntacticIndex_is_recognizable
   have ψ := @preImage_syntacticMonoid_iso M _ T L _ φ hφ
   exact ψ.finite_iff.mp h
+
+
+--def langOf (t : List α) : Language α := {t}
+--def kstar (L : Language α) : Language α := L∗
+
+variable {α : Type} {I : Independence α}
+
+def alph_mem (a : α) (t : Trace I) :=
+  Quotient.lift (fun (s : List α) => a ∈ s) (by intro u v h; simp; exact mem_iff_mem a h) t
+
+infixl:65 " ∈ " => alph_mem
+
+/-- The Dependence relation induced by an Independence `I`. -/
+def inducedDependence {α : Type} (I : Independence α) : Dependence α where
+  rel := fun a b => ¬ I.rel a b
+  refl := by
+    intro a
+    exact I.irrefl a
+  symm := by
+    intro a b hab hba
+    exact hab (I.symm b a hba)
+
+
+def isConnected' (s : List α) := ∀ a ∈ s, ∀ b ∈ s, (Relation.TransGen (inducedDependence I).rel) a b
+
+def isConnected (t : Trace I) := ∀ a b : α, a ∈ t ∧ b ∈ t → (Relation.TransGen (inducedDependence I).rel) a b
+
+def isIterativeFactor (X : Language α) (t : List α) :=
+    ∃ u v, ∀ (ts : List (List α)), (∀ t' ∈ ts, t' = t) → u ++ ts.flatten ++ v ∈ X
+
+def toTrace (X : Language α) : Set (Trace I) := (fun s => ⟦s⟧) '' X
+
+--@[simp]
+--lemma mul_canonical {a b : Trace I} : mul a b = a * b := by rfl
+
+@[simp]
+lemma left_id (t : Trace I) : mul ⟦[]⟧ t = t := by
+  rcases t
+  rfl
+
+@[simp]
+lemma right_id (t : Trace I) : mul t ⟦[]⟧ = t := by
+  rcases t
+  simp
+  rfl
+
+@[simp]
+lemma left_id' (t : Trace I) : mk' [] * t = t := by
+  rcases t
+  rfl
+
+@[simp]
+lemma right_id' (t : Trace I) : t * mk' [] = t := by
+  rw [show t * (mk' []) = mul t ⟦[]⟧ from rfl]
+  exact right_id t
+
+namespace RegularExpression
+
+def isStarConnected (I : Independence α) : RegularExpression α → Prop
+  | 0 => True
+  | 1 => True
+  | RegularExpression.char _ => True
+  | P + Q => isStarConnected I P ∧ isStarConnected I Q
+  | P * Q => isStarConnected I P ∧ isStarConnected I Q
+  | RegularExpression.star P => isStarConnected I P ∧ (∀ s ∈ P.matches', @isConnected' α I s)
+
+def matches_trace (I : Independence α) : RegularExpression α → Set (Trace I)
+  | 0 => {}
+  | 1 => {⟦[]⟧}
+  | RegularExpression.char a => {⟦[a]⟧}
+  | P + Q => (matches_trace I P) ∪ (matches_trace I Q)
+  | P * Q => {t | ∃ p : (matches_trace I P), ∃ q : (matches_trace I Q), t = p * q}
+  | RegularExpression.star P => {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ matches_trace I P) ∧ r = ts.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧}
+
+lemma matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTrace P.matches' := by
+  induction P with
+  | zero => simp [toTrace, matches_trace, Language.zero_def]
+  | epsilon => simp [toTrace, matches_trace, Language.one_def]
+  | char a =>
+    simp [toTrace, matches_trace, Set.image]
+    apply Set.ext_iff.mpr
+    intro t
+    apply Iff.intro
+    · simp
+      intro h
+      use [a]
+      exact ⟨rfl, Eq.symm h⟩
+    · simp
+      intro x hx hat
+      replace hx : x = [a] := hx
+      rw [<- hat, hx]
+  | plus P Q ihP ihQ =>
+    unfold matches_trace RegularExpression.matches'
+    simp [ihP, ihQ]
+    apply Set.ext_iff.mpr
+    intro t
+    apply Iff.intro
+    · intro h
+      cases h
+      all_goals
+        rename_i h
+        simp [toTrace] at h
+        have ⟨x, hx⟩ := h
+        use x
+        simp [hx, Language.add_def]
+    · intro h
+      simp [Language.add_def, toTrace] at h
+      have ⟨x, ⟨hx, hxt⟩⟩ := h
+      simp [<- hxt, toTrace]
+      cases hx with
+      | inl hx => apply Or.inl; use x
+      | inr hx => apply Or.inr; use x
+  | comp P Q ihP ihQ =>
+    unfold matches_trace RegularExpression.matches' toTrace
+    rw [Set.image]
+    apply Set.ext_iff.mpr
+    intro t
+    apply Iff.intro
+    all_goals simp
+    · simp [ihP, ihQ, toTrace]
+      intro u hu v hv ht
+      simp [Language.mul_def]
+      use u; simp [hu]
+      use v; simp [hv]
+      rw [ht]
+      rfl
+    · simp [Language.mul_def]
+      intro w u hu v hv hw ht
+      simp [ihP, ihQ, toTrace]
+      use u; simp [hu]
+      use v; simp [hv]
+      rw [<- ht, <- hw]
+      rfl
+  | star P ih =>
+    unfold matches_trace RegularExpression.matches' toTrace
+    simp [Language.kstar_def, Set.image, ih, toTrace]
+    apply Set.ext_iff.mpr
+    intro t
+    apply Iff.intro
+    all_goals simp
+    · intro ts hts ht
+      induction ts generalizing t with
+      | nil =>
+        use []
+        simp at ht
+        simp [ht]
+        use []
+        simp
+      | cons head ts ih =>
+        simp at ih
+        have ih_cond : ∀ t' ∈ ts, ∃ a ∈ P.matches', ⟦a⟧ = t' := by
+          intro t' ht'
+          exact hts t' (List.mem_cons_of_mem head ht')
+        have ⟨a, ⟨⟨ls, ha, hls⟩, hat⟩⟩ := ih ih_cond
+        rw [show ⟦[]⟧ = mk' [] from rfl] at ht
+        rw [List.foldl, Trace.left_id', <- Trace.right_id' head, List.foldl_assoc] at ht
+        rcases head
+        rename_i w₀
+        have ⟨w, hw⟩ := hts ⟦w₀⟧ List.mem_cons_self
+        use w ++ a
+        apply And.intro
+        · use w :: ls
+          simp [ha, hw]
+          exact hls
+        · rw [ht, show ⟦w ++ a⟧ = mul ⟦w⟧ ⟦a⟧ from rfl, hat, hw.2]
+          rfl
+    · intro w ws hw hws ht
+      induction ws generalizing w t with
+      | nil =>
+        use []
+        simp at hw ⊢
+        rw [<- hw, ht]
+      | cons u us ih =>
+        simp at ih
+        have ih_cond : ∀ y ∈ us, y ∈ P.matches' := by
+          intro y hy
+          exact hws y (List.mem_cons_of_mem u hy)
+        have ⟨ts, ⟨hts, h_eqs⟩⟩ := ih ih_cond
+        use ⟦u⟧ :: ts
+        simp
+        repeat apply And.intro
+        · use u
+          simp [hws u List.mem_cons_self]
+        · exact hts
+        · rw [<- ht, hw]
+          simp
+          rw [show ⟦u ++ us.flatten⟧ = mul ⟦u⟧ ⟦us.flatten⟧ from rfl]
+          rw [show ⟦[]⟧ = mk' [] from rfl]
+          rw [Trace.left_id']
+          nth_rw 2 [<- Trace.right_id' ⟦u⟧]
+          rw [List.foldl_assoc]
+          rw [h_eqs]
+          rfl
+
+
+@[simp]
+lemma matches_toTrace_dist (P Q : RegularExpression α) :
+    @toTrace α I (P.matches' + Q.matches') = toTrace P.matches' ∪ toTrace Q.matches' := by
+  rw [show P.matches' + Q.matches' = (P + Q).matches' from rfl]
+  repeat rw [<- RegularExpression.matches_toTrace]
+  simp [RegularExpression.matches_trace]
+
+
+end RegularExpression
+
+lemma empty_is_starConnected (X : RegularExpression α) (h : ¬ ∃s, s ∈ X.matches') :
+    RegularExpression.isStarConnected I X := by
+  induction X with
+  | zero => trivial
+  | epsilon => trivial
+  | char a => trivial
+  | plus P Q ihP ihQ =>
+    simp [Language.add_def] at h
+    replace ihP := ihP (by
+      simp
+      intro s
+      exact (not_or.mp (h s)).left)
+    replace ihQ := ihQ (by
+      simp
+      intro s
+      exact (not_or.mp (h s)).right)
+    exact ⟨ihP, ihQ⟩
+  | comp P Q ihP ihQ =>
+    by_cases hpe : ∃ s, s ∈ P.matches'
+    · simp [Language.mul_def] at h
+      replace ihQ := ihQ (by
+        simp
+        intro s hcon
+        apply h s
+        have ⟨p, hp⟩ := hpe
+        use p, hp, s, hcon
+        -- have : s ∈ Set.image2 (fun x1 x2 => x1 ++ x2) P.matches' Q.matches'
+        use ihP
+        exact (not_or.mp (h s)).left)
+    · simp [Language.mul_def] at h
+      replace ihP := ihP (by
+        simp
+        intro s hcon
+        apply h s
+        use s, hcon, []
+        -- have : s ∈ Set.image2 (fun x1 x2 => x1 ++ x2) P.matches' Q.matches'
+        use ihP
+        exact (not_or.mp (h s)).left)
+    unfold RegularExpression.isStarConnected
+  | star P ih =>
+    exfalso
+    apply h
+    use []
+    simp [RegularExpression.matches', KStar.kstar]
+    use []
+    simp
+
+theorem _connectedIterativeFactors_is_starConnected (X : RegularExpression α)
+    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected' α I s) :
+    RegularExpression.isStarConnected I X := by
+  induction X with
+  | zero => trivial
+  | epsilon => trivial
+  | char a => trivial
+  | plus P Q ihP ihQ =>
+    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected' α I s) := by
+      intro s ⟨u, v, h⟩
+      apply hconn s
+      use u, v
+      intro ts hts
+      replace h := h ts hts
+      have h_match_subset : ∀ p ∈ P.matches', p ∈ P.matches' + Q.matches' := by
+        simp [Language.add_def]
+        intro p hp
+        apply (Set.mem_union _ _ _).mpr
+        simp [hp]
+      exact h_match_subset _ h
+    replace ihP := ihP ihP_cond
+
+    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected' α I s) := by
+      intro s ⟨u, v, h⟩
+      apply hconn s
+      use u, v
+      intro ts hts
+      replace h := h ts hts
+      have h_match_subset : ∀ q ∈ Q.matches', q ∈ P.matches' + Q.matches' := by
+        simp [Language.add_def]
+        intro p hp
+        apply (Set.mem_union _ _ _).mpr
+        simp [hp]
+      exact h_match_subset _ h
+    replace ihQ := ihQ ihQ_cond
+
+    simp [RegularExpression.isStarConnected, ihP, ihQ]
+  | comp P Q ihP ihQ =>
+    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected' α I s) := by
+      intro s ⟨u, v, h⟩
+      apply hconn s
+      by_cases hqe : ∃ q, q ∈ Q.matches'
+      · have ⟨q, hq⟩ := hqe
+        use u, v ++ q
+        intro ts hts
+        replace h := h ts hts
+        unfold RegularExpression.matches'
+        use u ++ ts.flatten ++ v, h, q, hq
+        simp
+      · use [], []
+        intro ts hts
+        have := h ts hts
+      use u
+      intro u v ts ht
+      have h := hsf u v ts ht
+      intro
+    replace ihP := ihP ihP_cond
+  | star => sorry
+
+
+
+
+theorem connectedIterativeFactors_is_starConnected (T : Set (Trace I)) (X : RegularExpression α) (himg : T = toTrace X.matches')
+    (hconn : ∀ s ∈ X.matches', isIterativeFactor X.matches' s → @isConnected' α I s) :
+    ∃ P, RegularExpression.isStarConnected I P ∧ T = (RegularExpression.matches_trace I P) := by
+  simp [RegularExpression.matches_toTrace]
+  induction X generalizing T with
+  | zero => use RegularExpression.zero, trivial, himg
+  | epsilon => use RegularExpression.epsilon, trivial, himg
+  | char a => use RegularExpression.char a, trivial, himg
+  | plus P Q ihP ihQ =>
+    replace ihP := ihP (toTrace P.matches')
+    simp at ihP
+    have ihP_cond : (∀ s ∈ P.matches', isIterativeFactor P.matches' s → @isConnected' α I s) := by
+      intro s hsp hsf
+      replace hconn := hconn s
+      have h_match_subset : ∀ p ∈ P.matches', p ∈ P.matches' + Q.matches' := by
+        simp [Language.add_def]
+        intro p hp
+        apply (Set.mem_union _ _ _).mpr
+        simp [hp]
+      apply hconn (h_match_subset s hsp)
+      intro u v ts ht
+      have h := hsf u v ts ht
+      exact h_match_subset _ h
+    have ⟨P', hP'⟩ := ihP ihP_cond
+
+    replace ihQ := ihQ (toTrace Q.matches')
+    simp at ihQ
+    have ihQ_cond : (∀ s ∈ Q.matches', isIterativeFactor Q.matches' s → @isConnected' α I s) := by
+      intro s hsq hsf
+      replace hconn := hconn s
+      have h_match_subset : ∀ q ∈ Q.matches', q ∈ P.matches' + Q.matches' := by
+        simp [Language.add_def]
+        intro p hp
+        apply (Set.mem_union _ _ _).mpr
+        simp [hp]
+      apply hconn (h_match_subset s hsq)
+      intro u v ts ht
+      have h := hsf u v ts ht
+      exact h_match_subset _ h
+    have ⟨Q', hQ'⟩ := ihQ ihQ_cond
+
+    use P' + Q'
+    simp [RegularExpression.isStarConnected, himg, hP', hQ']
+  | comp P Q ihP ihQ =>
+    replace ihP := ihP (toTrace P.matches')
+    simp at ihP
+    have ihP_cond : (∀ s ∈ P.matches', isIterativeFactor P.matches' s → @isConnected' α I s) := by
+      intro s hsp hsf
+      replace hconn := hconn s
+      have h_match_subset : ∀ p ∈ P.matches', p ∈ P.matches' * Q.matches' := by
+        intro p hp
+        use p, hp
+        simp
+      apply hconn (h_match_subset s hsp)
+      intro u v ts ht
+      have h := hsf u v ts ht
+      exact h_match_subset _ h
+    have ⟨P', hP'⟩ := ihP ihP_cond
+
+
+  | star => sorry
+
+  simp [RegularExpression.matches_toTrace] at himg
+  induction T generalizing X with
+  | zero => exact trivial
+  | epsilon => exact trivial
+  | char _ => exact trivial
+  | plus P Q ihP ihQ =>
+    unfold RegularExpression.isStarConnected
+    apply And.intro
+    · apply ihP P
+      intro s hsp hsf
+      simp [] at hsp
+      replace hconn := hconn s
+    sorry
+  | comp P Q ih1 ih2 => sorry
+  | star => sorry
+
+-- !!! --- T : Set (Trace α) ;; ∃ P : T = P.matches_trace
+theorem connectedIterativeFactors_is_starConnected' (T : RegularExpression α) (X : RegularExpression α)
+    (himg : (@RegularExpression.matches_trace α I T) = toTrace X.matches')
+    (hconn : ∀ s ∈ X.matches', isIterativeFactor X.matches' s → @isConnected' α I s) :
+    RegularExpression.isStarConnected I T := by
+  simp [RegularExpression.matches_toTrace] at himg
+  induction T generalizing X with
+  | zero => exact trivial
+  | epsilon => exact trivial
+  | char _ => exact trivial
+  | plus P Q ihP ihQ =>
+    unfold RegularExpression.isStarConnected
+    apply And.intro
+    · apply ihP P
+      intro s hsp hsf
+      simp [] at hsp
+      replace hconn := hconn s
+    sorry
+  | comp P Q ih1 ih2 => sorry
+  | star => sorry
+
 
 end Trace
