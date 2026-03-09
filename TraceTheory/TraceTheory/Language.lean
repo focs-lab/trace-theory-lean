@@ -408,7 +408,26 @@ variable {α : Type} {I : Independence α}
 def alph_mem (a : α) (t : Trace I) :=
   Quotient.lift (fun (s : List α) => a ∈ s) (by intro u v h; simp; exact mem_iff_mem a h) t
 
-infixl:65 " ∈ " => alph_mem
+instance : Membership α (Trace I) where
+  mem l a := alph_mem a l
+
+lemma eps_is_empty (a : α) : a ∉ @Trace.mk' α I [] := by
+  intro h
+  rcases h
+
+lemma empty_is_eps (t : Trace I) : t ≠ ⟦[]⟧ → ∃ a, a ∈ t := by
+  intro h
+  rcases t
+  rename_i w
+  replace h : w ≠ [] := fun a => h (congrArg (Quot.mk ⇑(traceSetoid I)) a)
+  exact List.exists_mem_of_ne_nil w h
+
+lemma mem_append {a : α} {s t : Trace I} : a ∈ s * t ↔ a ∈ s ∨ a ∈ t := by
+  rcases s
+  rcases t
+  exact List.mem_append
+
+lemma mems_lift (w : List α) : {a : α // a ∈ w} = {a : α // a ∈ @mk' α I w} := rfl
 
 /-- The Dependence relation induced by an Independence `I`. -/
 def inducedDependence {α : Type} (I : Independence α) : Dependence α where
@@ -421,14 +440,49 @@ def inducedDependence {α : Type} (I : Independence α) : Dependence α where
     exact hab (I.symm b a hba)
 
 
-def isConnected' (s : List α) := ∀ a ∈ s, ∀ b ∈ s, (Relation.TransGen (inducedDependence I).rel) a b
+def dependencyIn' (s : List α) (a b : {a : α // a ∈ s}) := (inducedDependence I).rel a b
 
-def isConnected (t : Trace I) := ∀ a b : α, a ∈ t ∧ b ∈ t → (Relation.TransGen (inducedDependence I).rel) a b
+def dependencyTransClosureIn' (s : List α) (a b : {a : α // a ∈ s}) := Relation.TransGen (@dependencyIn' α I s) a b
+
+def isConnected' (s : List α) := ∀ a b : {a : α // a ∈ s}, (Relation.TransGen (inducedDependence I).rel) a b
+
+
+def dependencyIn (t : Trace I) (a b : {a : α // a ∈ t}) := (inducedDependence I).rel a b
+
+def dependencyTransClosureIn (t : Trace I) (a b : {a : α // a ∈ t}) := Relation.TransGen (dependencyIn t) a b
+
+def isConnected (t : Trace I) := ∀ a b : {a : α // a ∈ t}, dependencyTransClosureIn t a b
+
+
+-- lemma
+
+-- lemma dependencyIn_toTrace (s : List α) : dependencyIn
+
+lemma isConnected_toTrace (s : List α) : @isConnected' α I s → @isConnected α I ⟦s⟧ := by
+  intro h a b
+  replace h := h a b
+  unfold dependencyTransClosureIn dependencyIn
+  cases h with
+  | single h => exact Relation.TransGen.single h
+  | tail hac hcb =>
+    rename_i c
+    -- rw [show ⟦s⟧ = mk' s from rfl, <- mems_lift] at a b
+    apply Relation.TransGen.tail
+    all_goals sorry
+    -- · exact hac
 
 def isIterativeFactor (X : Language α) (t : List α) :=
     ∃ u v, ∀ (ts : List (List α)), (∀ t' ∈ ts, t' = t) → u ++ ts.flatten ++ v ∈ X
 
 def toTrace (X : Language α) : Set (Trace I) := (fun s => ⟦s⟧) '' X
+
+
+def kstar (T : Set (Trace I)) := {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ T) ∧ r = ts.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧}
+
+def independent' (u v : Trace I) := ∀ a b, a ∈ u → b ∈ v → I.rel a b
+
+def connectedComponents (X : Set (Trace I)) : Set (Trace I) := {u | isConnected u ∧ u ≠ ⟦[]⟧ ∧ ∃ v, u * v ∈ X ∧ independent' u v}
+
 
 --@[simp]
 --lemma mul_canonical {a b : Trace I} : mul a b = a * b := by rfl
@@ -471,7 +525,24 @@ def matches_trace (I : Independence α) : RegularExpression α → Set (Trace I)
   | RegularExpression.char a => {⟦[a]⟧}
   | P + Q => (matches_trace I P) ∪ (matches_trace I Q)
   | P * Q => {t | ∃ p : (matches_trace I P), ∃ q : (matches_trace I Q), t = p * q}
-  | RegularExpression.star P => {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ matches_trace I P) ∧ r = ts.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧}
+  | RegularExpression.star P => kstar (matches_trace I P)
+
+def isStarConnected_trace (I : Independence α) : RegularExpression α → Prop
+  | 0 => True
+  | 1 => True
+  | RegularExpression.char _ => True
+  | P + Q => isStarConnected I P ∧ isStarConnected I Q
+  | P * Q => isStarConnected I P ∧ isStarConnected I Q
+  | RegularExpression.star P => isStarConnected I P ∧ (∀ t ∈ matches_trace I P, @isConnected α I t)
+
+-- Interpretation of this RegularExpression as operating on trace languages.
+def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Trace I)
+  | 0 => {}
+  | 1 => {⟦[]⟧}
+  | RegularExpression.char a => {⟦[a]⟧}
+  | P + Q => (matches_trace I P) ∪ (matches_trace I Q)
+  | P * Q => {t | ∃ p : (matches_trace I P), ∃ q : (matches_trace I Q), t = p * q}
+  | RegularExpression.star P => kstar (connectedComponents (matches_trace I P))
 
 /-- Interpreting this RegularExpression as operating on Trace Languages gives the same matching set
   as interpreting (as usual) on String Languages and then projecting to Traces.
@@ -541,7 +612,7 @@ lemma matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTrace
     apply Set.ext_iff.mpr
     intro t
     apply Iff.intro
-    all_goals simp
+    all_goals simp [kstar]
     · intro ts hts ht
       induction ts generalizing t with
       | nil =>
@@ -613,7 +684,7 @@ end RegularExpression
   then X' is star-connected (for some rational expression X' with L(X) = L(X')).
 
   It is strictly necessary that we use an X' not necessarily equal to X.
-  Consider X = (ab)∗ · ∅; where `a` and `b` are not connected. Then L(X) = ∅ so every
+  Consider X = {a ∪ b}∗ · ∅; where `a` and `b` are not connected. Then L(X) = ∅ so every
   iterative factor is connected, but X is not star-connected.
 
   Note that P · ∅ or ∅ · P are the only cases where this patch is needed.
@@ -744,5 +815,93 @@ theorem connectedIterativeFactors_equiv_starConnected (T : Set (Trace I)) (X : R
   have ⟨P, hP⟩ := connectedIterativeFactors_equiv_starConnected' X hconn
   use P
   simp [hP, himg]
+
+lemma append_indep_is_disconnected (u v : Trace I) (h : independent' u v) (hu : u ≠ ⟦[]⟧) (hv : v ≠ ⟦[]⟧) :
+    ¬isConnected (u * v) := by
+  by_contra h_con
+  have ⟨a, ha⟩ := empty_is_eps u hu
+  have ⟨b, hb⟩ := empty_is_eps v hv
+  have h_ad := h a b ha hb
+  have := h_con ⟨a, mem_append.mpr (Or.inl ha)⟩ ⟨b, mem_append.mpr (Or.inr hb)⟩
+  unfold dependencyTransClosureIn dependencyIn at this
+  -- simp at this
+  sorry
+
+lemma connectedComponents_of_connected (T : Set (Trace I)) (h : ∀ t ∈ T, isConnected t) :
+    connectedComponents T = T \ {⟦[]⟧} := by
+  apply Set.ext
+  intro t
+  apply Iff.intro
+  · intro ⟨ht, htz, v, htv, htv_id⟩
+    simp [htz]
+    replace h := h (t * v) htv
+    have hvz : v = ⟦[]⟧ := by
+      by_contra hvz
+      exact append_indep_is_disconnected t v htv_id htz hvz h
+    rw [hvz, show ⟦[]⟧ = mk' [] from rfl, right_id'] at htv
+    exact htv
+  · intro ⟨ht, htz⟩
+    use (h t ht), htz, ⟦[]⟧
+    rw [show ⟦[]⟧ = mk' [] from rfl, Trace.right_id']
+    use ht
+    unfold independent'
+    simp [eps_is_empty]
+
+
+
+theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpression.isStarConnected I X) :
+    RegularExpression.matches_trace I X = RegularExpression.matches_cstar_trace I X := by
+  induction X with
+  | zero => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
+  | epsilon => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
+  | char _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
+  | plus _ _ _ _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
+  | comp _ _ _ _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
+  | star P ih =>
+    replace ih := ih h.left
+    unfold RegularExpression.matches_trace RegularExpression.matches_cstar_trace
+    simp
+    unfold RegularExpression.isStarConnected at h
+    have hP_conn : (∀ t ∈ RegularExpression.matches_trace I P, t.isConnected) := by
+      intro t ht
+      rw [RegularExpression.matches_toTrace] at ht
+      rcases t with ⟨w₀⟩
+      have ⟨w, hw, hw₀⟩ := ht
+      simp at hw₀
+      rw [<- hw₀]
+      exact isConnected_toTrace w (h.right w hw)
+    rw [connectedComponents_of_connected _ hP_conn]
+    apply Set.ext
+    intro t
+    apply Iff.intro
+    · intro ⟨ls, hls, ht⟩
+      have _ : BEq (Trace I) := by sorry
+      use ls.filter (· != ⟦[]⟧)
+      simp
+      apply And.intro
+      · intro t' ht' htz'
+        use hls t' ht'
+        by_contra ht'_con
+        rw [ht'_con] at htz'
+        -- simp at htz'
+        sorry
+      · induction ls generalizing t with
+        | nil => simp at ht ⊢; exact ht
+        | cons l ls ih =>
+          rw [ht]
+          replace ih := ih (List.foldl (fun u v => u * v) ⟦[]⟧ ls)
+          simp at ih
+          have ih_cond : (∀ t' ∈ ls, t' ∈ RegularExpression.matches_trace I P) := by
+            intro c hc
+            exact hls c (List.mem_cons_of_mem l hc)
+          replace ih := ih ih_cond
+          sorry
+    · intro ⟨ls, hls, ht⟩
+      use ls
+      simp [ht]
+      intro t' ht'
+      exact Set.mem_of_mem_inter_left (hls t' ht')
+
+
 
 end Trace
