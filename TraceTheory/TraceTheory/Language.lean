@@ -464,6 +464,7 @@ def isStarConnected (I : Independence α) : RegularExpression α → Prop
   | P * Q => isStarConnected I P ∧ isStarConnected I Q
   | RegularExpression.star P => isStarConnected I P ∧ (∀ s ∈ P.matches', @isConnected' α I s)
 
+-- Interpretation of this RegularExpression as operating on trace languages.
 def matches_trace (I : Independence α) : RegularExpression α → Set (Trace I)
   | 0 => {}
   | 1 => {⟦[]⟧}
@@ -472,6 +473,9 @@ def matches_trace (I : Independence α) : RegularExpression α → Set (Trace I)
   | P * Q => {t | ∃ p : (matches_trace I P), ∃ q : (matches_trace I Q), t = p * q}
   | RegularExpression.star P => {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ matches_trace I P) ∧ r = ts.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧}
 
+/-- Interpreting this RegularExpression as operating on Trace Languages gives the same matching set
+  as interpreting (as usual) on String Languages and then projecting to Traces.
+-/
 lemma matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTrace P.matches' := by
   induction P with
   | zero => simp [toTrace, matches_trace, Language.zero_def]
@@ -603,60 +607,24 @@ lemma matches_toTrace_dist (P Q : RegularExpression α) :
 
 end RegularExpression
 
-lemma empty_is_starConnected (X : RegularExpression α) (h : ¬ ∃s, s ∈ X.matches') :
-    RegularExpression.isStarConnected I X := by
-  induction X with
-  | zero => trivial
-  | epsilon => trivial
-  | char a => trivial
-  | plus P Q ihP ihQ =>
-    simp [Language.add_def] at h
-    replace ihP := ihP (by
-      simp
-      intro s
-      exact (not_or.mp (h s)).left)
-    replace ihQ := ihQ (by
-      simp
-      intro s
-      exact (not_or.mp (h s)).right)
-    exact ⟨ihP, ihQ⟩
-  | comp P Q ihP ihQ =>
-    by_cases hpe : ∃ s, s ∈ P.matches'
-    · simp [Language.mul_def] at h
-      replace ihQ := ihQ (by
-        simp
-        intro s hcon
-        apply h s
-        have ⟨p, hp⟩ := hpe
-        use p, hp, s, hcon
-        -- have : s ∈ Set.image2 (fun x1 x2 => x1 ++ x2) P.matches' Q.matches'
-        use ihP
-        exact (not_or.mp (h s)).left)
-    · simp [Language.mul_def] at h
-      replace ihP := ihP (by
-        simp
-        intro s hcon
-        apply h s
-        use s, hcon, []
-        -- have : s ∈ Set.image2 (fun x1 x2 => x1 ++ x2) P.matches' Q.matches'
-        use ihP
-        exact (not_or.mp (h s)).left)
-    unfold RegularExpression.isStarConnected
-  | star P ih =>
-    exfalso
-    apply h
-    use []
-    simp [RegularExpression.matches', KStar.kstar]
-    use []
-    simp
+/-- Main component of Theorem 4.1 (ii) => (iii).
 
-theorem _connectedIterativeFactors_is_starConnected (X : RegularExpression α)
+  For a rational expression X, if every iterative factor of L(X) is connected,
+  then X' is star-connected (for some rational expression X' with L(X) = L(X')).
+
+  It is strictly necessary that we use an X' not necessarily equal to X.
+  Consider X = (ab)∗ · ∅; where `a` and `b` are not connected. Then L(X) = ∅ so every
+  iterative factor is connected, but X is not star-connected.
+
+  Note that P · ∅ or ∅ · P are the only cases where this patch is needed.
+-/
+theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α)
     (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected' α I s) :
-    RegularExpression.isStarConnected I X := by
+    ∃ Y, RegularExpression.isStarConnected I Y ∧ X.matches' = Y.matches' := by
   induction X with
-  | zero => trivial
-  | epsilon => trivial
-  | char a => trivial
+  | zero => use RegularExpression.zero, trivial
+  | epsilon => use RegularExpression.epsilon, trivial
+  | char a => use RegularExpression.char a, trivial
   | plus P Q ihP ihQ =>
     have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected' α I s) := by
       intro s ⟨u, v, h⟩
@@ -670,7 +638,7 @@ theorem _connectedIterativeFactors_is_starConnected (X : RegularExpression α)
         apply (Set.mem_union _ _ _).mpr
         simp [hp]
       exact h_match_subset _ h
-    replace ihP := ihP ihP_cond
+    have ⟨P', hP'⟩ := ihP ihP_cond
 
     have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected' α I s) := by
       intro s ⟨u, v, h⟩
@@ -684,132 +652,97 @@ theorem _connectedIterativeFactors_is_starConnected (X : RegularExpression α)
         apply (Set.mem_union _ _ _).mpr
         simp [hp]
       exact h_match_subset _ h
-    replace ihQ := ihQ ihQ_cond
-
-    simp [RegularExpression.isStarConnected, ihP, ihQ]
-  | comp P Q ihP ihQ =>
-    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected' α I s) := by
-      intro s ⟨u, v, h⟩
-      apply hconn s
-      by_cases hqe : ∃ q, q ∈ Q.matches'
-      · have ⟨q, hq⟩ := hqe
-        use u, v ++ q
-        intro ts hts
-        replace h := h ts hts
-        unfold RegularExpression.matches'
-        use u ++ ts.flatten ++ v, h, q, hq
-        simp
-      · use [], []
-        intro ts hts
-        have := h ts hts
-      use u
-      intro u v ts ht
-      have h := hsf u v ts ht
-      intro
-    replace ihP := ihP ihP_cond
-  | star => sorry
-
-
-
-
-theorem connectedIterativeFactors_is_starConnected (T : Set (Trace I)) (X : RegularExpression α) (himg : T = toTrace X.matches')
-    (hconn : ∀ s ∈ X.matches', isIterativeFactor X.matches' s → @isConnected' α I s) :
-    ∃ P, RegularExpression.isStarConnected I P ∧ T = (RegularExpression.matches_trace I P) := by
-  simp [RegularExpression.matches_toTrace]
-  induction X generalizing T with
-  | zero => use RegularExpression.zero, trivial, himg
-  | epsilon => use RegularExpression.epsilon, trivial, himg
-  | char a => use RegularExpression.char a, trivial, himg
-  | plus P Q ihP ihQ =>
-    replace ihP := ihP (toTrace P.matches')
-    simp at ihP
-    have ihP_cond : (∀ s ∈ P.matches', isIterativeFactor P.matches' s → @isConnected' α I s) := by
-      intro s hsp hsf
-      replace hconn := hconn s
-      have h_match_subset : ∀ p ∈ P.matches', p ∈ P.matches' + Q.matches' := by
-        simp [Language.add_def]
-        intro p hp
-        apply (Set.mem_union _ _ _).mpr
-        simp [hp]
-      apply hconn (h_match_subset s hsp)
-      intro u v ts ht
-      have h := hsf u v ts ht
-      exact h_match_subset _ h
-    have ⟨P', hP'⟩ := ihP ihP_cond
-
-    replace ihQ := ihQ (toTrace Q.matches')
-    simp at ihQ
-    have ihQ_cond : (∀ s ∈ Q.matches', isIterativeFactor Q.matches' s → @isConnected' α I s) := by
-      intro s hsq hsf
-      replace hconn := hconn s
-      have h_match_subset : ∀ q ∈ Q.matches', q ∈ P.matches' + Q.matches' := by
-        simp [Language.add_def]
-        intro p hp
-        apply (Set.mem_union _ _ _).mpr
-        simp [hp]
-      apply hconn (h_match_subset s hsq)
-      intro u v ts ht
-      have h := hsf u v ts ht
-      exact h_match_subset _ h
     have ⟨Q', hQ'⟩ := ihQ ihQ_cond
 
     use P' + Q'
-    simp [RegularExpression.isStarConnected, himg, hP', hQ']
+    simp [RegularExpression.isStarConnected, hP', hQ']
   | comp P Q ihP ihQ =>
-    replace ihP := ihP (toTrace P.matches')
-    simp at ihP
-    have ihP_cond : (∀ s ∈ P.matches', isIterativeFactor P.matches' s → @isConnected' α I s) := by
-      intro s hsp hsf
-      replace hconn := hconn s
-      have h_match_subset : ∀ p ∈ P.matches', p ∈ P.matches' * Q.matches' := by
-        intro p hp
-        use p, hp
-        simp
-      apply hconn (h_match_subset s hsp)
-      intro u v ts ht
-      have h := hsf u v ts ht
-      exact h_match_subset _ h
+    by_cases hpe : ¬ ∃ p, p ∈ P.matches'
+    · use RegularExpression.zero
+      simp [RegularExpression.isStarConnected]
+      rw [Language.zero_def]
+      apply Language.ext
+      intro x
+      apply Iff.intro
+      all_goals intro h
+      · rw [Language.mul_def] at h
+        replace ⟨u, hu, v, hv, h⟩ := h
+        exact hpe ⟨u, hu⟩
+      · exact False.elim h
+
+    by_cases hqe : ¬ ∃ q, q ∈ Q.matches'
+    · use RegularExpression.zero
+      simp [RegularExpression.isStarConnected]
+      rw [Language.zero_def]
+      apply Language.ext
+      intro x
+      apply Iff.intro
+      all_goals intro h
+      · rw [Language.mul_def] at h
+        replace ⟨u, hu, v, hv, h⟩ := h
+        exact hqe ⟨v, hv⟩
+      · exact False.elim h
+
+    simp at hpe hqe
+
+    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected' α I s) := by
+      intro s ⟨u, v, h⟩
+      apply hconn s
+      have ⟨q, hq⟩ := hqe
+      use u, v ++ q
+      intro ts hts
+      replace h := h ts hts
+      unfold RegularExpression.matches'
+      use u ++ ts.flatten ++ v, h, q, hq
+      simp
     have ⟨P', hP'⟩ := ihP ihP_cond
 
+    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected' α I s) := by
+      intro s ⟨u, v, h⟩
+      apply hconn s
+      have ⟨p, hp⟩ := hpe
+      use p ++ u, v
+      intro ts hts
+      replace h := h ts hts
+      unfold RegularExpression.matches'
+      use p, hp, u ++ ts.flatten ++ v, h
+      simp
+    have ⟨Q', hQ'⟩ := ihQ ihQ_cond
 
-  | star => sorry
+    use P' * Q'
+    simp [RegularExpression.isStarConnected, hP', hQ']
+  | star P ih =>
+    have ih_cond : ∀ (s : List α), isIterativeFactor P.matches' s → @isConnected' α I s := by
+      intro s ⟨u, v, h⟩
+      apply hconn
+      use u, v
+      intro ts hts
+      replace h := h ts hts
+      simp [Language.kstar_def]
+      use [u ++ ts.flatten ++ v]
+      simp [<- List.append_assoc]
+      exact h
+    have ⟨P', hP'⟩ := ih ih_cond
+    use P'.star
+    simp [RegularExpression.isStarConnected, hP']
+    intro s hs
+    apply hconn
+    use [], []
+    intro ts hts
+    simp [Language.kstar_def]
+    use ts
+    simp
+    intro y hy
+    rw [hts y hy, hP'.right]
+    exact hs
 
-  simp [RegularExpression.matches_toTrace] at himg
-  induction T generalizing X with
-  | zero => exact trivial
-  | epsilon => exact trivial
-  | char _ => exact trivial
-  | plus P Q ihP ihQ =>
-    unfold RegularExpression.isStarConnected
-    apply And.intro
-    · apply ihP P
-      intro s hsp hsf
-      simp [] at hsp
-      replace hconn := hconn s
-    sorry
-  | comp P Q ih1 ih2 => sorry
-  | star => sorry
-
--- !!! --- T : Set (Trace α) ;; ∃ P : T = P.matches_trace
-theorem connectedIterativeFactors_is_starConnected' (T : RegularExpression α) (X : RegularExpression α)
-    (himg : (@RegularExpression.matches_trace α I T) = toTrace X.matches')
-    (hconn : ∀ s ∈ X.matches', isIterativeFactor X.matches' s → @isConnected' α I s) :
-    RegularExpression.isStarConnected I T := by
-  simp [RegularExpression.matches_toTrace] at himg
-  induction T generalizing X with
-  | zero => exact trivial
-  | epsilon => exact trivial
-  | char _ => exact trivial
-  | plus P Q ihP ihQ =>
-    unfold RegularExpression.isStarConnected
-    apply And.intro
-    · apply ihP P
-      intro s hsp hsf
-      simp [] at hsp
-      replace hconn := hconn s
-    sorry
-  | comp P Q ih1 ih2 => sorry
-  | star => sorry
-
+/-- Theorem 4.1 (ii) => (iii) -/
+theorem connectedIterativeFactors_equiv_starConnected (T : Set (Trace I)) (X : RegularExpression α) (himg : T = toTrace X.matches')
+    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected' α I s) :
+    ∃ P, RegularExpression.isStarConnected I P ∧ T = (RegularExpression.matches_trace I P) := by
+  simp [RegularExpression.matches_toTrace]
+  have ⟨P, hP⟩ := connectedIterativeFactors_equiv_starConnected' X hconn
+  use P
+  simp [hP, himg]
 
 end Trace
