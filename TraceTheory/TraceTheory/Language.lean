@@ -444,7 +444,7 @@ def dependencyIn' (s : List α) (a b : {a : α // a ∈ s}) := (inducedDependenc
 
 def dependencyTransClosureIn' (s : List α) (a b : {a : α // a ∈ s}) := Relation.TransGen (@dependencyIn' α I s) a b
 
-def isConnected' (s : List α) := ∀ a b : {a : α // a ∈ s}, (Relation.TransGen (inducedDependence I).rel) a b
+def isConnected' (s : List α) := ∀ a b : {a : α // a ∈ s}, @dependencyTransClosureIn' α I s a b
 
 
 def dependencyIn (t : Trace I) (a b : {a : α // a ∈ t}) := (inducedDependence I).rel a b
@@ -454,22 +454,12 @@ def dependencyTransClosureIn (t : Trace I) (a b : {a : α // a ∈ t}) := Relati
 def isConnected (t : Trace I) := ∀ a b : {a : α // a ∈ t}, dependencyTransClosureIn t a b
 
 
--- lemma
+lemma dependencyIn_toTrace (s : List α) : @dependencyIn' α I s = @dependencyIn α I ⟦s⟧ := rfl
 
--- lemma dependencyIn_toTrace (s : List α) : dependencyIn
+lemma dependencyTransClosureIn_toTrace (s : List α) : @dependencyTransClosureIn' α I s = @dependencyTransClosureIn α I ⟦s⟧ := rfl
 
-lemma isConnected_toTrace (s : List α) : @isConnected' α I s → @isConnected α I ⟦s⟧ := by
-  intro h a b
-  replace h := h a b
-  unfold dependencyTransClosureIn dependencyIn
-  cases h with
-  | single h => exact Relation.TransGen.single h
-  | tail hac hcb =>
-    rename_i c
-    -- rw [show ⟦s⟧ = mk' s from rfl, <- mems_lift] at a b
-    apply Relation.TransGen.tail
-    all_goals sorry
-    -- · exact hac
+lemma isConnected_toTrace (s : List α) : @isConnected' α I s = @isConnected α I ⟦s⟧ := rfl
+
 
 def isIterativeFactor (X : Language α) (t : List α) :=
     ∃ u v, ∀ (ts : List (List α)), (∀ t' ∈ ts, t' = t) → u ++ ts.flatten ++ v ∈ X
@@ -816,16 +806,34 @@ theorem connectedIterativeFactors_equiv_starConnected (T : Set (Trace I)) (X : R
   use P
   simp [hP, himg]
 
+lemma append_indep_is_disconnected_chars (u v : Trace I) (huv : independent' u v)
+    (a b : { a // a ∈ u * v }) (ha : a.1 ∈ u) (hb : b.1 ∈ v) :
+    ¬ (dependencyTransClosureIn (u * v)) a b := by
+  intro h
+  induction h with
+  | single h =>
+    rename_i b
+    apply h
+    exact huv a b ha hb
+  | tail h h_tail ih =>
+    rename_i b c
+    simp at ih
+    have hbu : b.1 ∈ u :=  by
+      have hb_uv := mem_append.mp b.2
+      simp [ih] at hb_uv
+      exact hb_uv
+    simp [dependencyIn, inducedDependence] at h_tail
+    unfold independent' at huv
+    exact h_tail (huv b c hbu hb)
+
 lemma append_indep_is_disconnected (u v : Trace I) (h : independent' u v) (hu : u ≠ ⟦[]⟧) (hv : v ≠ ⟦[]⟧) :
     ¬isConnected (u * v) := by
   by_contra h_con
   have ⟨a, ha⟩ := empty_is_eps u hu
   have ⟨b, hb⟩ := empty_is_eps v hv
-  have h_ad := h a b ha hb
-  have := h_con ⟨a, mem_append.mpr (Or.inl ha)⟩ ⟨b, mem_append.mpr (Or.inr hb)⟩
-  unfold dependencyTransClosureIn dependencyIn at this
-  -- simp at this
-  sorry
+  have h_ab_con := h_con ⟨a, mem_append.mpr (Or.inl ha)⟩ ⟨b, mem_append.mpr (Or.inr hb)⟩
+  have h_ab_dis := append_indep_is_disconnected_chars u v h ⟨a, mem_append.mpr (Or.inl ha)⟩ ⟨b, mem_append.mpr (Or.inr hb)⟩ ha hb
+  exact h_ab_dis h_ab_con
 
 lemma connectedComponents_of_connected (T : Set (Trace I)) (h : ∀ t ∈ T, isConnected t) :
     connectedComponents T = T \ {⟦[]⟧} := by
@@ -849,6 +857,15 @@ lemma connectedComponents_of_connected (T : Set (Trace I)) (h : ∀ t ∈ T, isC
 
 
 
+theorem flatten_filter_not_isEmpty  :
+    ∀ {L : List (Trace I)},
+      List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ (List.filter (· != ⟦[]⟧) L)
+      = List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ L
+  | [] => rfl
+  | ⟦[]⟧ :: L
+  | (a :: l) :: L => by
+      simp [flatten_filter_not_isEmpty (L := L)]
+
 theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpression.isStarConnected I X) :
     RegularExpression.matches_trace I X = RegularExpression.matches_cstar_trace I X := by
   induction X with
@@ -869,7 +886,8 @@ theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpres
       have ⟨w, hw, hw₀⟩ := ht
       simp at hw₀
       rw [<- hw₀]
-      exact isConnected_toTrace w (h.right w hw)
+      rw [<- isConnected_toTrace]
+      exact h.right w hw
     rw [connectedComponents_of_connected _ hP_conn]
     apply Set.ext
     intro t
