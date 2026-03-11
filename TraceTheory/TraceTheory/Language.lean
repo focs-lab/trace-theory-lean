@@ -525,7 +525,7 @@ def isStarConnected_trace (I : Independence α) : RegularExpression α → Prop
   | P * Q => isStarConnected I P ∧ isStarConnected I Q
   | RegularExpression.star P => isStarConnected I P ∧ (∀ t ∈ matches_trace I P, @isConnected α I t)
 
--- Interpretation of this RegularExpression as operating on trace languages.
+-- Interpretation of this RegularExpression as a <c-rational expression> operating on trace languages.
 def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Trace I)
   | 0 => {}
   | 1 => {⟦[]⟧}
