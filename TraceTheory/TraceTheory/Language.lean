@@ -857,20 +857,23 @@ lemma connectedComponents_of_connected (T : Set (Trace I)) (h : ∀ t ∈ T, isC
 
 
 
-lemma empty_inj_emptyTrace (w : List α) (h : (⟦w⟧ : Trace I) = ⟦[]⟧) : w = [] := by
+lemma empty_iff {w : List α} : (⟦w⟧ : Trace I) = ⟦[]⟧ ↔ w = [] := by
   cases w with
   | nil => simp
   | cons a u =>
-    have h_au := length_eq_of_equiv (Quotient.exact h)
-    simp at h_au
+    apply Iff.intro
+    · intro h
+      have h_au := length_eq_of_equiv (Quotient.exact h)
+      simp at h_au
+    · simp
 
 def isEmpty : Trace I → Bool := Quotient.lift List.isEmpty (by
   intro u v huv
   cases u with
-  | nil => rw [empty_inj_emptyTrace _ (Eq.symm (Quotient.sound huv))]
+  | nil => rw [empty_iff.mp (Eq.symm (Quotient.sound huv))]
   | cons a u =>
     cases v with
-    | nil => rw [empty_inj_emptyTrace _ (Quotient.sound huv)]
+    | nil => rw [empty_iff.mp (Quotient.sound huv)]
     | cons b v => rfl
 )
 
