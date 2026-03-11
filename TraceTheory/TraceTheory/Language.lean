@@ -530,9 +530,9 @@ def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Tr
   | 0 => {}
   | 1 => {⟦[]⟧}
   | RegularExpression.char a => {⟦[a]⟧}
-  | P + Q => (matches_trace I P) ∪ (matches_trace I Q)
-  | P * Q => {t | ∃ p : (matches_trace I P), ∃ q : (matches_trace I Q), t = p * q}
-  | RegularExpression.star P => kstar (connectedComponents (matches_trace I P))
+  | P + Q => (matches_cstar_trace I P) ∪ (matches_cstar_trace I Q)
+  | P * Q => {t | ∃ p : (matches_cstar_trace I P), ∃ q : (matches_cstar_trace I Q), t = p * q}
+  | RegularExpression.star P => kstar (connectedComponents (matches_cstar_trace I P))
 
 /-- Interpreting this RegularExpression as operating on Trace Languages gives the same matching set
   as interpreting (as usual) on String Languages and then projecting to Traces.
@@ -911,16 +911,15 @@ theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpres
   | zero => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
   | epsilon => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
   | char _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | plus _ _ _ _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | comp _ _ _ _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
+  | plus P Q ihP ihQ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace, ihP h.1, ihQ h.2]
+  | comp P Q ihP ihQ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace, ihP h.1, ihQ h.2]
   | star P ih =>
-    replace ih := ih h.left
     unfold RegularExpression.matches_trace RegularExpression.matches_cstar_trace
-    simp
+    simp [ih h.left]
     unfold RegularExpression.isStarConnected at h
-    have hP_conn : (∀ t ∈ RegularExpression.matches_trace I P, t.isConnected) := by
+    have hP_conn : (∀ t ∈ RegularExpression.matches_cstar_trace I P, t.isConnected) := by
       intro t ht
-      rw [RegularExpression.matches_toTrace] at ht
+      rw [<- ih h.left, RegularExpression.matches_toTrace] at ht
       rcases t with ⟨w₀⟩
       have ⟨w, hw, hw₀⟩ := ht
       simp at hw₀
