@@ -537,7 +537,7 @@ def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Tr
 /-- Interpreting this RegularExpression as operating on Trace Languages gives the same matching set
   as interpreting (as usual) on String Languages and then projecting to Traces.
 -/
-lemma matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTrace P.matches' := by
+theorem matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTrace P.matches' := by
   induction P with
   | zero => simp [toTrace, matches_trace, Language.zero_def]
   | epsilon => simp [toTrace, matches_trace, Language.one_def]
@@ -709,9 +709,9 @@ theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α
       replace h := h ts hts
       have h_match_subset : ∀ q ∈ Q.matches', q ∈ P.matches' + Q.matches' := by
         simp [Language.add_def]
-        intro p hp
+        intro q hq
         apply (Set.mem_union _ _ _).mpr
-        simp [hp]
+        simp [hq]
       exact h_match_subset _ h
     have ⟨Q', hQ'⟩ := ihQ ihQ_cond
 
@@ -857,15 +857,51 @@ lemma connectedComponents_of_connected (T : Set (Trace I)) (h : ∀ t ∈ T, isC
 
 
 
-theorem flatten_filter_not_isEmpty  :
+lemma empty_inj_emptyTrace (w : List α) (h : (⟦w⟧ : Trace I) = ⟦[]⟧) : w = [] := by
+  cases w with
+  | nil => simp
+  | cons a u =>
+    have h_au := length_eq_of_equiv (Quotient.exact h)
+    simp at h_au
+
+def isEmpty : Trace I → Bool := Quotient.lift List.isEmpty (by
+  intro u v huv
+  cases u with
+  | nil => rw [empty_inj_emptyTrace _ (Eq.symm (Quotient.sound huv))]
+  | cons a u =>
+    cases v with
+    | nil => rw [empty_inj_emptyTrace _ (Quotient.sound huv)]
+    | cons b v => rfl
+)
+
+lemma isEmpty_iff {t : Trace I} : t.isEmpty = true ↔ t = ⟦[]⟧ := by
+  apply Iff.intro
+  · intro h
+    rcases t with ⟨s⟩
+    rw [List.isEmpty_iff.mp h]
+    rfl
+  · intro h
+    rw [h]
+    rfl
+
+lemma traceFlatten_filter_not_isEmpty  :
     ∀ {L : List (Trace I)},
-      List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ (List.filter (· != ⟦[]⟧) L)
+      List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ (List.filter (!·.isEmpty) L)
       = List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ L
   | [] => rfl
-  | ⟦[]⟧ :: L
-  | (a :: l) :: L => by
-      simp [flatten_filter_not_isEmpty (L := L)]
+  | t :: L => by
+    by_cases ht : t.isEmpty
+    · apply isEmpty_iff.mp at ht
+      simp [ht]
+      simp [show isEmpty ⟦[]⟧ = true from rfl]
+      rw [show ⟦[]⟧ = mk' [] from rfl, left_id', show mk' [] = ⟦[]⟧ from rfl]
+      exact traceFlatten_filter_not_isEmpty (L := L)
+    · simp [ht]
+      rw [show ⟦[]⟧ = mk' [] from rfl, left_id', <- right_id' t, show mk' [] = ⟦[]⟧ from rfl]
+      repeat rw [List.foldl_assoc]
+      rw [traceFlatten_filter_not_isEmpty (L := L)]
 
+/-- Theorem 4.1 (iii) => (iv) -/
 theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpression.isStarConnected I X) :
     RegularExpression.matches_trace I X = RegularExpression.matches_cstar_trace I X := by
   induction X with
@@ -885,41 +921,28 @@ theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpres
       rcases t with ⟨w₀⟩
       have ⟨w, hw, hw₀⟩ := ht
       simp at hw₀
-      rw [<- hw₀]
-      rw [<- isConnected_toTrace]
+      rw [<- hw₀, <- isConnected_toTrace]
       exact h.right w hw
     rw [connectedComponents_of_connected _ hP_conn]
     apply Set.ext
     intro t
     apply Iff.intro
     · intro ⟨ls, hls, ht⟩
-      have _ : BEq (Trace I) := by sorry
-      use ls.filter (· != ⟦[]⟧)
+      use ls.filter (!·.isEmpty)
       simp
       apply And.intro
       · intro t' ht' htz'
         use hls t' ht'
         by_contra ht'_con
         rw [ht'_con] at htz'
-        -- simp at htz'
-        sorry
-      · induction ls generalizing t with
-        | nil => simp at ht ⊢; exact ht
-        | cons l ls ih =>
-          rw [ht]
-          replace ih := ih (List.foldl (fun u v => u * v) ⟦[]⟧ ls)
-          simp at ih
-          have ih_cond : (∀ t' ∈ ls, t' ∈ RegularExpression.matches_trace I P) := by
-            intro c hc
-            exact hls c (List.mem_cons_of_mem l hc)
-          replace ih := ih ih_cond
-          sorry
+        exact (Bool.eq_not_self (isEmpty ⟦[]⟧)).mp htz'
+      · rw [ht]
+        exact Eq.symm traceFlatten_filter_not_isEmpty
     · intro ⟨ls, hls, ht⟩
       use ls
       simp [ht]
       intro t' ht'
       exact Set.mem_of_mem_inter_left (hls t' ht')
-
 
 
 end Trace
