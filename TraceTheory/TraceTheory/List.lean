@@ -3,7 +3,7 @@ import Mathlib.Data.List.Lex
 
 open List
 
-variable {α : Type} [DecidableEq α]
+variable {α : Type*} [DecidableEq α]
 
 namespace TraceTheory
 
