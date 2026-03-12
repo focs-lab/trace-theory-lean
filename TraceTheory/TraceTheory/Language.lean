@@ -21,7 +21,7 @@ lemma indep_of_flatten {u : List α} {vs : List (List α)} (i : Fin vs.length) (
       exact ih (indep_of_concat h).right i hi
 
 /-- (i) → (ii) of Corollary (2.3) in `Partial Commutation and Traces`.
-  Note that t₁, t₂, …, tₙ is expressed as a list [ts], and (t₁ ++ t₂ ++ … ++ tₙ) via [ts.foldl].
+  Note that t₁, t₂, …, tₙ is expressed as a list [ts], and (t₁ ++ t₂ ++ … ++ tₙ) via [ts.flatten].
   Similarly, p₁, …, pₙ is [ps] and q₁, …, qₙ is [qs]. -/
 theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h : TraceEquiv I (u ++ v) ts.flatten) :
     ∃ (ps qs : List (List α)),
@@ -439,6 +439,36 @@ def inducedDependence {α : Type} (I : Independence α) : Dependence α where
     intro a b hab hba
     exact hab (I.symm b a hba)
 
+--@[simp]
+--lemma mul_canonical {a b : Trace I} : mul a b = a * b := by rfl
+
+--instance : Mul (Trace I) :=
+--  ⟨(mul · ·)⟩
+
+@[simp]
+lemma left_id (t : Trace I) : ↑(⟦[]⟧) * t = t := by
+  rcases t
+  rfl
+
+@[simp]
+lemma right_id (t : Trace I) : t * ↑(⟦[]⟧) = t := by
+  rcases t with ⟨w⟩
+  simp [show Quot.mk (⇑(traceSetoid I)) w = ⟦w⟧ from rfl, HMul.hMul, Mul.mul]
+
+--lemma mul_def : (⟦u⟧ : Trace I) * ⟦v⟧ = ⟦u ++ v⟧ :=
+--  rfl
+
+def traceFlatten (L : List (Trace I)) := List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ L
+
+lemma traceFlatten_append {u : Trace I} (L : List (Trace I)) : traceFlatten (u :: L) = u * traceFlatten L := by
+  unfold traceFlatten
+  simp
+  rw [<- right_id u]
+  rw [List.foldl_assoc]
+  simp
+
+
+
 
 def dependencyIn' (s : List α) (a b : {a : α // a ∈ s}) := (inducedDependence I).rel a b
 
@@ -467,36 +497,70 @@ def isIterativeFactor (X : Language α) (t : List α) :=
 def toTrace (X : Language α) : Set (Trace I) := (fun s => ⟦s⟧) '' X
 
 
-def kstar (T : Set (Trace I)) := {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ T) ∧ r = ts.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧}
+def kstar (T : Set (Trace I)) := {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ T) ∧ r = traceFlatten ts}
 
 def independent' (u v : Trace I) := ∀ a b, a ∈ u → b ∈ v → I.rel a b
 
 def connectedComponents (X : Set (Trace I)) : Set (Trace I) := {u | isConnected u ∧ u ≠ ⟦[]⟧ ∧ ∃ v, u * v ∈ X ∧ independent' u v}
 
 
---@[simp]
---lemma mul_canonical {a b : Trace I} : mul a b = a * b := by rfl
 
-@[simp]
-lemma left_id (t : Trace I) : mul ⟦[]⟧ t = t := by
-  rcases t
-  rfl
+-- open Computability
 
-@[simp]
-lemma right_id (t : Trace I) : mul t ⟦[]⟧ = t := by
-  rcases t
-  simp
-  rfl
-
-@[simp]
-lemma left_id' (t : Trace I) : mk' [] * t = t := by
-  rcases t
-  rfl
-
-@[simp]
-lemma right_id' (t : Trace I) : t * mk' [] = t := by
-  rw [show t * (mk' []) = mul t ⟦[]⟧ from rfl]
-  exact right_id t
+lemma kstar_toTrace_commutes (L : Language α) : @toTrace α I (KStar.kstar L) = kstar (toTrace L) := by
+  simp [Language.kstar_def, Set.image, toTrace]
+  apply Set.ext
+  intro t
+  apply Iff.intro
+  all_goals simp [kstar]
+  · intro w ws hw
+    induction ws generalizing w t with
+    | nil =>
+      intro hL ht
+      use []
+      simp at hw
+      rw [hw] at ht
+      simp [ht, traceFlatten]
+    | cons u ws ih =>
+      simp at ih
+      intro hL ht
+      replace ih := ih (fun y hy => hL y (List.mem_cons_of_mem u hy))
+      choose ts hts using ih
+      use ⟦u⟧ :: ts
+      apply And.intro
+      · intro s hs
+        cases hs with
+        | head => use u; simp [hL]
+        | tail s hs => exact hts.left s hs
+      · simp [<- ht, hw]
+        -- rw [<- mul_def]
+        rw [traceFlatten_append, <- hts.right]
+        rfl
+  · intro ts hts ht
+    induction ts generalizing t with
+    | nil =>
+      use []
+      simp [ht, traceFlatten]
+      use []
+      simp
+    | cons s ts ih =>
+      simp at ih
+      replace ih := ih (fun y hy => hts y (List.mem_cons_of_mem s hy))
+      choose w hws hw using ih
+      rcases s with ⟨u⟩
+      rw [show Quot.mk (⇑(traceSetoid I)) u = ⟦u⟧ from rfl] at ht hts
+      replace hts := hts ⟦u⟧
+      simp at hts
+      choose u' hu' using hts
+      use u' ++ w
+      apply And.intro
+      · rcases hws with ⟨ws, hws⟩
+        use u' :: ws
+        simp [hws.left, hu']
+        exact hws.right
+      · simp [ht]
+        rw [traceFlatten_append, <- hw, <- hu'.right]
+        rfl
 
 namespace RegularExpression
 
@@ -597,65 +661,8 @@ theorem matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTra
       rw [<- ht, <- hw]
       rfl
   | star P ih =>
-    unfold matches_trace RegularExpression.matches' toTrace
-    simp [Language.kstar_def, Set.image, ih, toTrace]
-    apply Set.ext_iff.mpr
-    intro t
-    apply Iff.intro
-    all_goals simp [kstar]
-    · intro ts hts ht
-      induction ts generalizing t with
-      | nil =>
-        use []
-        simp at ht
-        simp [ht]
-        use []
-        simp
-      | cons head ts ih =>
-        simp at ih
-        have ih_cond : ∀ t' ∈ ts, ∃ a ∈ P.matches', ⟦a⟧ = t' := by
-          intro t' ht'
-          exact hts t' (List.mem_cons_of_mem head ht')
-        have ⟨a, ⟨⟨ls, ha, hls⟩, hat⟩⟩ := ih ih_cond
-        rw [show ⟦[]⟧ = mk' [] from rfl] at ht
-        rw [List.foldl, Trace.left_id', <- Trace.right_id' head, List.foldl_assoc] at ht
-        rcases head
-        rename_i w₀
-        have ⟨w, hw⟩ := hts ⟦w₀⟧ List.mem_cons_self
-        use w ++ a
-        apply And.intro
-        · use w :: ls
-          simp [ha, hw]
-          exact hls
-        · rw [ht, show ⟦w ++ a⟧ = mul ⟦w⟧ ⟦a⟧ from rfl, hat, hw.2]
-          rfl
-    · intro w ws hw hws ht
-      induction ws generalizing w t with
-      | nil =>
-        use []
-        simp at hw ⊢
-        rw [<- hw, ht]
-      | cons u us ih =>
-        simp at ih
-        have ih_cond : ∀ y ∈ us, y ∈ P.matches' := by
-          intro y hy
-          exact hws y (List.mem_cons_of_mem u hy)
-        have ⟨ts, ⟨hts, h_eqs⟩⟩ := ih ih_cond
-        use ⟦u⟧ :: ts
-        simp
-        repeat apply And.intro
-        · use u
-          simp [hws u List.mem_cons_self]
-        · exact hts
-        · rw [<- ht, hw]
-          simp
-          rw [show ⟦u ++ us.flatten⟧ = mul ⟦u⟧ ⟦us.flatten⟧ from rfl]
-          rw [show ⟦[]⟧ = mk' [] from rfl]
-          rw [Trace.left_id']
-          nth_rw 2 [<- Trace.right_id' ⟦u⟧]
-          rw [List.foldl_assoc]
-          rw [h_eqs]
-          rfl
+    unfold matches_trace RegularExpression.matches'
+    rw [kstar_toTrace_commutes, ih]
 
 
 @[simp]
@@ -846,15 +853,14 @@ lemma connectedComponents_of_connected (T : Set (Trace I)) (h : ∀ t ∈ T, isC
     have hvz : v = ⟦[]⟧ := by
       by_contra hvz
       exact append_indep_is_disconnected t v htv_id htz hvz h
-    rw [hvz, show ⟦[]⟧ = mk' [] from rfl, right_id'] at htv
+    rw [hvz, right_id] at htv
     exact htv
   · intro ⟨ht, htz⟩
     use (h t ht), htz, ⟦[]⟧
-    rw [show ⟦[]⟧ = mk' [] from rfl, Trace.right_id']
+    rw [right_id]
     use ht
     unfold independent'
-    simp [eps_is_empty]
-
+    simp [show ⟦[]⟧ = mk' [] from rfl, eps_is_empty]
 
 
 lemma empty_iff {w : List α} : (⟦w⟧ : Trace I) = ⟦[]⟧ ↔ w = [] := by
@@ -887,22 +893,51 @@ lemma isEmpty_iff {t : Trace I} : t.isEmpty = true ↔ t = ⟦[]⟧ := by
     rw [h]
     rfl
 
-lemma traceFlatten_filter_not_isEmpty  :
-    ∀ {L : List (Trace I)},
-      List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ (List.filter (!·.isEmpty) L)
-      = List.foldl (fun (u : Trace I) v => u * v) ⟦[]⟧ L
+lemma traceFlatten_filter_not_isEmpty :
+    ∀ {L : List (Trace I)}, traceFlatten (List.filter (!·.isEmpty) L) = traceFlatten L
   | [] => rfl
   | t :: L => by
     by_cases ht : t.isEmpty
     · apply isEmpty_iff.mp at ht
       simp [ht]
       simp [show isEmpty ⟦[]⟧ = true from rfl]
-      rw [show ⟦[]⟧ = mk' [] from rfl, left_id', show mk' [] = ⟦[]⟧ from rfl]
       exact traceFlatten_filter_not_isEmpty (L := L)
     · simp [ht]
-      rw [show ⟦[]⟧ = mk' [] from rfl, left_id', <- right_id' t, show mk' [] = ⟦[]⟧ from rfl]
-      repeat rw [List.foldl_assoc]
+      repeat rw [traceFlatten_append]
       rw [traceFlatten_filter_not_isEmpty (L := L)]
+
+lemma kstar_eq_minusEps (L : Language α) : KStar.kstar (L \ {[]}) = KStar.kstar L := by
+  apply Set.ext
+  intro w
+  apply Iff.intro
+  · intro ⟨ls, hw, hls⟩
+    use ls
+    simp [hw]
+    exact fun y hy => Set.diff_subset (hls y hy)
+  · intro ⟨ls, hls, ht⟩
+    use ls.filter (!·.isEmpty)
+    simp
+    apply And.intro
+    · simp [hls, List.flatten_filter_not_isEmpty]
+    · intro y hy hyz
+      exact Set.mem_diff_singleton.mpr ⟨ht y hy, hyz⟩
+
+lemma kstar_eq_minusEps_trace (T : Set (Trace I)) : kstar (T \ {⟦[]⟧}) = kstar T := by
+  apply Set.ext
+  intro t
+  apply Iff.intro
+  · intro ⟨ls, hls, ht⟩
+    use ls
+    simp [ht]
+    exact fun y hy => Set.diff_subset (hls y hy)
+  · intro ⟨ls, hls, ht⟩
+    use ls.filter (!·.isEmpty)
+    simp
+    apply And.intro
+    · intro y hy hyz
+      exact ⟨hls y hy, Trace.isEmpty_iff.ne.mp (ne_true_of_eq_false hyz)⟩
+    · simp [traceFlatten_filter_not_isEmpty, ht]
+
 
 /-- Theorem 4.1 (iii) => (iv) -/
 theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpression.isStarConnected I X) :
@@ -915,36 +950,19 @@ theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpres
   | comp P Q ihP ihQ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace, ihP h.1, ihQ h.2]
   | star P ih =>
     unfold RegularExpression.matches_trace RegularExpression.matches_cstar_trace
-    simp [ih h.left]
+    simp [<- ih h.1]
     unfold RegularExpression.isStarConnected at h
-    have hP_conn : (∀ t ∈ RegularExpression.matches_cstar_trace I P, t.isConnected) := by
+    have hP_conn : (∀ t ∈ RegularExpression.matches_trace I P, t.isConnected) := by
       intro t ht
-      rw [<- ih h.left, RegularExpression.matches_toTrace] at ht
       rcases t with ⟨w₀⟩
-      have ⟨w, hw, hw₀⟩ := ht
-      simp at hw₀
-      rw [<- hw₀, <- isConnected_toTrace]
-      exact h.right w hw
+      rw [show Quot.mk (⇑(traceSetoid I)) w₀ = ⟦w₀⟧ from rfl] at ht ⊢
+      rw [RegularExpression.matches_toTrace] at ht
+      simp [toTrace] at ht
+      rcases ht with ⟨w, hw⟩
+      rw [<- hw.2, <- isConnected_toTrace]
+      exact h.2 w hw.1
     rw [connectedComponents_of_connected _ hP_conn]
-    apply Set.ext
-    intro t
-    apply Iff.intro
-    · intro ⟨ls, hls, ht⟩
-      use ls.filter (!·.isEmpty)
-      simp
-      apply And.intro
-      · intro t' ht' htz'
-        use hls t' ht'
-        by_contra ht'_con
-        rw [ht'_con] at htz'
-        exact (Bool.eq_not_self (isEmpty ⟦[]⟧)).mp htz'
-      · rw [ht]
-        exact Eq.symm traceFlatten_filter_not_isEmpty
-    · intro ⟨ls, hls, ht⟩
-      use ls
-      simp [ht]
-      intro t' ht'
-      exact Set.mem_of_mem_inter_left (hls t' ht')
+    rw [kstar_eq_minusEps_trace]
 
 
 end Trace
