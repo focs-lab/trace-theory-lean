@@ -932,7 +932,7 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
 -- Theorem (1.4.8)
 /-- The trace monoid and `GraphMonoid` are isomorphic. -/
 noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
-    Trace (inducedIndependence D) ≃* GraphMonoid D := by
+    TraceMonoid (inducedIndependence D) ≃* GraphMonoid D := by
   apply dependenceMorphismIso
     traceDependenceMorphism
     Quotient.mk_surjective

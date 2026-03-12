@@ -69,18 +69,7 @@ inductive CommuteOnce (I : Independence α) : List α → List α → Prop
   | mk : ∀ (x y : List α) (a b : α), I.rel a b →
     CommuteOnce I (x ++ [a, b] ++ y) (x ++ [b, a] ++ y)
 
-instance : Coe α (FreeMonoid α) := ⟨FreeMonoid.of⟩
-
-inductive SwapOnce (I : Independence α) : FreeMonoid α → FreeMonoid α → Prop
-  | swap (a b : α) : I.rel a b → SwapOnce I (↑a * ↑b) (↑b * ↑a)
-
-def traceCon (I : Independence α) : Con (FreeMonoid α) := conGen (SwapOnce I)
-
-def TraceMonoid' (I : Independence α) := (traceCon I).Quotient
-
 variable {I : Independence α}
-
-instance : Monoid (TraceMonoid' I) := (traceCon I).monoid
 
 lemma eqvGen_append_right {u v w : List α}
     (h : Relation.EqvGen (CommuteOnce I) u v) :
@@ -660,18 +649,18 @@ theorem projection_lemma {u v : List α} [DecidableEq α] (D : Dependence α) :
 
 /-- The setoid structure on strings defined by the trace equivalence relation `TraceEqv I`.
 This serves as the basis for constructing the quotient type `Trace`. -/
-def traceSetoid (I : Independence α) : Setoid (List α) where
+def TraceSetoid (I : Independence α) : Setoid (List α) where
   r := TraceEqv I
   iseqv := Equivalence.mk TraceEqv.refl TraceEqv.symm TraceEqv.trans
 
 /-- The type of Mazurkiewicz traces, defined as the quotient of the free monoid
 by the trace equivalence relation induced by `I`. -/
-def Trace (I : Independence α) := Quotient (traceSetoid I)
+def TraceMonoid (I : Independence α) := Quotient (TraceSetoid I)
 
 /-- Composition (concatenation) of traces. This is induced by the concatenation
 operation on the underlying strings. -/
 @[simp]
-def mul : Trace I -> Trace I -> Trace I := by
+def mul : TraceMonoid I -> TraceMonoid I -> TraceMonoid I := by
   exact Quotient.lift₂
     (fun w₁ w₂ => ⟦w₁ ++ w₂⟧)
     (by
@@ -681,9 +670,9 @@ def mul : Trace I -> Trace I -> Trace I := by
     )
 
 /-- The empty trace, represented by the equivalence class of the empty list. -/
-def one := Quotient.mk (traceSetoid I) []
+def one := Quotient.mk (TraceSetoid I) []
 
-instance : Monoid (Trace I) where
+instance : Monoid (TraceMonoid I) where
   mul := mul
   one := one
   mul_assoc := by
@@ -708,7 +697,7 @@ instance : Monoid (Trace I) where
 variable (I) in
 /-- The prefix relation on traces. A trace `t₁` is a prefix of `t₂` if there exists
 a trace `⟦w⟧` such that `t₁` concatenated with `⟦w⟧` equals `t₂`. -/
-def isPrefix (t₁ t₂ : Trace I) := ∃ w, mul t₁ ⟦w⟧ = t₂
+def isPrefix (t₁ t₂ : TraceMonoid I) := ∃ w, mul t₁ ⟦w⟧ = t₂
 
 theorem exists_gcp {u v w : List α} [DecidableEq α]
     (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
@@ -840,6 +829,26 @@ instance : Monoid (List α) where
 
 variable [DecidableEq α]
 
+instance : CancelMonoid (TraceMonoid I) where
+  mul_left_cancel := by
+    intro a b c heq
+    induction a using Quotient.inductionOn with | h a =>
+    induction b using Quotient.inductionOn with | h b =>
+    induction c using Quotient.inductionOn with | h c =>
+    apply Quotient.sound
+    simp only at heq
+    have heqv := by simpa using Quotient.exact heq
+    exact append_cancel_left heqv
+  mul_right_cancel := by
+    intro a b c heq
+    induction a using Quotient.inductionOn with | h a =>
+    induction b using Quotient.inductionOn with | h b =>
+    induction c using Quotient.inductionOn with | h c =>
+    apply Quotient.sound
+    simp only at heq
+    have heqv := by simpa using Quotient.exact heq
+    exact append_cancel_right heqv
+
 variable (I) in
 /-- A dependence morphism is any homomophism from the free monoid of strings onto another monoid
 such that:
@@ -870,8 +879,8 @@ theorem DependenceMorphism.map_append {I M} [Monoid M]
   ϕ.toFun.map_mul u v
 
 /-- The natural homomorphism from the free monoid `List α` to the trace monoid `Trace I`. -/
-def mk' : List α →* Trace I where
-  toFun := Quotient.mk (traceSetoid I)
+def mk' : List α →* TraceMonoid I where
+  toFun := Quotient.mk (TraceSetoid I)
   map_one' := rfl
   map_mul' := by
     intro w₁ w₂
@@ -879,7 +888,7 @@ def mk' : List α →* Trace I where
 
 /-- The natural homomorphism from the free monoid of strings to the trace monoid
 is a dependence morphism. -/
-def traceDependenceMorphism : DependenceMorphism I (Trace I) where
+def traceDependenceMorphism : DependenceMorphism I (TraceMonoid I) where
   toFun := mk'
   A1 := by
     intro w hw

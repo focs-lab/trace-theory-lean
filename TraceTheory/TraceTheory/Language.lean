@@ -8,12 +8,12 @@ namespace TraceTheory
 
 section LexNf
 
-variable {α : Type} [LinearOrder α]
+variable {α : Type*} [LinearOrder α]
 
 /-- Lexicographic Normal Form.
 A word x is in normal form if it is minimal among all words equivalent to it. -/
 def IsLexNf (I : Independence α) (x : List α) : Prop :=
-  ∀ w, TraceEquiv I x w → x ≤ w
+  ∀ w, TraceEqv I x w → x ≤ w
 
 /-- The condition to be in Lexicographic Normal Form.
 For all factorizations x = ybuaz, where (a, b) ∈ I, and a < b,
@@ -34,18 +34,18 @@ lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf 
   use y ++ [a] ++ [b] ++ u ++ z
   rw [hx]
   constructor
-  · have h_comm_au : TraceEquiv I ([a] ++ u) (u ++ [a]) := by
+  · have h_comm_au : TraceEqv I ([a] ++ u) (u ++ [a]) := by
       apply comm_append_of_indep
       intro c hc
       simp at hc
       rw [hc]
       exact h
-    apply TraceEquiv.compat _ (TraceEquiv.refl z)
+    apply TraceEqv.compat _ (TraceEqv.refl z)
     simp only [List.append_assoc]
-    apply TraceEquiv.compat (TraceEquiv.refl y)
-    apply TraceEquiv.trans (TraceEquiv.compat (TraceEquiv.refl [b]) (TraceEquiv.symm h_comm_au))
+    apply TraceEqv.compat (TraceEqv.refl y)
+    apply TraceEqv.trans (TraceEqv.compat (TraceEqv.refl [b]) (TraceEqv.symm h_comm_au))
     simp only [← List.append_assoc]
-    exact TraceEquiv.compat (TraceEquiv.swap b a (I.symm a b h_indep)) (TraceEquiv.refl u)
+    exact TraceEqv.compat (TraceEqv.swap b a (I.symm a b h_indep)) (TraceEqv.refl u)
   · simp
     apply List.append_left_lt
     apply List.cons_lt_cons_iff.mpr
@@ -54,7 +54,7 @@ lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf 
 
 -- TODO: Move somewhere else?
 lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α}
-    (I : Independence α) (h : TraceEquiv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
+    (I : Independence α) (h : TraceEqv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
     I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ Independent I [a] u := by
   have h_rev := reverse_equiv_of_equiv h
   simp at h_rev
@@ -179,7 +179,7 @@ variable {α : Type} {I : Independence α}
 
 /-- The `Language` of all strings trace equivalent to strings in language `X`. -/
 def traceClosure (I : Independence α) (X : Language α) : Language α :=
-  { y | ∃ x ∈ X, TraceEquiv I x y }
+  { y | ∃ x ∈ X, TraceEqv I x y }
 
 /-- A language is `I`-closed if its trace closure under `I` is equal to itself. -/
 def IsClosed (I : Independence α) (X : Language α) : Prop :=
@@ -187,7 +187,7 @@ def IsClosed (I : Independence α) (X : Language α) : Prop :=
 
 theorem traceClosure.le_closure {X : Language α} : X ≤ traceClosure I X := by
   intro x hx
-  exact ⟨x, hx, TraceEquiv.refl x⟩
+  exact ⟨x, hx, TraceEqv.refl x⟩
 
 theorem traceClosure.mono {X Y : Language α} (h : X ≤ Y) :
     traceClosure I X ≤ traceClosure I Y := by
@@ -200,7 +200,7 @@ theorem traceClosure.idem {X : Language α} :
   apply le_antisymm
   · intro x hx
     rcases hx with ⟨y, ⟨z, hz, heqv_zy⟩, heqv_yx⟩
-    exact ⟨z, hz, TraceEquiv.trans heqv_zy heqv_yx⟩
+    exact ⟨z, hz, TraceEqv.trans heqv_zy heqv_yx⟩
   · apply mono
     apply le_closure
 
@@ -209,8 +209,8 @@ def IsValidFactorization
     (I : Independence α) (X : Language α) (x y : List α) (xs ys : List (List α)) : Prop :=
   xs.length = ys.length ∧
   (List.zipWith (· ++ ·) xs ys).flatten ∈ X ∧
-  TraceEquiv I x xs.flatten ∧
-  TraceEquiv I y ys.flatten ∧
+  TraceEqv I x xs.flatten ∧
+  TraceEqv I y ys.flatten ∧
   ∀ i : ℕ, ∀ (h : i + 1 < xs.length),
     Independent I (xs[i]'(Nat.lt_of_succ_lt h)) ((ys.drop i).flatten)
 
