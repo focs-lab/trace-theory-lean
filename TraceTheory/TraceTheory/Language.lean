@@ -56,9 +56,9 @@ lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf 
 lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α}
     (I : Independence α) (h : TraceEqv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
     I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ Independent I [a] u := by
-  have h_rev := reverse_equiv_of_equiv h
+  have h_rev := reverse_eqv_of_eqv h
   simp at h_rev
-  have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_exists_of_equiv_of_tail_ne h_rev hne
+  have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_exists_of_eqv_of_tail_ne h_rev hne
   constructor
   · exact h_indep
   · have ha := (mem_iff_mem a hx_rev).mpr
@@ -85,7 +85,7 @@ lemma lexNf_of_factorCondition
   contrapose! h
   have ⟨w, h_equiv, hlt⟩ := h
   have ⟨p, a, b, w', x', hw, hx, hlt'⟩ :=
-    exists_decomp_of_lt_of_len_eq hlt (length_eq_of_equiv h_equiv).symm
+    exists_decomp_of_lt_of_len_eq hlt (length_eq_of_eqv h_equiv).symm
   rw [hw, hx, List.append_assoc, List.append_assoc] at h_equiv
   replace h_equiv := (append_cancel_left h_equiv).symm
   have ⟨h_indep, u, v, hx', hu⟩ := indep_and_exists_of_equiv_of_head_ne I h_equiv (ne_of_lt hlt')
