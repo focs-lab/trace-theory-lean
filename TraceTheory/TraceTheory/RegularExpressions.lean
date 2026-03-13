@@ -1,7 +1,7 @@
 import TraceTheory.Lemmas
 import Mathlib.Computability.RegularExpressions
 
-open Trace
+open TraceTheory
 
 namespace RegularExpression
 
@@ -13,7 +13,7 @@ def isStarConnected (I : Independence α) : RegularExpression α → Prop
   | char _ => True
   | P + Q => isStarConnected I P ∧ isStarConnected I Q
   | P * Q => isStarConnected I P ∧ isStarConnected I Q
-  | star P => isStarConnected I P ∧ (∀ s ∈ P.matches', @isConnected' α I s)
+  | star P => isStarConnected I P ∧ (∀ s ∈ P.matches', @isConnected α I s)
 
 -- Interpretation of this RegularExpression as operating on trace languages.
 def matches_trace (I : Independence α) : RegularExpression α → Set (Trace I)
@@ -30,7 +30,7 @@ def isStarConnected_trace (I : Independence α) : RegularExpression α → Prop
   | char _ => True
   | P + Q => isStarConnected I P ∧ isStarConnected I Q
   | P * Q => isStarConnected I P ∧ isStarConnected I Q
-  | star P => isStarConnected I P ∧ (∀ t ∈ matches_trace I P, @isConnected α I t)
+  | star P => isStarConnected I P ∧ (∀ t ∈ matches_trace I P, @isConnectedT α I t)
 
 -- Interpretation of this RegularExpression as a <c-rational expression> operating on trace languages.
 def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Trace I)

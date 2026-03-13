@@ -1,37 +1,31 @@
 import Mathlib.Data.Finset.Prod
-import TraceTheory.Trace
 import TraceTheory.DependenceGraph
-import TraceTheory
 
-namespace List
+
+namespace TraceTheory
 
 variable {α : Type} [DecidableEq α]
 
-lemma count_proj (Sigma : Alphabet α) (w : List α) (a : α) :
-    (w.proj Sigma).count a = if a ∈ Sigma then w.count a else 0 := by
+lemma count_proj (S : Finset α) (w : List α) (a : α) :
+    (proj S w).count a = if a ∈ S then w.count a else 0 := by
   induction w with
   | nil => simp [proj]
   | cons b u ih =>
-    by_cases ha : a ∈ Sigma
+    by_cases ha : a ∈ S
     all_goals simp [ha] at ih
     · simp [proj, ha]
-      by_cases hab : b = a
-      · simp [hab, ha, ih]
-      · simp [hab]
-        by_cases hb : b ∈ Sigma
-        all_goals simp [hb, count_cons_of_ne hab, <- ih]
     · simp [ha]
       by_cases hab : b = a
-      · simp [hab, proj, ha, ih]
-      · by_cases hb : b ∈ Sigma
-        all_goals simp [proj, hb, count_cons_of_ne hab, ih]
+      · simp [hab, proj, ha, <- ih]
+      · by_cases hb : b ∈ S
+        all_goals simp [proj, hb, List.count_cons_of_ne hab, <- ih]
 
-end List
+end TraceTheory
 
 
 namespace DependenceGraph
 
-open Trace
+open TraceTheory
 variable {α : Type} {D : Dependence α} [DecidableEq α]
 
 def count (γ : DependenceGraph D) (a : α) := (Finset.filter (γ.φ · == a) Finset.univ).card
@@ -48,16 +42,16 @@ def occ (w : List α) : Finset (α × ℕ) :=
   | [] => ∅
   | a :: u => (occ u) ∪ {(a, w.count a)}
 
-def proj (A : Alphabet α) (R : Finset (α × ℕ)) : Finset (α × ℕ) :=
+def projOcc (A : Finset α) (R : Finset (α × ℕ)) : Finset (α × ℕ) :=
   R.filter (fun (a, _) => a ∈ A)
 
-lemma occ_proj_commute {w : List α} {A : Alphabet α} : proj A (occ w) = occ (w.proj A) := by
+lemma occ_proj_commute {w : List α} {A : Finset α} : projOcc A (occ w) = occ (TraceTheory.proj A w) := by
   induction w with
-  | nil => simp [occ, proj, List.proj]
+  | nil => simp [occ, projOcc, TraceTheory.proj]
   | cons a u ih =>
     by_cases ha : a ∈ A
-    · simp [occ, proj, List.proj, ha, List.count_proj]
-      simp [<- ih, proj]
+    · simp [occ, projOcc, TraceTheory.proj, ha] at ih ⊢
+      simp [<- ih]
       apply Finset.ext_iff.mpr
       intro p
       apply Iff.intro
@@ -77,10 +71,9 @@ lemma occ_proj_commute {w : List α} {A : Alphabet α} : proj A (occ w) = occ (w
           apply Finset.mem_filter.mp at hp
           apply Finset.mem_filter.mpr
           exact And.intro (Finset.mem_insert_of_mem hp.left) hp.right
-    · simp [occ, proj, List.proj, ha]
+    · simp [occ, projOcc, TraceTheory.proj, ha] at ih ⊢
       rw [Finset.filter_insert]
       simp [<- ih, ha]
-      rfl
 
 def ord_rev (w : List α) : Finset ((α × ℕ) × (α × ℕ)) :=
   match w with
@@ -90,15 +83,15 @@ def ord_rev (w : List α) : Finset ((α × ℕ) × (α × ℕ)) :=
 def ord (w : List α) : Finset ((α × ℕ) × (α × ℕ)) :=
   ord_rev w.reverse
 
-variable {I : Trace.Independence α}
+variable {I : TraceTheory.Independence α}
 
-def trace_intersect (I : Trace.Independence α) (w : List α) : (α × ℕ) × α × ℕ → Prop :=
-  (∀ v : List α, Trace.TraceEquiv I v w → · ∈ (ord v))
+def trace_intersect (I : TraceTheory.Independence α) (w : List α) : (α × ℕ) × α × ℕ → Prop :=
+  (∀ v : List α, TraceTheory.TraceEqv I v w → · ∈ (ord v))
 
 noncomputable instance trace_intersect_decidable (w : List α) : DecidablePred (trace_intersect I w) := by
   exact Classical.decPred (trace_intersect I w)
 
-noncomputable def ord_trace (T : Trace I) : Finset ((α × ℕ) × (α × ℕ)) :=
+noncomputable def ord_trace (T : TraceTheory.Trace I) : Finset ((α × ℕ) × (α × ℕ)) :=
   Quotient.lift (fun w => (ord w).filter (trace_intersect I w)) (by
     intro a b hab
     simp
@@ -111,14 +104,14 @@ noncomputable def ord_trace (T : Trace I) : Finset ((α × ℕ) × (α × ℕ)) 
       apply And.intro
       · exact (hp b) hab.symm
       · intro v vb
-        exact hp v (Trace.TraceEquiv.trans vb hab.symm)
+        exact hp v (TraceTheory.TraceEqv.trans vb hab.symm)
     · intro hp
       replace hp := (Finset.mem_filter.mp hp).right
       apply Finset.mem_filter.mpr
       apply And.intro
       · exact (hp a) hab
       · intro v va
-        exact hp v (Trace.TraceEquiv.trans va hab)
+        exact hp v (TraceTheory.TraceEqv.trans va hab)
   ) T
 
 

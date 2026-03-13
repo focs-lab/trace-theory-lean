@@ -1,41 +1,41 @@
-import TraceTheory.Basic
+import TraceTheory.Lemmas
 import Mathlib.Data.Finset.Pi
 
 namespace TraceTheory
 
 variable {α : Type} {I : Independence α}
 
-lemma indep_of_flatten {u : List α} {vs : List (List α)} (i : Fin vs.length) (h : independent I u vs.flatten) :
-    independent I u vs[i] := by
+lemma indep_of_flatten {u : List α} {vs : List (List α)} (i : Fin vs.length) (h : Independent I u vs.flatten) :
+    Independent I u vs[i] := by
   replace ⟨i, hi⟩ := i
   induction vs generalizing i with
   | nil =>
     simp at hi
   | cons v vs' ih =>
-    simp at h ⊢
+    simp [-Independent] at h ⊢
     cases i with
-    | zero => exact (indep_of_concat h).left
+    | zero => exact (indep_of_indep_append_right h).left
     | succ i =>
       simp at hi
-      exact ih (indep_of_concat h).right i hi
+      exact ih (indep_of_indep_append_right h).right i hi
 
 /-- (i) → (ii) of Corollary (2.3) in `Partial Commutation and Traces`.
   Note that t₁, t₂, …, tₙ is expressed as a list [ts], and (t₁ ++ t₂ ++ … ++ tₙ) via [ts.flatten].
   Similarly, p₁, …, pₙ is [ps] and q₁, …, qₙ is [qs]. -/
-theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h : TraceEquiv I (u ++ v) ts.flatten) :
+theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h : TraceEqv I (u ++ v) ts.flatten) :
     ∃ (ps qs : List (List α)),
     ps.length = ts.length
     ∧ qs.length = ts.length
-    ∧ TraceEquiv I u ps.flatten
-    ∧ TraceEquiv I v qs.flatten
-    ∧ (∀ i : Fin (min ts.length (min ps.length qs.length)), TraceEquiv I ts[i] (ps[i] ++ qs[i]))
-    ∧ ∀ i : Fin qs.length, ∀ j : Fin ps.length, i.val < j.val → independent I qs[i] ps[j] := by
+    ∧ TraceEqv I u ps.flatten
+    ∧ TraceEqv I v qs.flatten
+    ∧ (∀ i : Fin (min ts.length (min ps.length qs.length)), TraceEqv I ts[i] (ps[i] ++ qs[i]))
+    ∧ ∀ i : Fin qs.length, ∀ j : Fin ps.length, i.val < j.val → Independent I qs[i] ps[j] := by
   induction ts generalizing u v with
   | nil =>
     simp at h ⊢
-    replace h := length_eq_of_equiv h
+    replace h := length_eq_of_eqv h
     simp at h
-    simp [h, TraceEquiv.refl]
+    simp [h, TraceEqv.refl]
     intro ⟨i, hi⟩
     simp at hi
   | cons t tsuf ih =>
@@ -47,12 +47,12 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
     repeat' apply And.intro
     · simp [ih_p_len]
     · simp [ih_q_len]
-    · apply TraceEquiv.trans h_up
+    · apply TraceEqv.trans h_up
       simp
-      exact TraceEquiv.compat (TraceEquiv.refl p) ih_p
-    · apply TraceEquiv.trans h_vq
+      exact TraceEqv.compat (TraceEqv.refl p) ih_p
+    · apply TraceEqv.trans h_vq
       simp
-      exact TraceEquiv.compat (TraceEquiv.refl q) ih_q
+      exact TraceEqv.compat (TraceEqv.refl q) ih_q
     · intro ⟨i, hi⟩
       by_cases hzi : i = 0
       · simp [hzi, h_tpq]
@@ -68,7 +68,7 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
         cases i with
         | zero =>
           simp at hj ⊢
-          have h_ind_ps := indep_of_indep_of_equiv (indep_symm h_ind) ih_p
+          have h_ind_ps := indep_of_indep_of_eqv (independent_symm h_ind) ih_p
           exact indep_of_flatten ⟨j, hj⟩ h_ind_ps
         | succ i =>
           simp at hi hj hij ⊢

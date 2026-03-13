@@ -2,7 +2,7 @@ import TraceTheory.Lemmas
 import TraceTheory.MyhillNerode
 import TraceTheory.RegularExpressions
 
-namespace Trace
+namespace TraceTheory
 
 variable {α : Type} {I : Independence α}
 
@@ -19,14 +19,14 @@ variable {α : Type} {I : Independence α}
   Note that P · ∅ or ∅ · P are the only cases where this patch is needed.
 -/
 theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α)
-    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected' α I s) :
+    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected α I s) :
     ∃ Y, RegularExpression.isStarConnected I Y ∧ X.matches' = Y.matches' := by
   induction X with
   | zero => use RegularExpression.zero, trivial
   | epsilon => use RegularExpression.epsilon, trivial
   | char a => use RegularExpression.char a, trivial
   | plus P Q ihP ihQ =>
-    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected' α I s) := by
+    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected α I s) := by
       intro s ⟨u, v, h⟩
       apply hconn s
       use u, v
@@ -40,7 +40,7 @@ theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α
       exact h_match_subset _ h
     have ⟨P', hP'⟩ := ihP ihP_cond
 
-    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected' α I s) := by
+    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected α I s) := by
       intro s ⟨u, v, h⟩
       apply hconn s
       use u, v
@@ -85,7 +85,7 @@ theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α
 
     simp at hpe hqe
 
-    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected' α I s) := by
+    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected α I s) := by
       intro s ⟨u, v, h⟩
       apply hconn s
       have ⟨q, hq⟩ := hqe
@@ -97,7 +97,7 @@ theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α
       simp
     have ⟨P', hP'⟩ := ihP ihP_cond
 
-    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected' α I s) := by
+    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected α I s) := by
       intro s ⟨u, v, h⟩
       apply hconn s
       have ⟨p, hp⟩ := hpe
@@ -112,7 +112,7 @@ theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α
     use P' * Q'
     simp [RegularExpression.isStarConnected, hP', hQ']
   | star P ih =>
-    have ih_cond : ∀ (s : List α), isIterativeFactor P.matches' s → @isConnected' α I s := by
+    have ih_cond : ∀ (s : List α), isIterativeFactor P.matches' s → @isConnected α I s := by
       intro s ⟨u, v, h⟩
       apply hconn
       use u, v
@@ -138,7 +138,7 @@ theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α
 
 /-- Theorem 4.1 (ii) => (iii) -/
 theorem connectedIterativeFactors_equiv_starConnected (T : Set (Trace I)) (X : RegularExpression α) (himg : T = toTrace X.matches')
-    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected' α I s) :
+    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected α I s) :
     ∃ P, RegularExpression.isStarConnected I P ∧ T = (RegularExpression.matches_trace I P) := by
   simp [RegularExpression.matches_toTrace]
   have ⟨P, hP⟩ := connectedIterativeFactors_equiv_starConnected' X hconn
@@ -160,10 +160,10 @@ theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpres
     unfold RegularExpression.matches_trace RegularExpression.matches_cstar_trace
     simp [<- ih h.1]
     unfold RegularExpression.isStarConnected at h
-    have hP_conn : (∀ t ∈ RegularExpression.matches_trace I P, t.isConnected) := by
+    have hP_conn : (∀ t ∈ RegularExpression.matches_trace I P, isConnectedT t) := by
       intro t ht
       rcases t with ⟨w₀⟩
-      rw [show Quot.mk (⇑(traceSetoid I)) w₀ = ⟦w₀⟧ from rfl] at ht ⊢
+      rw [show Quot.mk (⇑(TraceSetoid I)) w₀ = ⟦w₀⟧ from rfl] at ht ⊢
       rw [RegularExpression.matches_toTrace] at ht
       simp [toTrace] at ht
       rcases ht with ⟨w, hw⟩
@@ -173,4 +173,4 @@ theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpres
     rw [kstar_eq_minusEps_trace]
 
 
-end Trace
+end TraceTheory

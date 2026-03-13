@@ -287,8 +287,7 @@ theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
     (h : TraceEqv I (u ++ [a] ++ v) (w ++ [a])) (h_mem : a ∉ v) :
     Independent I [a] v := by
   induction v using reverseRecOn generalizing w with
-  | nil =>
-    simp
+  | nil => simp
   | append_singleton x b ih =>
     intro a' ha' b' hb'
     simp at ha' hb' h_mem
@@ -308,8 +307,7 @@ theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
 theorem comm_singleton_of_indep {w : List α} {a : α} (h : Independent I [a] w) :
     TraceEqv I (w ++ [a]) ([a] ++ w) := by
   induction w using reverseRecOn with
-  | nil =>
-    apply TraceEqv.refl
+  | nil => apply TraceEqv.refl
   | append_singleton w' b ih =>
     simp at h
     have haw' : Independent I [a] w' := by
