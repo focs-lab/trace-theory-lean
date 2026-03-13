@@ -1,7 +1,7 @@
-import TraceTheory.Trace
+import TraceTheory.Basic
 import Mathlib.Data.Finset.Pi
 
-namespace Trace
+namespace TraceTheory
 
 variable {α : Type} {I : Independence α}
 
@@ -396,4 +396,4 @@ theorem recognizablePreImage_is_recognizable (L : Type) [Monoid L] (φ : L →* 
   have ψ := @preImage_syntacticMonoid_iso M _ T L _ φ hφ
   exact ψ.finite_iff.mp h
 
-end Trace
+end TraceTheory

@@ -4,6 +4,7 @@ import Mathlib.Data.Fintype.Basic
 import Mathlib.Logic.Relation
 import Mathlib.Tactic.FinCases
 import TraceTheory.Basic
+import TraceTheory.DependenceMorphism
 
 open TraceTheory
 
@@ -932,7 +933,7 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
 -- Theorem (1.4.8)
 /-- The trace monoid and `GraphMonoid` are isomorphic. -/
 noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
-    TraceMonoid (inducedIndependence D) ≃* GraphMonoid D := by
+    Trace (inducedIndependence D) ≃* GraphMonoid D := by
   apply dependenceMorphismIso
     traceDependenceMorphism
     Quotient.mk_surjective
