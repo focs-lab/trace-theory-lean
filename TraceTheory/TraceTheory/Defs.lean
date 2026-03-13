@@ -117,7 +117,7 @@ def mul : Trace I -> Trace I -> Trace I :=
 /-- The empty trace, represented by the equivalence class of the empty list. -/
 def one := Quotient.mk (TraceSetoid I) []
 
-instance : CancelMonoid (Trace I) where
+instance : Monoid (Trace I) where
   mul := mul
   one := one
   mul_assoc := by
@@ -138,8 +138,6 @@ instance : CancelMonoid (Trace I) where
     apply Quotient.sound
     rw [List.append_nil]
     exact TraceEqv.refl _
-  mul_left_cancel := sorry
-  mul_right_cancel := sorry
 
 -- TODO better name
 /-- The natural homomorphism from the free monoid `List α` to the `TraceMonoid I`. -/

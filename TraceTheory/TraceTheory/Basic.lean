@@ -9,49 +9,30 @@ variable {α : Type*} {I : Independence α}
 theorem length_eq_of_eqv {u v : List α} (h : TraceEqv I u v) :
     u.length = v.length := by
   induction h with
-  | swap _ _ _ =>
-    rfl
-  | refl _ =>
-    rfl
-  | symm _ ih =>
-    exact ih.symm
-  | trans _ _ ih₁ ih₂ =>
-    exact ih₁.trans ih₂
-  | compat _ _ ih₁ ih₂ =>
-    simp [ih₁, ih₂]
+  | swap _ _ _ => rfl
+  | refl _ => rfl
+  | symm _ ih => exact ih.symm
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+  | compat _ _ ih₁ ih₂ => simp [ih₁, ih₂]
 
 theorem mem_iff_mem {u v : List α} (a : α) (h : TraceEqv I u v) :
     (a ∈ u ↔ a ∈ v) := by
   induction h with
-  | swap _ _ _ =>
-    simp
-    exact Or.comm
-  | refl _ =>
-    exact Eq.to_iff rfl
-  | symm _ ih =>
-    exact Iff.symm ih
-  | trans _ _ ih₁ ih₂ =>
-    exact ih₁.trans ih₂
-  | compat _ _ ih₁ ih₂ =>
-    simp
-    exact or_congr ih₁ ih₂
+  | swap _ _ _ => simp [or_comm]
+  | refl _ => rfl
+  | symm _ ih => exact ih.symm
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+  | compat _ _ ih₁ ih₂ => simp [ih₁, ih₂]
 
 /-- The mirror rule. -/
 theorem reverse_eqv_of_eqv {u v : List α} (h : TraceEqv I u v) :
     TraceEqv I u.reverse v.reverse := by
   induction h with
-  | swap a b h =>
-    simp
-    exact TraceEqv.swap b a (I.symm a b h)
-  | refl u' =>
-    exact TraceEqv.refl u'.reverse
-  | symm _ ih =>
-    exact ih.symm
-  | trans _ _ ih₁ ih₂ =>
-    exact ih₁.trans ih₂
-  | compat _ _ ih₁ ih₂ =>
-    simp
-    exact ih₂.compat ih₁
+  | swap a b h => simp [TraceEqv.swap b a (I.symm a b h)]
+  | refl u' => apply TraceEqv.refl
+  | symm _ ih => exact ih.symm
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+  | compat _ _ ih₁ ih₂ => simp [ih₂.compat ih₁]
 
 /-- The projection rule. -/
 theorem proj_eqv_of_eqv {u v : List α} {S : Finset α} [DecidableEq α] (h : TraceEqv I u v) :
@@ -64,15 +45,10 @@ theorem proj_eqv_of_eqv {u v : List α} {S : Finset α} [DecidableEq α] (h : Tr
     · apply TraceEqv.refl
     · apply TraceEqv.refl
     · apply TraceEqv.refl
-  | refl _ =>
-    apply TraceEqv.refl
-  | symm _ ih =>
-    exact ih.symm
-  | trans _ _ ih₁ ih₂ =>
-    exact ih₁.trans ih₂
-  | compat _ _ ih₁ ih₂ =>
-    simp
-    exact ih₁.compat ih₂
+  | refl _ => apply TraceEqv.refl
+  | symm _ ih => exact ih.symm
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+  | compat _ _ ih₁ ih₂ => simp [ih₁.compat ih₂]
 
 theorem proj_eq_of_eqv {u v : List α} [DecidableEq α]
     (D : Dependence α) (h : TraceEqv (inducedIndependence D) u v)
@@ -94,15 +70,10 @@ theorem proj_eq_of_eqv {u v : List α} [DecidableEq α]
     · simp [filter, ha', hb']
     · simp [filter, ha', hb']
     · simp [filter, ha', hb']
-  | refl _ =>
-    rfl
-  | symm _ ih =>
-    exact ih.symm
-  | trans _ _ ih₁ ih₂ =>
-    exact ih₁.trans ih₂
-  | compat _ _ ih₁ ih₂ =>
-    simp [proj_append]
-    rw [ih₁, ih₂]
+  | refl _ => rfl
+  | symm _ ih => exact ih.symm
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+  | compat _ _ ih₁ ih₂ => simp [ih₁, ih₂]
 
 theorem cancelRight_congr {u v : List α} [DecidableEq α] (a : α) (h : TraceEqv I u v) :
     TraceEqv I (u ÷ a) (v ÷ a) := by
@@ -118,19 +89,14 @@ theorem cancelRight_congr {u v : List α} [DecidableEq α] (a : α) (h : TraceEq
     · simp [cancelRight, hab, hac]
       apply TraceEqv.swap
       exact h_indep
-  | refl _ =>
-    apply TraceEqv.refl
-  | symm _ ih =>
-    exact ih.symm
-  | trans _ _ ih₁ ih₂ =>
-    exact ih₁.trans ih₂
+  | refl _ => apply TraceEqv.refl
+  | symm _ ih => exact ih.symm
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
   | compat t₁ t₂ ih₁ ih₂ =>
     expose_names
     by_cases h_mem : a ∈ w₃
-    · simp [h_mem, (mem_iff_mem a t₂).mp h_mem]
-      exact t₁.compat ih₂
-    · simp [h_mem, (mem_iff_mem a t₂).mpr.mt h_mem]
-      exact ih₁.compat t₂
+    · simp [h_mem, (mem_iff_mem a t₂).mp h_mem, t₁.compat ih₂]
+    · simp [h_mem, (mem_iff_mem a t₂).mpr.mt h_mem, ih₁.compat t₂]
 
 theorem erase_congr {u v : List α} [DecidableEq α] (a : α) (h : TraceEqv I u v) :
     TraceEqv I (u.erase a) (v.erase a) := by
@@ -163,6 +129,22 @@ theorem append_cancel_middle {l r u v : List α} [DecidableEq α]
     TraceEqv I u v :=
   append_cancel_left (append_cancel_right h)
 
+instance [DecidableEq α] : CancelMonoid (Trace I) where
+  mul_left_cancel := by
+    intro t₁ t₂ t₃
+    refine Quotient.inductionOn₃ t₁ t₂ t₃ (fun w₁ w₂ w₃ => ?_)
+    intro heq
+    apply Quotient.sound
+    simp only at heq
+    exact append_cancel_left (Quotient.exact heq)
+  mul_right_cancel := by
+    intro t₁ t₂ t₃
+    refine Quotient.inductionOn₃ t₁ t₂ t₃ (fun w₁ w₂ w₃ => ?_)
+    intro heq
+    apply Quotient.sound
+    simp only at heq
+    exact append_cancel_right (Quotient.exact heq)
+
 lemma eqv_length_eq_two {a b : α} {w : List α} (h : TraceEqv I [a, b] w) :
     w = [a, b] ∨ w = [b, a] := by
   rcases length_eq_two.mp (length_eq_of_eqv h).symm with ⟨c, d, rfl⟩
@@ -185,13 +167,11 @@ lemma eqv_singletons {a b : α} (h : TraceEqv I [a] [b]) : a = b := by
   generalize hu : ([a] : List α) = u at h
   generalize hv : ([b] : List α) = v at h
   induction h generalizing a b with
-  | swap _ _ _ =>
-    cases hu
+  | swap _ _ _ => cases hu
   | refl _ =>
     subst hv
     injection hu
-  | symm _ ih =>
-    exact (ih hv hu).symm
+  | symm _ ih => exact (ih hv hu).symm
   | trans t₁ t₂ _ _ =>
     have ht₁ := mem_iff_mem a t₁
     have ht₂ := mem_iff_mem a t₂
@@ -287,8 +267,7 @@ theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
     (h : TraceEqv I (u ++ [a] ++ v) (w ++ [a])) (h_mem : a ∉ v) :
     Independent I [a] v := by
   induction v using reverseRecOn generalizing w with
-  | nil =>
-    simp
+  | nil => simp
   | append_singleton x b ih =>
     intro a' ha' b' hb'
     simp at ha' hb' h_mem
@@ -308,8 +287,7 @@ theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
 theorem comm_singleton_of_indep {w : List α} {a : α} (h : Independent I [a] w) :
     TraceEqv I (w ++ [a]) ([a] ++ w) := by
   induction w using reverseRecOn with
-  | nil =>
-    apply TraceEqv.refl
+  | nil => apply TraceEqv.refl
   | append_singleton w' b ih =>
     simp at h
     have haw' : Independent I [a] w' := by
