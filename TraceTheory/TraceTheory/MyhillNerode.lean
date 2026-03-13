@@ -1,16 +1,19 @@
-import TraceTheory.Lemmas
+import TraceTheory.Basic
+import TraceTheory.Computability
 import Mathlib.Data.Finset.Pi
+import Mathlib.Data.Fintype.EquivFin
+import Mathlib.Data.Fintype.Pi
 
 namespace TraceTheory
 
-variable {α : Type} {I : Independence α}
+variable {α : Type*} {I : Independence α}
 
-lemma indep_of_flatten {u : List α} {vs : List (List α)} (i : Fin vs.length) (h : Independent I u vs.flatten) :
+lemma indep_of_flatten {u : List α} {vs : List (List α)}
+    (i : Fin vs.length) (h : Independent I u vs.flatten) :
     Independent I u vs[i] := by
-  replace ⟨i, hi⟩ := i
+  rcases i with ⟨i, hi⟩
   induction vs generalizing i with
-  | nil =>
-    simp at hi
+  | nil => contradiction
   | cons v vs' ih =>
     simp [-Independent] at h ⊢
     cases i with
@@ -22,36 +25,39 @@ lemma indep_of_flatten {u : List α} {vs : List (List α)} (i : Fin vs.length) (
 /-- (i) → (ii) of Corollary (2.3) in `Partial Commutation and Traces`.
   Note that t₁, t₂, …, tₙ is expressed as a list [ts], and (t₁ ++ t₂ ++ … ++ tₙ) via [ts.flatten].
   Similarly, p₁, …, pₙ is [ps] and q₁, …, qₙ is [qs]. -/
-theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h : TraceEqv I (u ++ v) ts.flatten) :
-    ∃ (ps qs : List (List α)),
-    ps.length = ts.length
-    ∧ qs.length = ts.length
-    ∧ TraceEqv I u ps.flatten
-    ∧ TraceEqv I v qs.flatten
-    ∧ (∀ i : Fin (min ts.length (min ps.length qs.length)), TraceEqv I ts[i] (ps[i] ++ qs[i]))
-    ∧ ∀ i : Fin qs.length, ∀ j : Fin ps.length, i.val < j.val → Independent I qs[i] ps[j] := by
+theorem levi_lemma_gen {u v : List α} {ts : List (List α)} [DecidableEq α]
+    (h : TraceEqv I (u ++ v) ts.flatten) :
+    ∃ ps qs : List (List α),
+      ps.length = ts.length ∧
+      qs.length = ts.length ∧
+      TraceEqv I u ps.flatten ∧
+      TraceEqv I v qs.flatten ∧
+      (∀ i : Fin (min ts.length (min ps.length qs.length)), TraceEqv I ts[i] (ps[i] ++ qs[i])) ∧
+      ∀ i : Fin qs.length, ∀ j : Fin ps.length, i.val < j.val → Independent I qs[i] ps[j] := by
   induction ts generalizing u v with
   | nil =>
-    simp at h ⊢
+    rw [List.flatten_nil] at h
     replace h := length_eq_of_eqv h
-    simp at h
-    simp [h, TraceEqv.refl]
+    simp only [List.length_append, List.length_nil, Nat.add_eq_zero_iff,
+      List.length_eq_zero_iff] at h
+    rcases h with ⟨rfl, rfl⟩
+    use [], []
+    simp only [List.length_nil, List.flatten_nil, Fin.getElem_fin, Independent, IsEmpty.forall_iff,
+      and_true, true_and, TraceEqv.refl]
     intro ⟨i, hi⟩
-    simp at hi
+    contradiction
   | cons t tsuf ih =>
-    have ⟨p, psuf, q, qsuf, h_ind, h_up, h_vq, h_tpq, h_tpq_suf⟩ := levi_lemma h
-    replace ih := ih psuf qsuf h_tpq_suf.symm
-    have ⟨ps_i, qs_i, ih_p_len, ih_q_len, ih_p, ih_q, ih_tpq, ih_ind⟩ := ih
-    clear ih
+    rcases levi_lemma h with ⟨p, psuf, q, qsuf, h_ind, h_up, h_vq, h_tpq, h_tpq_suf⟩
+    rcases ih h_tpq_suf.symm with ⟨ps_i, qs_i, ih_p_len, ih_q_len, ih_p, ih_q, ih_tpq, ih_ind⟩
     use p :: ps_i, q :: qs_i
-    repeat' apply And.intro
-    · simp [ih_p_len]
-    · simp [ih_q_len]
+    and_intros
+    · simpa
+    · simpa
     · apply TraceEqv.trans h_up
-      simp
+      simp only [List.flatten_cons]
       exact TraceEqv.compat (TraceEqv.refl p) ih_p
     · apply TraceEqv.trans h_vq
-      simp
+      simp only [List.flatten_cons]
       exact TraceEqv.compat (TraceEqv.refl q) ih_q
     · intro ⟨i, hi⟩
       by_cases hzi : i = 0
@@ -59,55 +65,47 @@ theorem levi_lemma_gen (u v : List α) (ts : List (List α)) [DecidableEq α] (h
       · cases i with
         | zero => contradiction
         | succ i =>
-          simp at hi ⊢
-          exact ih_tpq ⟨i, by simp; exact hi⟩
+          simp only [List.length_cons, Nat.add_min_add_right, Nat.add_lt_add_iff_right, lt_inf_iff,
+            Fin.getElem_fin, List.getElem_cons_succ] at hi ⊢
+          exact ih_tpq ⟨i, by simpa⟩
     · intro ⟨i, hi⟩ ⟨j, hj⟩ hij
       cases j with
       | zero => contradiction
       | succ j =>
         cases i with
         | zero =>
-          simp at hj ⊢
-          have h_ind_ps := indep_of_indep_of_eqv (independent_symm h_ind) ih_p
-          exact indep_of_flatten ⟨j, hj⟩ h_ind_ps
+          simp only [List.length_cons, Nat.add_lt_add_iff_right, Independent, Fin.zero_eta,
+            Fin.getElem_fin, Fin.val_zero, List.getElem_cons_zero, List.getElem_cons_succ] at hj ⊢
+          exact indep_of_flatten ⟨j, hj⟩ (indep_of_indep_of_eqv (independent_symm h_ind) ih_p)
         | succ i =>
-          simp at hi hj hij ⊢
+          simp only [List.length_cons, Nat.add_lt_add_iff_right, Independent, Fin.getElem_fin,
+            List.getElem_cons_succ] at hi hj hij ⊢
           exact ih_ind ⟨i, hi⟩ ⟨j, hj⟩ hij
 
-
-variable {M : Type} [Monoid M]
-variable {α : Type} [Monoid α]
-variable {σ : Type}
+variable {M : Type} {σ : Type} [Monoid M] [Monoid α]
 
 -- We need [DecidableEq N] to match the definition of `IsRecognizableDFMA`; see the latter.
-def IsRecognizable (S : Set M) : Prop :=
-  ∃ N : Type, ∃ _ : Monoid N, ∃ _ : Fintype N, ∃ _ : DecidableEq N, ∃ φ : M →* N, S = φ⁻¹' (φ '' S)
+def IsRecognizable (T : Set M) : Prop :=
+  ∃ (N : Type) (_ : Monoid N) (_ : Fintype N) (_ : DecidableEq N) (φ : M →* N), T = φ⁻¹' (φ '' T)
 
 variable (α σ) in
 /-- (Deterministic) M-automaton. Following the convention of `Mathlib.Computability.DFA`,
   the finiteness of `σ` is not imposed here and should be handled separately. -/
-structure DFMA where
-  step : σ → α → σ
-  start : σ
-  accept : Set σ
+structure DFMA extends DFA α σ where
   idempotent (q : σ) : step q 1 = q
   composition (q : σ) (u v : α) : step (step q u) v = step q (u * v)
 
 namespace DFMA
 
-variable {A : DFMA α σ}
+def eval {A : DFMA α σ} (x : α) : σ := A.step A.start x
 
-def eval (x : α) : σ := A.step A.start x
-
-def eval_set (S : Set α) : Set σ := S.image A.eval
-
-def accepts : Set α := {x | A.eval x ∈ A.accept}
+def accepts {A : DFMA α σ} : Set α := {x | A.eval x ∈ A.accept}
 
 end DFMA
 
 -- We need [DecidableEq σ] to derive the finiteness of (σ → σ) through `Finset.pi`.
 def IsRecognizableDFMA (S : Set M) : Prop :=
-  ∃ σ : Type, ∃ _ : Fintype σ, ∃ _ : DecidableEq σ, ∃ A : DFMA M σ, S = A.accepts
+  ∃ (σ : Type) (_ : Fintype σ) (_ : DecidableEq σ) (A : DFMA M σ), S = A.accepts
 
 /-- Prop 4.1 (i) => (iii) -/
 theorem recognizable_is_recognizableDFMA (S : Set M) :
@@ -125,11 +123,11 @@ theorem recognizable_is_recognizableDFMA (S : Set M) :
       rw [map_mul φ u v]
       exact mul_assoc q (φ u) (φ v)
   }
-  unfold DFMA.accepts DFMA.eval DFMA.step
-  simp
+  unfold DFMA.accepts DFMA.eval DFA.step
+  simp only [one_mul, Set.mem_image]
   apply Set.ext_iff.mpr
   intro x
-  apply Iff.intro
+  constructor
   · intro hx
     apply Set.mem_setOf.mpr
     use x
@@ -138,28 +136,6 @@ theorem recognizable_is_recognizableDFMA (S : Set M) :
     rcases hx with ⟨y, hy, hy_eq⟩
     rw [h, Set.mem_preimage, ← hy_eq]
     exact ⟨y, hy, rfl⟩
-
-def fintype_to_fintype_is_fintype (α β : Type) [Fintype α] [Fintype β] [DecidableEq α] :
-    Fintype (α → β) := by
-  rename_i hα hβ _
-  refine ⟨?_, ?_⟩
-  · have proj := (@Fintype.elems α).pi fun _ => @Fintype.elems β hβ
-    exact proj.map {
-      toFun f := fun a => f a (Fintype.complete a)
-      inj' := by
-        simp [Function.Injective]
-        intro f g h
-        apply funext
-        intro a
-        have h_eq_at : (fun a => f a (Fintype.complete a)) a = (fun a => g a (Fintype.complete a)) a := by rw[h]
-        simp at h_eq_at
-        exact funext fun x => h_eq_at
-    }
-  · intro f
-    simp
-    use fun a h => f a
-    simp
-    exact fun a h => Fintype.complete (f a)
 
 /-- Prop 4.1 (iii) => (i) -/
 theorem recognizableDFMA_is_recognizable (S : Set M) :
@@ -174,7 +150,7 @@ theorem recognizableDFMA_is_recognizable (S : Set M) :
     one_mul := fun f => rfl
     mul_one := fun f => rfl
   }
-  use fn_mon, fintype_to_fintype_is_fintype σ σ, instDecidableEqOfLawfulBEq
+  use fn_mon, inferInstance, inferInstance
   use {
     toFun := fun m => (fun x => A.step x m)
     map_one' := by apply funext A.idempotent
@@ -203,7 +179,6 @@ theorem recognizableDFMA_is_recognizable (S : Set M) :
     simp at hm_eq
     rw [hm_eq] at hm'
     exact hm'
-
 
 variable {T : Set M}
 
@@ -260,7 +235,6 @@ instance : Monoid (syntacticMonoid T) where
     rw [hM.mul_one]
     intro u v
     rfl
-
 
 /-- Prop 4.1 (ii) => (i) -/
 theorem finSyntacticIndex_is_recognizable :
@@ -339,7 +313,8 @@ theorem recognizable_has_recognizablePreImage (L : Type) [Monoid L] (φ : L →*
     rw [Set.mem_preimage]
     exact this
 
-noncomputable def preImage_syntacticMonoid_iso (L : Type) [Monoid L] (φ : L →* M) (hφ : Function.Surjective φ) :
+noncomputable def preImage_syntacticMonoid_iso (L : Type) [Monoid L]
+    (φ : L →* M) (hφ : Function.Surjective φ) :
     syntacticMonoid (φ ⁻¹' T) ≃* syntacticMonoid T := by
   refine ⟨?_, ?_⟩
   · refine ⟨?_, ?_, ?_, ?_⟩

@@ -8,7 +8,7 @@ import TraceTheory.DependenceMorphism
 
 open TraceTheory
 
-variable {α : Type} {D : Dependence α}
+variable {α : Type*} {D : Dependence α}
 
 variable (D) in
 /-- A `DependenceGraph` over `D` is a triple $\gamma=(V,R,\varphi)$ where $V$ is a finite set,
