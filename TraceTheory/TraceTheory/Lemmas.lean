@@ -63,16 +63,16 @@ lemma traceFlatten_append {u : Trace I} (L : List (Trace I)) : traceFlatten (u :
   simp
 
 
-def dependencyIn (s : List α) (a b : {a : α // a ∈ s}) := (inducedDependence I).rel a b
+def dependencyIn (s : List α) (a b : α) := (inducedDependence I).rel a b ∧ a ∈ s ∧ b ∈ s
 
-def dependencyTransClosureIn (s : List α) (a b : {a : α // a ∈ s}) := Relation.TransGen (@dependencyIn α I s) a b
+def dependencyTransClosureIn (s : List α) (a b : α) := Relation.TransGen (@dependencyIn α I s) a b
 
 def isConnected (s : List α) := ∀ a b : {a : α // a ∈ s}, @dependencyTransClosureIn α I s a b
 
 
-def dependencyInT (t : Trace I) (a b : {a : α // a ∈ t}) := (inducedDependence I).rel a b
+def dependencyInT (t : Trace I) (a b : α) := (inducedDependence I).rel a b ∧ a ∈ t ∧ b ∈ t
 
-def dependencyTransClosureInT (t : Trace I) (a b : {a : α // a ∈ t}) := Relation.TransGen (dependencyInT t) a b
+def dependencyTransClosureInT (t : Trace I) (a b : α) := Relation.TransGen (dependencyInT t) a b
 
 def isConnectedT (t : Trace I) := ∀ a b : {a : α // a ∈ t}, dependencyTransClosureInT t a b
 
@@ -149,24 +149,23 @@ lemma kstar_toTrace_commutes (L : Language α) : @toTrace α I (KStar.kstar L) =
         rfl
 
 lemma append_indep_is_disconnected_chars (u v : Trace I) (huv : IndependentT u v)
-    (a b : { a // a ∈ u * v }) (ha : a.1 ∈ u) (hb : b.1 ∈ v) :
+    (a b : α) (ha : a ∈ u) (hb : b ∈ v) :
     ¬ (dependencyTransClosureInT (u * v)) a b := by
   intro h
   induction h with
   | single h =>
     rename_i b
-    apply h
-    exact huv a b ha hb
+    have hab := huv a b ha hb
+    exact h.1 hab
   | tail h h_tail ih =>
     rename_i b c
     simp at ih
-    have hbu : b.1 ∈ u :=  by
-      have hb_uv := mem_append.mp b.2
+    have hbu : b ∈ u := by
+      have hb_uv := mem_append.mp h_tail.2.1
       simp [ih] at hb_uv
       exact hb_uv
-    simp [dependencyInT, inducedDependence] at h_tail
-    unfold IndependentT at huv
-    exact h_tail (huv b c hbu hb)
+    have hbc := huv b c hbu hb
+    exact h_tail.1 hbc
 
 lemma append_indep_is_disconnected (u v : Trace I) (h : IndependentT u v) (hu : u ≠ ⟦[]⟧) (hv : v ≠ ⟦[]⟧) :
     ¬isConnectedT (u * v) := by
@@ -174,7 +173,7 @@ lemma append_indep_is_disconnected (u v : Trace I) (h : IndependentT u v) (hu : 
   have ⟨a, ha⟩ := empty_is_eps u hu
   have ⟨b, hb⟩ := empty_is_eps v hv
   have h_ab_con := h_con ⟨a, mem_append.mpr (Or.inl ha)⟩ ⟨b, mem_append.mpr (Or.inr hb)⟩
-  have h_ab_dis := append_indep_is_disconnected_chars u v h ⟨a, mem_append.mpr (Or.inl ha)⟩ ⟨b, mem_append.mpr (Or.inr hb)⟩ ha hb
+  have h_ab_dis := append_indep_is_disconnected_chars u v h a b ha hb
   exact h_ab_dis h_ab_con
 
 lemma connectedComponents_of_connected (T : Set (Trace I)) (h : ∀ t ∈ T, isConnectedT t) :
