@@ -1,11 +1,11 @@
 import TraceTheory.Lemmas
 import Mathlib.Computability.RegularExpressions
 
-open Trace
+open TraceTheory
 
 namespace RegularExpression
 
-variable {α : Type} {I : Independence α}
+variable {α : Type*} {I : Independence α}
 
 def isStarConnected (I : Independence α) : RegularExpression α → Prop
   | 0 => True
@@ -13,12 +13,12 @@ def isStarConnected (I : Independence α) : RegularExpression α → Prop
   | char _ => True
   | P + Q => isStarConnected I P ∧ isStarConnected I Q
   | P * Q => isStarConnected I P ∧ isStarConnected I Q
-  | star P => isStarConnected I P ∧ (∀ s ∈ P.matches', @isConnected' α I s)
+  | star P => isStarConnected I P ∧ (∀ s ∈ P.matches', IsConnected I ⟦s⟧)
 
 -- Interpretation of this RegularExpression as operating on trace languages.
 def matches_trace (I : Independence α) : RegularExpression α → Set (Trace I)
   | 0 => {}
-  | 1 => {⟦[]⟧}
+  | 1 => {1}
   | char a => {⟦[a]⟧}
   | P + Q => (matches_trace I P) ∪ (matches_trace I Q)
   | P * Q => {t | ∃ p : (matches_trace I P), ∃ q : (matches_trace I Q), t = p * q}
@@ -30,12 +30,12 @@ def isStarConnected_trace (I : Independence α) : RegularExpression α → Prop
   | char _ => True
   | P + Q => isStarConnected I P ∧ isStarConnected I Q
   | P * Q => isStarConnected I P ∧ isStarConnected I Q
-  | star P => isStarConnected I P ∧ (∀ t ∈ matches_trace I P, @isConnected α I t)
+  | star P => isStarConnected I P ∧ (∀ t ∈ matches_trace I P, @IsConnected α I t)
 
 -- Interpretation of this RegularExpression as a <c-rational expression> operating on trace languages.
 def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Trace I)
   | 0 => {}
-  | 1 => {⟦[]⟧}
+  | 1 => {1}
   | char a => {⟦[a]⟧}
   | P + Q => (matches_cstar_trace I P) ∪ (matches_cstar_trace I Q)
   | P * Q => {t | ∃ p : (matches_cstar_trace I P), ∃ q : (matches_cstar_trace I Q), t = p * q}
@@ -44,7 +44,7 @@ def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Tr
 /-- Interpreting this RegularExpression as operating on Trace Languages gives the same matching set
   as interpreting (as usual) on String Languages and then projecting to Traces.
 -/
-theorem matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTrace P.matches' := by
+theorem matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTrace I P.matches' := by
   induction P with
   | zero => simp [toTrace, matches_trace, Language.zero_def]
   | epsilon => simp [toTrace, matches_trace, Language.one_def]
@@ -61,6 +61,7 @@ theorem matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTra
       intro x hx hat
       replace hx : x = [a] := hx
       rw [<- hat, hx]
+      rfl
   | plus P Q ihP ihQ =>
     unfold matches_trace matches'
     simp [ihP, ihQ]
@@ -105,15 +106,13 @@ theorem matches_toTrace (P : RegularExpression α) : (matches_trace I P) = toTra
       rfl
   | star P ih =>
     unfold matches_trace matches'
-    rw [kstar_toTrace_commutes, ih]
-
+    rw [kstar_toTrace_comm, ih]
 
 @[simp]
 lemma matches_toTrace_dist (P Q : RegularExpression α) :
-    @toTrace α I (P.matches' + Q.matches') = toTrace P.matches' ∪ toTrace Q.matches' := by
+    toTrace I (P.matches' + Q.matches') = toTrace I P.matches' ∪ toTrace I Q.matches' := by
   rw [show P.matches' + Q.matches' = (P + Q).matches' from rfl]
   repeat rw [<- matches_toTrace]
   simp [matches_trace]
-
 
 end RegularExpression

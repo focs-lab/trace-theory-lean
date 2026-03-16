@@ -148,6 +148,10 @@ def mk' : List α →* Trace I where
     intro x y
     rfl
 
+omit [DecidableEq α] in
+@[simp]
+theorem mk'_nil : mk' (I := I) [] = 1 := map_one _
+
 /-- The prefix relation on traces. A trace `t₁` is a prefix of `t₂` if there exists
 a trace `⟦w⟧` such that `t₁` concatenated with `⟦w⟧` equals `t₂`. -/
 def isPrefix (I : Independence α) (t₁ t₂ : Trace I) := ∃ w, mul t₁ ⟦w⟧ = t₂
