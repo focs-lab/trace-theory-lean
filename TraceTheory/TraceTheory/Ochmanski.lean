@@ -164,14 +164,6 @@ lemma connected_of_lexNf_sq {w : List α}
     IsConnected I ⟦w⟧ := by
   sorry
 
-omit [Fintype α] [LinearOrder α] in
-lemma mem_sigma (x : List α) : x ∈ KStar.kstar (Sigma : Language α) := by
-  rw [Language.mem_kstar]
-  use [x]
-  simp only [List.flatten_cons, List.flatten_nil, List.append_nil, List.mem_cons,
-    List.not_mem_nil, or_false, Sigma, forall_eq, true_and]
-  apply Set.mem_univ
-
 omit [LinearOrder α] in
 lemma forbidden_of_subword {u w v : List α} {a b : α}
     (hw : w ∈ ForbiddenPattern I a b) :
