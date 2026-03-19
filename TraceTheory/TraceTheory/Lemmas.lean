@@ -42,7 +42,7 @@ def dependencyTransClosureIn (t : Trace I) (a b : α) :=
   Relation.TransGen (dependencyIn t) a b
 
 def IsConnected (I : Independence α) (t : Trace I) :=
-  ∀ a b : α, dependencyTransClosureIn t a b
+  ∀ a b : {a : α // a ∈ t}, dependencyTransClosureIn t a b
 
 def IsIterativeFactor (X : Language α) (t : List α) :=
   ∃ u v, ∀ n : ℕ, u ++ t ^ n ++ v ∈ X
@@ -118,7 +118,7 @@ lemma append_indep_is_disconnected
   by_contra h_con
   have ⟨a, ha⟩ := empty_is_eps u hu
   have ⟨b, hb⟩ := empty_is_eps v hv
-  have h_ab_con := h_con a b
+  have h_ab_con := h_con ⟨a, mem_append.mpr (Or.inl ha)⟩ ⟨b, mem_append.mpr (Or.inr hb)⟩
   have h_ab_dis := append_indep_is_disconnected_chars h a b ha hb
   exact h_ab_dis h_ab_con
 
