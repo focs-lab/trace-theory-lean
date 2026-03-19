@@ -182,6 +182,113 @@ lemma depTrClIn_refl {w : List α} {a : α} (h : a ∈ w) : dependencyTransClosu
 noncomputable instance : ∀ w x y, Decidable (dependencyTransClosureInL I w x y) :=
   fun w x y => Classical.propDecidable (dependencyTransClosureInL I w x y)
 
+noncomputable def ccDec_aux' (I : Independence α) (w₀ w : List α) : List (List α) :=
+  match w with
+  | [] => [[]]
+  | a :: w =>
+    match ccDec_aux' I w₀ w with
+    | [] => [] -- dummy value, unreachable by construction
+    | v :: vs =>
+      match v with
+      | [] => [a] :: vs
+      | b :: v =>
+        if dependencyTransClosureInL I w₀ a b
+          then (a :: b :: v) :: vs
+          else [a] :: (b :: v) :: vs
+
+lemma ccDec'_aux_nonempty' (w₀ w : List α) : (ccDec_aux' I w₀ w) ≠ [] := by
+  induction w with
+  | nil => simp [ccDec_aux']
+  | cons a u ih =>
+    simp [ccDec_aux']
+    cases hs : ccDec_aux' I w₀ u
+    · simp [hs] at ih
+    · simp
+      rename_i c_head c_tail
+      cases c_head with
+      | nil => simp
+      | cons b c_head =>
+        simp
+        by_cases hab : dependencyTransClosureInL I w₀ a b
+        all_goals simp [hab]
+
+lemma ccDec'_aux_len (u w : List α) (a : α) :
+    (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length ∨
+    (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length + 1 := by
+  simp [ccDec_aux']
+  cases ccDec_aux' I u w
+  · simp
+  · rename_i c_head c_tail
+    simp
+    cases c_head with
+    | nil => simp
+    | cons b c_head =>
+      simp
+      by_cases hab : dependencyTransClosureInL I u a b
+      all_goals simp [hab]
+
+lemma ccDec'_aux_len_le (u w : List α) (a : α) :
+    (ccDec_aux' I u w).length ≤ (ccDec_aux' I u (a :: w)).length := by
+  cases ccDec'_aux_len u w a with
+  | inl h => rw [h]
+  | inr h => simp [h]
+
+lemma ccDec'_aux_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux' I u w).length) (hz : w ≠ []) :
+    (ccDec_aux' I u w)[i] ≠ [] := by
+  induction w generalizing i with
+  | nil => simp at hz
+  | cons a w ih =>
+    clear hz
+    by_cases hiz : i = 0
+    · suffices hs_dec : (∃ _1 _2 _3, (ccDec_aux' I u (a :: w)) = (_1 :: _2) :: _3) ∨ (ccDec_aux' I u (a :: w)) = [] from by
+        rcases hs_dec with ⟨hs_dec⟩
+        · replace ⟨_1, _2, _3, hs_dec⟩ := hs_dec
+          simp [hs_dec, hiz]
+        · rename_i hs_dec
+          simp [hs_dec] at hi
+      simp [ccDec_aux']
+      cases ccDec_aux' I u w
+      · simp
+      · rename_i c_head c_tail
+        simp
+        cases c_head with
+        | nil => simp
+        | cons b c_head =>
+          simp
+          by_cases hab : dependencyTransClosureInL I u a b
+          all_goals simp [hab]
+    · -- cases a
+      have : (ccDec_aux' I u (a :: w))[i] = (ccDec_aux' I u w)[i]'sorry ∨ (ccDec_aux' I u (a :: w))[i] = (ccDec_aux' I u w)[i - 1]'sorry := by
+        simp [ccDec_aux']
+        /- cases ccDec_aux' I u w
+        · simp
+        · rename_i c_head c_tail
+          simp
+          cases c_head with
+          | nil => simp
+          | cons b c_head =>
+            simp
+            by_cases hab : dependencyTransClosureInL I u a b
+            all_goals simp [hab] -/
+        sorry
+      cases this with
+      | inl h =>
+        rw [h]
+        apply ih
+        by_contra hz
+        simp [ccDec_aux', hz] at hi
+        exact hiz hi
+      | inr h =>
+        rw [h]
+        have : i - 1 < (ccDec_aux' I u w).length := by sorry
+        apply ih (i - 1) this
+        by_contra hz
+        simp [ccDec_aux', hz] at hi
+        exact hiz hi
+
+
+
+
 noncomputable def ccDec_aux (I : Independence α) (w₀ w : List α) (p : α) : List (List α × List α) :=
   match w with
   | [] => [⟨[], []⟩]
