@@ -4,8 +4,9 @@ import TraceTheory.RegularExpressions
 
 namespace TraceTheory
 
-variable {α : Type*} {I : Independence α}
+open RegularExpression
 
+variable {α : Type*} {I : Independence α}
 
 /-- Main component of Theorem 4.1 (ii) => (iii).
 
@@ -18,149 +19,104 @@ variable {α : Type*} {I : Independence α}
 
   Note that P · ∅ or ∅ · P are the only cases where this patch is needed.
 -/
-theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α)
+lemma exists_starConnected_of_connectedIterativeFactors'
+    (X : RegularExpression α)
     (hconn : ∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) :
-    ∃ Y, RegularExpression.isStarConnected I Y ∧ X.matches' = Y.matches' := by
+    ∃ Y, IsStarConnected I Y ∧ X.matches' = Y.matches' := by
   induction X with
-  | zero => use RegularExpression.zero, trivial
-  | epsilon => use RegularExpression.epsilon, trivial
-  | char a => use RegularExpression.char a, trivial
+  | zero => use zero, trivial
+  | epsilon => use epsilon, trivial
+  | char a => use char a, trivial
   | plus P Q ihP ihQ =>
-    have ihP_cond : (∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧) := by
+    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      use u, v
-      simp only [RegularExpression.matches', Language.mem_add]
-      intro n
-      left
-      exact h n
-    have ⟨P', hP'⟩ := ihP ihP_cond
-    have ihQ_cond : (∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧) := by
+      exact hconn s ⟨u, v, fun n => Or.inl (h n)⟩
+    have condQ : ∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      use u, v
-      simp only [RegularExpression.matches', Language.mem_add]
-      intro n
-      right
-      exact h n
-    have ⟨Q', hQ'⟩ := ihQ ihQ_cond
+      exact hconn s ⟨u, v, fun n => Or.inr (h n)⟩
+    rcases ihP condP with ⟨P', hP'⟩
+    rcases ihQ condQ with ⟨Q', hQ'⟩
     use P' + Q'
-    simp [RegularExpression.isStarConnected, hP', hQ']
+    simp [IsStarConnected, hP', hQ']
   | comp P Q ihP ihQ =>
-    by_cases hpe : ¬ ∃ p, p ∈ P.matches'
-    · use RegularExpression.zero
-      simp [RegularExpression.isStarConnected]
-      rw [Language.zero_def]
-      apply Language.ext
-      intro x
-      apply Iff.intro
-      all_goals intro h
-      · rw [Language.mul_def] at h
-        replace ⟨u, hu, v, hv, h⟩ := h
-        exact hpe ⟨u, hu⟩
-      · exact False.elim h
-    by_cases hqe : ¬ ∃ q, q ∈ Q.matches'
-    · use RegularExpression.zero
-      simp [RegularExpression.isStarConnected]
-      rw [Language.zero_def]
-      apply Language.ext
-      intro x
-      apply Iff.intro
-      all_goals intro h
-      · rw [Language.mul_def] at h
-        replace ⟨u, hu, v, hv, h⟩ := h
-        exact hqe ⟨v, hv⟩
-      · exact False.elim h
-    simp at hpe hqe
-    have ihP_cond : (∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧) := by
+    rcases Set.eq_empty_or_nonempty P.matches' with hp_emp | ⟨p, hp⟩
+    · use zero
+      simp only [IsStarConnected, matches', hp_emp, true_and]
+      rw [Set.empty_mul]
+      rfl
+    rcases Set.eq_empty_or_nonempty Q.matches' with hq_emp | ⟨q, hq⟩
+    · use zero
+      simp only [IsStarConnected, matches', hq_emp, true_and]
+      rw [Set.mul_empty]
+      rfl
+    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      rcases hpe with ⟨p, hp⟩
-      rcases hqe with ⟨q, hq⟩
-      use u, v ++ q
-      simp only [RegularExpression.matches', Language.mem_mul]
-      intro n
-      rw [← List.append_assoc]
-      use u ++ s ^ n ++ v, h n, q, hq
-    have ⟨P', hP'⟩ := ihP ihP_cond
-    have ihQ_cond : (∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧) := by
+      exact hconn s ⟨u, v ++ q, fun n => by
+        simp only [matches', Language.mem_mul]
+        exact ⟨u ++ s ^ n ++ v, h n, q, hq, by simp [← List.append_assoc]⟩⟩
+    have condQ : ∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      rcases hpe with ⟨p, hp⟩
-      rcases hqe with ⟨q, hq⟩
-      use p ++ u, v
-      simp only [RegularExpression.matches', Language.mem_mul]
-      intro n
-      use p, hp, u ++ s ^ n ++ v, h n
-      simp
-    have ⟨Q', hQ'⟩ := ihQ ihQ_cond
+      exact hconn s ⟨p ++ u, v, fun n => by
+        simp only [matches', Language.mem_mul]
+        exact ⟨p, hp, u ++ s ^ n ++ v, h n, by simp [List.append_assoc]⟩⟩
+    rcases ihP condP with ⟨P', hP'⟩
+    rcases ihQ condQ with ⟨Q', hQ'⟩
     use P' * Q'
-    simp [RegularExpression.isStarConnected, hP', hQ']
+    simp [IsStarConnected, hP', hQ']
   | star P ih =>
-    have ih_cond : ∀ (s : List α), IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
+    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn
-      use u, v
-      intro n
-      simp only [RegularExpression.matches', Language.mem_kstar]
-      use [u ++ s ^ n ++ v]
-      simp_rw [List.append_assoc] at h
-      simp_all
-    have ⟨P', hP'⟩ := ih ih_cond
+      exact hconn s ⟨u, v, fun n => by
+        simp only [matches', Language.mem_kstar]
+        exact ⟨[u ++ s ^ n ++ v], by simp_all [List.append_assoc]⟩⟩
+    rcases ih condP with ⟨P', hP'⟩
     use P'.star
-    simp [RegularExpression.isStarConnected, hP']
+    simp [IsStarConnected, hP']
     intro s hs
-    apply hconn
+    apply hconn s
     use [], []
     intro n
-    simp only [RegularExpression.matches', List.nil_append, List.append_nil, Language.mem_kstar]
+    simp only [matches', List.nil_append, List.append_nil, Language.mem_kstar]
     use List.replicate n s
     constructor
-    · rw [← List.prod_replicate]
-      induction n with
-      | zero =>
-        simp only [List.replicate_zero, List.prod_nil, List.flatten_nil]
-        rfl
+    · induction n with
+      | zero => simp; rfl
       | succ n' ih =>
-        rw [List.replicate_succ]
-        simp only [List.prod_cons, ih, List.flatten_cons]
+        rw [add_comm, pow_add, List.replicate_add, ih]
         rfl
-    · simp only [List.mem_replicate, ne_eq, and_imp, forall_eq_apply_imp_iff]
-      rw [hP'.right]
-      intro
-      exact hs
+    · intro y hy
+      simp_all only [implies_true, forall_const, matches', List.mem_replicate, ne_eq]
 
 /-- Theorem 4.1 (ii) => (iii) -/
-theorem connectedIterativeFactors_equiv_starConnected (T : Set (Trace I)) (X : RegularExpression α) (himg : T = toTrace I X.matches')
+theorem exists_starConnected_of_connectedIterativeFactors
+    (T : Set (Trace I)) (X : RegularExpression α)
+    (himg : T = toTrace I X.matches')
     (hconn : ∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) :
-    ∃ P, RegularExpression.isStarConnected I P ∧ T = (RegularExpression.matches_trace I P) := by
-  simp [RegularExpression.matches_toTrace]
-  have ⟨P, hP⟩ := connectedIterativeFactors_equiv_starConnected' X hconn
+    ∃ P, IsStarConnected I P ∧ T = (matches_trace I P) := by
+  simp [matches_toTrace]
+  rcases exists_starConnected_of_connectedIterativeFactors' X hconn with ⟨P, hP⟩
   use P
   simp [hP, himg]
 
 /-- Theorem 4.1 (iii) => (iv) -/
-theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpression.isStarConnected I X) :
-    RegularExpression.matches_trace I X = RegularExpression.matches_cstar_trace I X := by
+theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConnected I X) :
+    matches_trace I X = matches_cstar_trace I X := by
   induction X with
-  | zero => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | epsilon => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | char _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | plus P Q ihP ihQ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace, ihP h.1, ihQ h.2]
-  | comp P Q ihP ihQ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace, ihP h.1, ihQ h.2]
+  | zero => simp [matches_trace, matches_cstar_trace]
+  | epsilon => simp [matches_trace, matches_cstar_trace]
+  | char _ => simp [matches_trace, matches_cstar_trace]
+  | plus P Q ihP ihQ => simp [matches_trace, matches_cstar_trace, ihP h.1, ihQ h.2]
+  | comp P Q ihP ihQ => simp [matches_trace, matches_cstar_trace, ihP h.1, ihQ h.2]
   | star P ih =>
-    unfold RegularExpression.matches_trace RegularExpression.matches_cstar_trace
-    simp [<- ih h.1]
-    unfold RegularExpression.isStarConnected at h
-    have hP_conn : (∀ t ∈ RegularExpression.matches_trace I P, IsConnected I t) := by
+    unfold matches_trace matches_cstar_trace
+    unfold IsStarConnected at h
+    rw [<- ih h.left]
+    have hP_conn : ∀ t ∈ matches_trace I P, IsConnected I t := by
       intro t ht
-      rcases t with ⟨w₀⟩
-      rw [show Quot.mk (⇑(TraceSetoid I)) w₀ = ⟦w₀⟧ from rfl] at ht ⊢
-      rw [RegularExpression.matches_toTrace] at ht
-      simp [toTrace] at ht
-      rcases ht with ⟨w, hw⟩
-      rw [← hw.2]
-      exact h.2 w hw.1
+      rw [matches_toTrace] at ht
+      simp only [toTrace, Set.mem_image] at ht
+      rcases ht with ⟨s, hs, rfl⟩
+      exact h.right s hs
     rw [connectedComponents_of_connected _ hP_conn]
     rw [kstar_eq_minusEps_trace]
 
