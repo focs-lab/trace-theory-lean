@@ -1,12 +1,16 @@
+import Mathlib.Algebra.Group.PUnit
+import TraceTheory.Language
 import TraceTheory.Lemmas
 import TraceTheory.MyhillNerode
 import TraceTheory.RegularExpressions
 
 namespace TraceTheory
 
+open scoped Pointwise
+
 open RegularExpression
 
-variable {α : Type*} {I : Independence α}
+variable {α : Type} {I : Independence α}
 
 /-- Main component of Theorem 4.1 (ii) => (iii).
 
@@ -119,5 +123,177 @@ theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConne
       exact h.right s hs
     rw [connectedComponents_of_connected _ hP_conn]
     rw [kstar_eq_minusEps_trace]
+
+lemma recognizable_zero : IsRecognizable (∅ : Set (Trace I)) :=
+  ⟨PUnit, inferInstance, inferInstance, inferInstance, 1, by simp⟩
+
+lemma recognizable_epsilon : IsRecognizable ({ 1 } : Set (Trace I)) := by
+  sorry
+
+lemma recognizable_char (a : α) : IsRecognizable ({ ⟦[a]⟧ } : Set (Trace I)) := by
+  sorry
+
+lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
+    (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P ∪ Q) := by
+  sorry
+
+lemma recognizable_mul {P Q : Set (Trace I)}
+    (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
+  sorry
+
+lemma recognizable_cstar {P : Set (Trace I)}
+    (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
+  sorry
+
+/-- Theorem 4.1 (iv) => (i) -/
+theorem recognizable_of_cRational (X : RegularExpression α) :
+    IsRecognizable (matches_cstar_trace I X) := by
+  induction X with
+  | zero => exact recognizable_zero
+  | epsilon => exact recognizable_epsilon
+  | char a => exact recognizable_char a
+  | plus P Q ihP ihQ => exact recognizable_union ihP ihQ
+  | comp P Q ihP ihQ => exact recognizable_mul ihP ihQ
+  | star P ih => exact recognizable_cstar ih
+
+variable [Fintype α] [LinearOrder α] [DecidableRel I.rel]
+
+lemma connected_of_lexNf_sq {w : List α}
+    (hw : w ∈ LexNfLanguage I)
+    (hww : w ++ w ∈ LexNfLanguage I) :
+    IsConnected I ⟦w⟧ := by
+  sorry
+
+omit [Fintype α] [LinearOrder α] in
+lemma mem_sigma (x : List α) : x ∈ KStar.kstar (Sigma : Language α) := by
+  rw [Language.mem_kstar]
+  use [x]
+  simp only [List.flatten_cons, List.flatten_nil, List.append_nil, List.mem_cons,
+    List.not_mem_nil, or_false, Sigma, forall_eq, true_and]
+  apply Set.mem_univ
+
+omit [LinearOrder α] in
+lemma forbidden_of_subword {u w v : List α} {a b : α}
+    (hw : w ∈ ForbiddenPattern I a b) :
+    u ++ w ++ v ∈ ForbiddenPattern I a b := by
+  unfold ForbiddenPattern at *
+  simp [Language.mem_mul] at hw
+  rcases hw with ⟨a1, b1, b2, b3, ⟨⟨ha1, hb1, hb2⟩, hb3⟩, ⟨x, hx, rfl⟩⟩
+  simp [Language.mem_mul]
+  use u ++ a1, b1, b2, b3
+  and_intros
+  · apply mem_sigma
+  · exact hb1
+  · exact hb2
+  · exact hb3
+  · use x ++ v
+    simp [mem_sigma]
+
+lemma sum_forbidden_of_subword {S : Finset (α × α)} {u w v : List α}
+    (hw : w ∈ ∑ p ∈ S, ForbiddenPattern I p.1 p.2) :
+    u ++ w ++ v ∈ ∑ p ∈ S, ForbiddenPattern I p.1 p.2 := by
+  induction S using Finset.induction_on generalizing w with
+  | empty =>
+    simp only [Finset.sum_empty] at hw
+    contradiction
+  | insert p' S' hp ih =>
+    rw [Finset.sum_insert hp] at hw ⊢
+    cases hw with
+    | inl h_left =>
+      left
+      exact forbidden_of_subword h_left
+    | inr h_right =>
+      right
+      exact ih h_right
+
+lemma lexNf_of_subword {u w v : List α} (h : u ++ w ++ v ∈ LexNfLanguage I) :
+    w ∈ LexNfLanguage I := by
+  unfold LexNfLanguage at h ⊢
+  rw [Set.mem_compl_iff] at h ⊢
+  unfold AllForbiddenPatterns at h ⊢
+  contrapose! h
+  exact sum_forbidden_of_subword h
+
+lemma connected_iterativeFactor_of_subset_lexNf {X : Language α}
+    (hX : X ≤ LexNfLanguage I) {w : List α}
+    (hw : IsIterativeFactor X w) :
+    IsConnected I ⟦w⟧ := by
+  rcases hw with ⟨u, v, hw⟩
+  have h_lex1 : u ++ w ++ v ∈ LexNfLanguage I := hX (hw 1)
+  have h_lex2 : u ++ (w ++ w) ++ v ∈ LexNfLanguage I := hX (hw 2)
+  have h_w_lex : w ∈ LexNfLanguage I := lexNf_of_subword h_lex1
+  have h_ww_lex : w ++ w ∈ LexNfLanguage I := lexNf_of_subword h_lex2
+  exact connected_of_lexNf_sq h_w_lex h_ww_lex
+
+omit [Fintype α] [LinearOrder α] in
+lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
+    L.IsRegular := by
+  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
+  rw [Language.isRegular_iff]
+  let M_DFA : DFA α σ := {
+    step := fun q a => M.step q [a]
+    start := M.start
+    accept := M.accept
+  }
+  use σ, h_fin, M_DFA
+  rw [hM]
+  ext w
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  unfold DFMA.accepts DFMA.eval
+  rw [Set.mem_setOf, Set.mem_setOf]
+  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
+    induction w with
+    | nil =>
+      intro q
+      simp only [List.foldl_nil]
+      exact (M.idempotent q).symm
+    | cons a ws ih =>
+      intro q
+      simp only [List.foldl_cons]
+      rw [ih (M.step q [a])]
+      exact (M.composition q [a] ws)
+  rw [h_eval M_DFA.start]
+
+/-- Theorem 4.1 (i) => (ii) -/
+theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
+    (hT : IsRecognizable T) :
+    ∃ X : RegularExpression α,
+      (∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) ∧
+      toTrace I X.matches' = T := by
+  let L : Language α := (mk' (I := I) ⁻¹' T) ⊓ LexNfLanguage I
+  have hL_reg : L.IsRegular := by
+    apply Language.IsRegular.inf
+    · apply isRegular_of_recognizable
+      apply recognizable_has_recognizablePreImage
+      exact hT
+    · apply isRegular_lexNf
+  have ⟨R, hR_matches⟩ : ∃ R : RegularExpression α, R.matches' = L := by
+    classical
+    have ⟨σ, h_fin, M, hL⟩ : ∃ (σ : Type) (_ : Fintype σ) (M : DFA α σ), M.accepts = L :=
+      Language.isRegular_iff.mp hL_reg
+    haveI : FinEnum σ := FinEnum.ofEquiv (Fin (Fintype.card σ)) (Fintype.equivFin σ)
+    use M.toNFA.toεNFA.toRegex
+    rw [← hL, εNFA.accepts_toRegex, NFA.toεNFA_correct, DFA.toNFA_correct]
+  use R
+  constructor
+  · intro s hs
+    have h_subset : R.matches' ≤ LexNfLanguage I := by
+      simp_all only [inf_le_right, L]
+    exact connected_iterativeFactor_of_subset_lexNf h_subset hs
+  · rw [hR_matches]
+    ext t
+    constructor
+    · rintro ⟨s, hs, rfl⟩
+      exact hs.left
+    · intro ht
+      rcases exists_lexNf_rep I t with ⟨s, hs_eq, hs_lex⟩
+      refine ⟨s, ?_, hs_eq⟩
+      unfold L
+      change s ∈ ⇑mk' ⁻¹' T ∩ LexNfLanguage I
+      constructor
+      · rw [Set.mem_preimage]
+        subst hs_eq
+        exact ht
+      · exact hs_lex
 
 end TraceTheory
