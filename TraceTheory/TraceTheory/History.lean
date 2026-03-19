@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Group.Submonoid.Basic
 import Mathlib.Algebra.Group.Pi.Basic
-import TraceTheory.Basic
+import TraceTheory.DependenceMorphism
 
 open TraceTheory
 
@@ -193,7 +193,7 @@ def historyDependenceMorphism (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i,
 /-- The trace monoid and `HistoryMonoid` are isomorphic. -/
 noncomputable def traceMonoidIsoHistoryMonoid
     (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ S i) :
-    TraceMonoid (inducedIndependence (SigmaDependence S h_cover)) ≃* HistoryMonoid S := by
+    Trace (inducedIndependence (SigmaDependence S h_cover)) ≃* HistoryMonoid S := by
   apply dependenceMorphismIso
     traceDependenceMorphism
     Quotient.mk_surjective

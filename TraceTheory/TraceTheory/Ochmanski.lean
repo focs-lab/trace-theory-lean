@@ -1,3 +1,4 @@
+import Mathlib.Algebra.Group.PUnit
 import TraceTheory.Language
 import TraceTheory.Lemmas
 import TraceTheory.MyhillNerode
@@ -5,8 +6,11 @@ import TraceTheory.RegularExpressions
 
 namespace TraceTheory
 
-variable {α : Type} {I : Independence α}
+open scoped Pointwise
 
+open RegularExpression
+
+variable {α : Type} {I : Independence α}
 
 /-- Main component of Theorem 4.1 (ii) => (iii).
 
@@ -19,273 +23,269 @@ variable {α : Type} {I : Independence α}
 
   Note that P · ∅ or ∅ · P are the only cases where this patch is needed.
 -/
-theorem connectedIterativeFactors_equiv_starConnected' (X : RegularExpression α)
-    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected α I s) :
-    ∃ Y, RegularExpression.isStarConnected I Y ∧ X.matches' = Y.matches' := by
+lemma exists_starConnected_of_connectedIterativeFactors'
+    (X : RegularExpression α)
+    (hconn : ∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) :
+    ∃ Y, IsStarConnected I Y ∧ X.matches' = Y.matches' := by
   induction X with
-  | zero => use RegularExpression.zero, trivial
-  | epsilon => use RegularExpression.epsilon, trivial
-  | char a => use RegularExpression.char a, trivial
+  | zero => use zero, trivial
+  | epsilon => use epsilon, trivial
+  | char a => use char a, trivial
   | plus P Q ihP ihQ =>
-    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected α I s) := by
+    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      use u, v
-      intro ts hts
-      replace h := h ts hts
-      have h_match_subset : ∀ p ∈ P.matches', p ∈ P.matches' + Q.matches' := by
-        simp [Language.add_def]
-        intro p hp
-        apply (Set.mem_union _ _ _).mpr
-        simp [hp]
-      exact h_match_subset _ h
-    have ⟨P', hP'⟩ := ihP ihP_cond
-
-    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected α I s) := by
+      exact hconn s ⟨u, v, fun n => Or.inl (h n)⟩
+    have condQ : ∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      use u, v
-      intro ts hts
-      replace h := h ts hts
-      have h_match_subset : ∀ q ∈ Q.matches', q ∈ P.matches' + Q.matches' := by
-        simp [Language.add_def]
-        intro q hq
-        apply (Set.mem_union _ _ _).mpr
-        simp [hq]
-      exact h_match_subset _ h
-    have ⟨Q', hQ'⟩ := ihQ ihQ_cond
-
+      exact hconn s ⟨u, v, fun n => Or.inr (h n)⟩
+    rcases ihP condP with ⟨P', hP'⟩
+    rcases ihQ condQ with ⟨Q', hQ'⟩
     use P' + Q'
-    simp [RegularExpression.isStarConnected, hP', hQ']
+    simp [IsStarConnected, hP', hQ']
   | comp P Q ihP ihQ =>
-    by_cases hpe : ¬ ∃ p, p ∈ P.matches'
-    · use RegularExpression.zero
-      simp [RegularExpression.isStarConnected]
-      rw [Language.zero_def]
-      apply Language.ext
-      intro x
-      apply Iff.intro
-      all_goals intro h
-      · rw [Language.mul_def] at h
-        replace ⟨u, hu, v, hv, h⟩ := h
-        exact hpe ⟨u, hu⟩
-      · exact False.elim h
-
-    by_cases hqe : ¬ ∃ q, q ∈ Q.matches'
-    · use RegularExpression.zero
-      simp [RegularExpression.isStarConnected]
-      rw [Language.zero_def]
-      apply Language.ext
-      intro x
-      apply Iff.intro
-      all_goals intro h
-      · rw [Language.mul_def] at h
-        replace ⟨u, hu, v, hv, h⟩ := h
-        exact hqe ⟨v, hv⟩
-      · exact False.elim h
-
-    simp at hpe hqe
-
-    have ihP_cond : (∀ s, isIterativeFactor P.matches' s → @isConnected α I s) := by
+    rcases Set.eq_empty_or_nonempty P.matches' with hp_emp | ⟨p, hp⟩
+    · use zero
+      simp only [IsStarConnected, matches', hp_emp, true_and]
+      rw [Set.empty_mul]
+      rfl
+    rcases Set.eq_empty_or_nonempty Q.matches' with hq_emp | ⟨q, hq⟩
+    · use zero
+      simp only [IsStarConnected, matches', hq_emp, true_and]
+      rw [Set.mul_empty]
+      rfl
+    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      have ⟨q, hq⟩ := hqe
-      use u, v ++ q
-      intro ts hts
-      replace h := h ts hts
-      unfold RegularExpression.matches'
-      use u ++ ts.flatten ++ v, h, q, hq
-      simp
-    have ⟨P', hP'⟩ := ihP ihP_cond
-
-    have ihQ_cond : (∀ s, isIterativeFactor Q.matches' s → @isConnected α I s) := by
+      exact hconn s ⟨u, v ++ q, fun n => by
+        simp only [matches', Language.mem_mul]
+        exact ⟨u ++ s ^ n ++ v, h n, q, hq, by simp [← List.append_assoc]⟩⟩
+    have condQ : ∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn s
-      have ⟨p, hp⟩ := hpe
-      use p ++ u, v
-      intro ts hts
-      replace h := h ts hts
-      unfold RegularExpression.matches'
-      use p, hp, u ++ ts.flatten ++ v, h
-      simp
-    have ⟨Q', hQ'⟩ := ihQ ihQ_cond
-
+      exact hconn s ⟨p ++ u, v, fun n => by
+        simp only [matches', Language.mem_mul]
+        exact ⟨p, hp, u ++ s ^ n ++ v, h n, by simp [List.append_assoc]⟩⟩
+    rcases ihP condP with ⟨P', hP'⟩
+    rcases ihQ condQ with ⟨Q', hQ'⟩
     use P' * Q'
-    simp [RegularExpression.isStarConnected, hP', hQ']
+    simp [IsStarConnected, hP', hQ']
   | star P ih =>
-    have ih_cond : ∀ (s : List α), isIterativeFactor P.matches' s → @isConnected α I s := by
+    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
-      apply hconn
-      use u, v
-      intro ts hts
-      replace h := h ts hts
-      simp [Language.kstar_def]
-      use [u ++ ts.flatten ++ v]
-      simp [<- List.append_assoc]
-      exact h
-    have ⟨P', hP'⟩ := ih ih_cond
+      exact hconn s ⟨u, v, fun n => by
+        simp only [matches', Language.mem_kstar]
+        exact ⟨[u ++ s ^ n ++ v], by simp_all [List.append_assoc]⟩⟩
+    rcases ih condP with ⟨P', hP'⟩
     use P'.star
-    simp [RegularExpression.isStarConnected, hP']
+    simp [IsStarConnected, hP']
     intro s hs
-    apply hconn
+    apply hconn s
     use [], []
-    intro ts hts
-    simp [Language.kstar_def]
-    use ts
-    simp
-    intro y hy
-    rw [hts y hy, hP'.right]
-    exact hs
+    intro n
+    simp only [matches', List.nil_append, List.append_nil, Language.mem_kstar]
+    use List.replicate n s
+    constructor
+    · induction n with
+      | zero => simp; rfl
+      | succ n' ih =>
+        rw [add_comm, pow_add, List.replicate_add, ih]
+        rfl
+    · intro y hy
+      simp_all only [implies_true, forall_const, matches', List.mem_replicate, ne_eq]
 
 /-- Theorem 4.1 (ii) => (iii) -/
-theorem connectedIterativeFactors_equiv_starConnected (T : Set (Trace I)) (X : RegularExpression α) (himg : T = toTrace X.matches')
-    (hconn : ∀ s, isIterativeFactor X.matches' s → @isConnected α I s) :
-    ∃ P, RegularExpression.isStarConnected I P ∧ T = (RegularExpression.matches_trace I P) := by
-  simp [RegularExpression.matches_toTrace]
-  have ⟨P, hP⟩ := connectedIterativeFactors_equiv_starConnected' X hconn
+theorem exists_starConnected_of_connectedIterativeFactors
+    (T : Set (Trace I)) (X : RegularExpression α)
+    (himg : T = toTrace I X.matches')
+    (hconn : ∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) :
+    ∃ P, IsStarConnected I P ∧ T = (matches_trace I P) := by
+  simp [matches_toTrace]
+  rcases exists_starConnected_of_connectedIterativeFactors' X hconn with ⟨P, hP⟩
   use P
   simp [hP, himg]
 
-
-
 /-- Theorem 4.1 (iii) => (iv) -/
-theorem starConnected_is_cRational (X : RegularExpression α) (h : RegularExpression.isStarConnected I X) :
-    RegularExpression.matches_trace I X = RegularExpression.matches_cstar_trace I X := by
+theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConnected I X) :
+    matches_trace I X = matches_cstar_trace I X := by
   induction X with
-  | zero => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | epsilon => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | char _ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace]
-  | plus P Q ihP ihQ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace, ihP h.1, ihQ h.2]
-  | comp P Q ihP ihQ => simp [RegularExpression.matches_trace, RegularExpression.matches_cstar_trace, ihP h.1, ihQ h.2]
+  | zero => simp [matches_trace, matches_cstar_trace]
+  | epsilon => simp [matches_trace, matches_cstar_trace]
+  | char _ => simp [matches_trace, matches_cstar_trace]
+  | plus P Q ihP ihQ => simp [matches_trace, matches_cstar_trace, ihP h.1, ihQ h.2]
+  | comp P Q ihP ihQ => simp [matches_trace, matches_cstar_trace, ihP h.1, ihQ h.2]
   | star P ih =>
-    unfold RegularExpression.matches_trace RegularExpression.matches_cstar_trace
-    simp [<- ih h.1]
-    unfold RegularExpression.isStarConnected at h
-    have hP_conn : (∀ t ∈ RegularExpression.matches_trace I P, isConnectedT t) := by
+    unfold matches_trace matches_cstar_trace
+    unfold IsStarConnected at h
+    rw [<- ih h.left]
+    have hP_conn : ∀ t ∈ matches_trace I P, IsConnected I t := by
       intro t ht
-      rcases t with ⟨w₀⟩
-      rw [show Quot.mk (⇑(TraceSetoid I)) w₀ = ⟦w₀⟧ from rfl] at ht ⊢
-      rw [RegularExpression.matches_toTrace] at ht
-      simp [toTrace] at ht
-      rcases ht with ⟨w, hw⟩
-      rw [<- hw.2, <- isConnected_toTrace]
-      exact h.2 w hw.1
+      rw [matches_toTrace] at ht
+      simp only [toTrace, Set.mem_image] at ht
+      rcases ht with ⟨s, hs, rfl⟩
+      exact h.right s hs
     rw [connectedComponents_of_connected _ hP_conn]
     rw [kstar_eq_minusEps_trace]
 
+lemma recognizable_zero : IsRecognizable (∅ : Set (Trace I)) :=
+  ⟨PUnit, inferInstance, inferInstance, inferInstance, 1, by simp⟩
+
+lemma recognizable_epsilon : IsRecognizable ({ 1 } : Set (Trace I)) := by
+  sorry
+
+lemma recognizable_char (a : α) : IsRecognizable ({ ⟦[a]⟧ } : Set (Trace I)) := by
+  sorry
+
+lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
+    (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P ∪ Q) := by
+  sorry
+
+lemma recognizable_mul {P Q : Set (Trace I)}
+    (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
+  sorry
+
+lemma recognizable_cstar {P : Set (Trace I)}
+    (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
+  sorry
+
+/-- Theorem 4.1 (iv) => (i) -/
+theorem recognizable_of_cRational (X : RegularExpression α) :
+    IsRecognizable (matches_cstar_trace I X) := by
+  induction X with
+  | zero => exact recognizable_zero
+  | epsilon => exact recognizable_epsilon
+  | char a => exact recognizable_char a
+  | plus P Q ihP ihQ => exact recognizable_union ihP ihQ
+  | comp P Q ihP ihQ => exact recognizable_mul ihP ihQ
+  | star P ih => exact recognizable_cstar ih
 
 
-lemma depTrClIn_refl {w : List α} {a : α} (h : a ∈ w) : @dependencyTransClosureIn α I w a a := by
-  unfold dependencyTransClosureIn dependencyIn
+
+-----
+
+def dependencyInL (I : Independence α) (w : List α) (a b : α) :=
+  (inducedDependence I).rel a b ∧ a ∈ w ∧ b ∈ w
+
+def dependencyTransClosureInL (I : Independence α) (w : List α) (a b : α) :=
+  Relation.TransGen (dependencyInL I w) a b
+
+def IsConnectedL (I : Independence α) (w : List α) :=
+  ∀ a b : α, dependencyTransClosureInL I w a b
+
+lemma IsConnected_eq (I : Independence α) (w : List α) : IsConnectedL I w = IsConnected I ⟦w⟧ := rfl
+
+lemma depTrClIn_refl {w : List α} {a : α} (h : a ∈ w) : dependencyTransClosureInL I w a a := by
+  unfold dependencyTransClosureInL dependencyInL
   apply Relation.TransGen.single
   simp [Dependence.refl, h]
 
-noncomputable instance : ∀ w x y, Decidable (@dependencyTransClosureIn α I w x y) :=
-  fun w x y => Classical.propDecidable (dependencyTransClosureIn w x y)
+--- variable [DecidableRel I.rel]
 
-noncomputable def sep_aux (w₀ w : List α) (p : α) : List (List α × List α) :=
+---
+noncomputable instance : ∀ w x y, Decidable (dependencyTransClosureInL I w x y) :=
+  fun w x y => Classical.propDecidable (dependencyTransClosureInL I w x y)
+
+noncomputable def ccDec_aux (I : Independence α) (w₀ w : List α) (p : α) : List (List α × List α) :=
   match w with
   | [] => [⟨[], []⟩]
   | a :: w =>
-    match sep_aux w₀ w p with
+    match ccDec_aux I w₀ w p with
     | [] => [] -- dummy value, unreachable by construction
     | v :: vs =>
-      if @dependencyTransClosureIn α I w₀ a p
+      if dependencyTransClosureInL I w₀ a p
         then match v.2 with
         | [] => ⟨a :: v.1, v.2⟩ :: vs
         | _ :: _ => ⟨[a], []⟩ :: v :: vs
         else ⟨v.1, a :: v.2⟩ :: vs
 
-noncomputable def sep (w : List α) (p : α) : List (List α × List α) := @sep_aux α I w w p
+noncomputable def ccDec (I : Independence α) (w : List α) (p : α) : List (List α × List α) := ccDec_aux I w w p
 
-lemma sep_aux_nonempty (w₀ w : List α) (p : α) : (@sep_aux α I w₀ w p) ≠ [] := by
+lemma ccDec_aux_nonempty (w₀ w : List α) (p : α) : (ccDec_aux I w₀ w p) ≠ [] := by
   induction w with
-  | nil => simp [sep_aux]
+  | nil => simp [ccDec_aux]
   | cons a u ih =>
-    simp [sep_aux]
-    cases hs : sep_aux w₀ u p
+    simp [ccDec_aux]
+    cases hs : ccDec_aux I w₀ u p
     · simp [hs] at ih
     · simp
-      by_cases ha : @dependencyTransClosureIn α I w₀ a p
+      by_cases ha : dependencyTransClosureInL I w₀ a p
       · rename_i s_head s_tail
         cases s_head.2
         all_goals simp [ha]
       · simp [ha]
 
-lemma sep_aux_zero_idx {w₀ w : List α} {p : α} : 0 < (@sep_aux α I w₀ w p).length := List.length_pos_iff.mpr (sep_aux_nonempty _ _ _)
+lemma ccDec_aux_zero_idx {w₀ w : List α} {p : α} : 0 < (ccDec_aux I w₀ w p).length := List.length_pos_iff.mpr (ccDec_aux_nonempty _ _ _)
 
-lemma sep_nonempty (w : List α) (p : α) : (@sep α I w p) ≠ [] := sep_aux_nonempty w w p
+lemma ccDEc_nonempty (w : List α) (p : α) : (ccDec I w p) ≠ [] := ccDec_aux_nonempty w w p
 
-lemma sep_invar (u w : List α) (a p : α) (i : Fin (@sep_aux α I (u ++ [p]) (w ++ [p]) p).length) :
-    (@sep_aux α I (u ++ [p]) (a :: w ++ [p]) p)[i] = (@sep_aux α I (u ++ [p]) (w ++ [p]) p)[i] ∨
-    (@sep_aux α I (u ++ [p]) (a :: w ++ [p]) p)[i] = (@sep_aux α I (u ++ [p]) (w ++ [p]) p)[i]
+/- lemma ccDec_invar (u w : List α) (a p : α) (i : Fin (ccDec_aux I (u ++ [p]) (w ++ [p]) p).length) :
+    (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p)[i] = (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i] ∨
+    (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p)[i] = (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i]
   := by
-  simp [sep_aux]
+  simp [ccDec_aux] -/
 
-lemma sep_aux_1_nonempty_head (u w : List α) (p : α) (h : w ≠ []) :
-    ((@sep_aux α I (u ++ [p]) (w ++ [p]) p)[0]'(sep_aux_zero_idx)).1 ≠ [] := by
+lemma ccDec_aux_1_nonempty_head (u w : List α) (p : α) (h : w ≠ []) :
+    ((ccDec_aux I (u ++ [p]) (w ++ [p]) p)[0]'(ccDec_aux_zero_idx)).1 ≠ [] := by
   induction w with
   | nil => simp at h
   | cons a w ih =>
     clear h
     by_cases hw : w = []
-    · simp [hw, sep_aux, depTrClIn_refl]
-      by_cases hau : @dependencyTransClosureIn α I (u ++ [p]) a p
+    · simp [hw, ccDec_aux, depTrClIn_refl]
+      by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
       all_goals simp [hau]
     · simp [hw] at ih
-      let t := @sep_aux α I (u ++ [p]) (w ++ [p]) p
-      have ht : @sep_aux α I (u ++ [p]) (w ++ [p]) p = t := rfl
+      let t := ccDec_aux I (u ++ [p]) (w ++ [p]) p
+      have ht : ccDec_aux I (u ++ [p]) (w ++ [p]) p = t := rfl
       rcases t
       · exfalso
-        exact sep_aux_nonempty _ _ _ ht
+        exact ccDec_aux_nonempty _ _ _ ht
       · rename_i s_head s_tail
-        by_cases hau : @dependencyTransClosureIn α I (u ++ [p]) a p
-        · suffices hs_dec : ∃ _1 _2 _3 _4, (@sep_aux α I (u ++ [p]) (a :: w ++ [p]) p) = (_1 ::_2, _3) :: _4 from by
+        by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
+        · suffices hs_dec : ∃ _1 _2 _3 _4, (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p) = (_1 ::_2, _3) :: _4 from by
             replace ⟨_1, _2, _3, _4, hs_dec⟩ := hs_dec
             rw [List.getElem_of_eq hs_dec]
             simp
-          simp [sep_aux, ht, hau]
+          simp [ccDec_aux, ht, hau]
           cases s_head.2
           · simp
           · simp
-        · simp [sep_aux, ht, hau]
-          have hs_dec : (@sep_aux α I (u ++ [p]) (w ++ [p]) p)[0]'(sep_aux_zero_idx) = (s_head :: s_tail)[0] := List.getElem_of_eq ht _
+        · simp [ccDec_aux, ht, hau]
+          have hs_dec : (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[0]'(ccDec_aux_zero_idx) = (s_head :: s_tail)[0] := List.getElem_of_eq ht _
           simp [hs_dec] at ih
           exact ih
 
-lemma sep_aux_1_nonempty (u w : List α) (p : α) (i : Fin (@sep_aux α I (u ++ [p]) (w ++ [p]) p).length) (h : w ≠ []) :
-    (@sep_aux α I (u ++ [p]) (w ++ [p]) p)[i].1 ≠ [] := by
+lemma ccDec_aux_1_nonempty (u w : List α) (p : α) (i : Fin (ccDec_aux I (u ++ [p]) (w ++ [p]) p).length) (h : w ≠ []) :
+    (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i].1 ≠ [] := by
   induction w with
   | nil => simp at h
   | cons a w ih =>
     clear h
     by_cases hw : w = []
     · rcases i with ⟨i, hi⟩
-      simp [hw, sep_aux, depTrClIn_refl]
-      by_cases hau : @dependencyTransClosureIn α I (u ++ [p]) a p
+      simp [hw, ccDec_aux, depTrClIn_refl]
+      by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
       all_goals simp [hau]
     · simp [hw] at ih
       rcases i with ⟨i, hi⟩
       cases i with
-      | zero => exact sep_aux_1_nonempty_head _ _ _ (by simp)
+      | zero => exact ccDec_aux_1_nonempty_head _ _ _ (by simp)
       | succ i =>
-        by_cases hau : @dependencyTransClosureIn α I (u ++ [p]) a p
-        · let temp := @sep_aux α I (u ++ [p]) (w ++ [p]) p
-          have htemp : @sep_aux α I (u ++ [p]) (w ++ [p]) p = temp := rfl
+        by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
+        · let temp := ccDec_aux I (u ++ [p]) (w ++ [p]) p
+          have htemp : ccDec_aux I (u ++ [p]) (w ++ [p]) p = temp := rfl
           rcases temp
           · exfalso
-            exact sep_aux_nonempty _ _ _ htemp
+            exact ccDec_aux_nonempty _ _ _ htemp
           · rename_i s_head s_tail
-            suffices hs_dec : (∃ _1 _2, (@sep_aux α I (u ++ [p]) (a :: w ++ [p]) p) = _1 :: _2) from by
+            suffices hs_dec : (∃ _1 _2, (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p) = _1 :: _2) from by
               replace ⟨_1, _2, hs_dec⟩ := hs_dec
               have h_2ne : (_2[i]'(by rw [hs_dec] at hi; exact Nat.succ_lt_succ_iff.mp hi)).1 ≠ [] := by
-                simp [sep_aux, htemp, hau] at hs_dec
+                simp [ccDec_aux, htemp, hau] at hs_dec
                 contrapose hs_dec
                 cases s_head.2
                 · simp
                   intro _
                   contrapose hs_dec
                   rw [<- List.getElem_of_eq hs_dec]
+                  all_goals sorry
                 · simp
                   intro _
                   contrapose hs_dec
@@ -296,27 +296,27 @@ lemma sep_aux_1_nonempty (u w : List α) (p : α) (i : Fin (@sep_aux α I (u ++ 
               rw [Fin.getElem_fin]
               rw [List.getElem_of_eq hs_dec]
               simp [h_2ne]
-            simp [sep_aux, htemp, hau]
+            simp [ccDec_aux, htemp, hau]
             cases s_head.2
             · simp
             · simp
-        · suffices hs_dec : (∃ _1 _2, (@sep_aux α I (u ++ [p]) (a :: w ++ [p]) p) = _1 :: _2) from by
+        · suffices hs_dec : (∃ _1 _2, (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p) = _1 :: _2) from by
             replace ⟨_1, _2, hs_dec⟩ := hs_dec
             have h_2ne : (_2[i]'(by rw [hs_dec] at hi; exact Nat.succ_lt_succ_iff.mp hi)).1 ≠ [] := by
               sorry
             rw [Fin.getElem_fin]
             rw [List.getElem_of_eq hs_dec]
             simp [h_2ne]
-          simp [sep_aux, hau]
-          let temp := @sep_aux α I (u ++ [p]) (w ++ [p]) p
-          have htemp : @sep_aux α I (u ++ [p]) (w ++ [p]) p = temp := rfl
+          simp [ccDec_aux, hau]
+          let temp := ccDec_aux I (u ++ [p]) (w ++ [p]) p
+          have htemp : ccDec_aux I (u ++ [p]) (w ++ [p]) p = temp := rfl
           rcases temp
           · exfalso
-            exact sep_aux_nonempty _ _ _ htemp
+            exact ccDec_aux_nonempty _ _ _ htemp
           · simp [htemp]
 
-lemma sep_aux_2_nonempty (u w : List α) (p : α) (i : Fin (@sep_aux α I (u ++ [p]) (w ++ [p]) p).length) (h : w ≠ []) (hi : i.1 > 0) :
-    (@sep_aux α I (u ++ [p]) (w ++ [p]) p)[i].2 ≠ [] := by sorry
+lemma ccDec_aux_2_nonempty (u w : List α) (p : α) (i : Fin (ccDec_aux I (u ++ [p]) (w ++ [p]) p).length) (h : w ≠ []) (hi : i.1 > 0) :
+    (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i].2 ≠ [] := by sorry
 
 
 
@@ -334,7 +334,7 @@ lemma proj2_prop {S : Set α} {hd : ∀ x, Decidable (x ∈ S)} {w : List α} {a
       exact h.2
 
 variable [LinearOrder α] in
-theorem lexNf_dup_lexNf_isConnected {w : List α} (h : IsLexNf I (w ++ w)) : @isConnected α I w := by
+theorem lexNf_dup_lexNf_isConnected {w : List α} (h : IsLexNf I (w ++ w)) : IsConnectedL I w := by
   have h' : IsLexNf I w := by
     contrapose h
     simp [IsLexNf] at h ⊢
@@ -343,10 +343,10 @@ theorem lexNf_dup_lexNf_isConnected {w : List α} (h : IsLexNf I (w ++ w)) : @is
     exact ⟨TraceEqv.compat (TraceEqv.refl w) h.1, List.append_left_lt h.right⟩
 
   by_contra h_con
-  simp [isConnected] at h_con
-  choose a ha b hb h_con using h_con
-  let A := {x | @dependencyTransClosureIn α I w a x}
-  let B := {x | ¬ @dependencyTransClosureIn α I w a x}
+  simp [IsConnectedL] at h_con
+  choose a b h_con using h_con
+  let A := {x | dependencyTransClosureInL I w a x}
+  let B := {x | ¬ dependencyTransClosureInL I w a x}
   have hA_dec : ∀ x, Decidable (x ∈ A) := fun x => Classical.propDecidable (x ∈ A)
   have hB_dec : ∀ x, Decidable (x ∈ B) := fun x => Classical.propDecidable (x ∈ B)
   let u := proj2 A hA_dec w
@@ -359,25 +359,156 @@ theorem lexNf_dup_lexNf_isConnected {w : List α} (h : IsLexNf I (w ++ w)) : @is
     unfold v at hk
     replace hj := proj2_prop hj
     replace hk := proj2_prop hk
-    replace hj : @dependencyTransClosureIn α I w a j := hj
-    replace hk : ¬@dependencyTransClosureIn α I w a k := hk
+    replace hj : dependencyTransClosureInL I w a j := hj
+    replace hk : ¬ dependencyTransClosureInL I w a k := hk
     by_contra hjk
 
-    have : @dependencyTransClosureInCoe α I w a k := by
-      rcases hj with ⟨ha', hjw', hj⟩
-      have : @dependencyIn α I w ⟨j, hjw'⟩ ⟨k, hkw⟩ := hjk ∘ fun a => a
-      use ha', hkw
-      unfold dependencyTransClosureIn at hj ⊢
+    have : dependencyTransClosureInL I w a k := by
+      have : dependencyInL I w j k := ⟨hjk, hjw, hkw⟩
       exact Relation.TransGen.tail hj this
 
     exact hk this
 
-  have : a ∈ u := by
+  /- have : a ∈ u := by
     have ha_A : a ∈ A := ⟨ha, ha, Relation.TransGen.single ((inducedDependence I).refl a)⟩
     exact List.mem_filter_of_mem ha (decide_eq_true ha_A)
   have : b ∈ v := by
-    have hb_B : b ∈ B := by simp [B, dependencyTransClosureInCoe, h_con]
-    exact List.mem_filter_of_mem hb (decide_eq_true hb_B)
+    have hb_B : b ∈ B := by simp [B, dependencyTransClosureInL, h_con]
+    exact List.mem_filter_of_mem hb (decide_eq_true hb_B) -/
+  sorry
 
+-----
+
+variable [Fintype α] [LinearOrder α] [DecidableRel I.rel]
+
+lemma connected_of_lexNf_sq {w : List α}
+    (hw : w ∈ LexNfLanguage I)
+    (hww : w ++ w ∈ LexNfLanguage I) :
+    IsConnected I ⟦w⟧ := by
+  sorry
+
+omit [LinearOrder α] in
+lemma forbidden_of_subword {u w v : List α} {a b : α}
+    (hw : w ∈ ForbiddenPattern I a b) :
+    u ++ w ++ v ∈ ForbiddenPattern I a b := by
+  unfold ForbiddenPattern at *
+  simp [Language.mem_mul] at hw
+  rcases hw with ⟨a1, b1, b2, b3, ⟨⟨ha1, hb1, hb2⟩, hb3⟩, ⟨x, hx, rfl⟩⟩
+  simp [Language.mem_mul]
+  use u ++ a1, b1, b2, b3
+  and_intros
+  · apply mem_sigma
+  · exact hb1
+  · exact hb2
+  · exact hb3
+  · use x ++ v
+    simp [mem_sigma]
+
+lemma sum_forbidden_of_subword {S : Finset (α × α)} {u w v : List α}
+    (hw : w ∈ ∑ p ∈ S, ForbiddenPattern I p.1 p.2) :
+    u ++ w ++ v ∈ ∑ p ∈ S, ForbiddenPattern I p.1 p.2 := by
+  induction S using Finset.induction_on generalizing w with
+  | empty =>
+    simp only [Finset.sum_empty] at hw
+    contradiction
+  | insert p' S' hp ih =>
+    rw [Finset.sum_insert hp] at hw ⊢
+    cases hw with
+    | inl h_left =>
+      left
+      exact forbidden_of_subword h_left
+    | inr h_right =>
+      right
+      exact ih h_right
+
+lemma lexNf_of_subword {u w v : List α} (h : u ++ w ++ v ∈ LexNfLanguage I) :
+    w ∈ LexNfLanguage I := by
+  unfold LexNfLanguage at h ⊢
+  rw [Set.mem_compl_iff] at h ⊢
+  unfold AllForbiddenPatterns at h ⊢
+  contrapose! h
+  exact sum_forbidden_of_subword h
+
+lemma connected_iterativeFactor_of_subset_lexNf {X : Language α}
+    (hX : X ≤ LexNfLanguage I) {w : List α}
+    (hw : IsIterativeFactor X w) :
+    IsConnected I ⟦w⟧ := by
+  rcases hw with ⟨u, v, hw⟩
+  have h_lex1 : u ++ w ++ v ∈ LexNfLanguage I := hX (hw 1)
+  have h_lex2 : u ++ (w ++ w) ++ v ∈ LexNfLanguage I := hX (hw 2)
+  have h_w_lex : w ∈ LexNfLanguage I := lexNf_of_subword h_lex1
+  have h_ww_lex : w ++ w ∈ LexNfLanguage I := lexNf_of_subword h_lex2
+  exact connected_of_lexNf_sq h_w_lex h_ww_lex
+
+omit [Fintype α] [LinearOrder α] in
+lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
+    L.IsRegular := by
+  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
+  rw [Language.isRegular_iff]
+  let M_DFA : DFA α σ := {
+    step := fun q a => M.step q [a]
+    start := M.start
+    accept := M.accept
+  }
+  use σ, h_fin, M_DFA
+  rw [hM]
+  ext w
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  unfold DFMA.accepts DFMA.eval
+  rw [Set.mem_setOf, Set.mem_setOf]
+  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
+    induction w with
+    | nil =>
+      intro q
+      simp only [List.foldl_nil]
+      exact (M.idempotent q).symm
+    | cons a ws ih =>
+      intro q
+      simp only [List.foldl_cons]
+      rw [ih (M.step q [a])]
+      exact (M.composition q [a] ws)
+  rw [h_eval M_DFA.start]
+
+/-- Theorem 4.1 (i) => (ii) -/
+theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
+    (hT : IsRecognizable T) :
+    ∃ X : RegularExpression α,
+      (∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) ∧
+      toTrace I X.matches' = T := by
+  let L : Language α := (mk' (I := I) ⁻¹' T) ⊓ LexNfLanguage I
+  have hL_reg : L.IsRegular := by
+    apply Language.IsRegular.inf
+    · apply isRegular_of_recognizable
+      apply recognizable_has_recognizablePreImage
+      exact hT
+    · apply isRegular_lexNf
+  have ⟨R, hR_matches⟩ : ∃ R : RegularExpression α, R.matches' = L := by
+    classical
+    have ⟨σ, h_fin, M, hL⟩ : ∃ (σ : Type) (_ : Fintype σ) (M : DFA α σ), M.accepts = L :=
+      Language.isRegular_iff.mp hL_reg
+    haveI : FinEnum σ := FinEnum.ofEquiv (Fin (Fintype.card σ)) (Fintype.equivFin σ)
+    use M.toNFA.toεNFA.toRegex
+    rw [← hL, εNFA.accepts_toRegex, NFA.toεNFA_correct, DFA.toNFA_correct]
+  use R
+  constructor
+  · intro s hs
+    have h_subset : R.matches' ≤ LexNfLanguage I := by
+      simp_all only [inf_le_right, L]
+    exact connected_iterativeFactor_of_subset_lexNf h_subset hs
+  · rw [hR_matches]
+    ext t
+    constructor
+    · rintro ⟨s, hs, rfl⟩
+      exact hs.left
+    · intro ht
+      rcases exists_lexNf_rep I t with ⟨s, hs_eq, hs_lex⟩
+      refine ⟨s, ?_, hs_eq⟩
+      unfold L
+      change s ∈ ⇑mk' ⁻¹' T ∩ LexNfLanguage I
+      constructor
+      · rw [Set.mem_preimage]
+        subst hs_eq
+        exact ht
+      · exact hs_lex
 
 end TraceTheory

@@ -1,4 +1,4 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Computability.DFA
 import Mathlib.Computability.Language
 import TraceTheory.Basic
@@ -170,6 +170,125 @@ lemma isRegular_allForbiddenPatterns : Language.IsRegular (AllForbiddenPatterns 
 theorem isRegular_lexNf : Language.IsRegular (LexNfLanguage I) := by
   apply Language.IsRegular.compl
   apply isRegular_allForbiddenPatterns
+
+omit [LinearOrder α] [Fintype α] in
+lemma mem_sigma (x : List α) : x ∈ (Sigma : Language α)∗ := by
+  rw [Language.mem_kstar]
+  use [x]
+  simp only [List.flatten_cons, List.flatten_nil, List.append_nil, List.mem_cons,
+    List.not_mem_nil, or_false, Sigma, forall_eq, true_and]
+  apply Set.mem_univ
+
+omit [Fintype α] [LinearOrder α] in
+lemma mem_sum_language
+    {ι : Type*} [DecidableEq ι] {S : Finset ι} {f : ι → Language α} {x : List α} :
+    x ∈ ∑ i ∈ S, f i ↔ ∃ i ∈ S, x ∈ f i := by
+  induction S using Finset.induction_on with
+  | empty => simp
+  | insert i S hi ih =>
+    simp only [Finset.sum_insert hi, Language.mem_add]
+    rw [ih]
+    constructor
+    · rintro (hx | ⟨j, hj, hxj⟩)
+      · exact ⟨i, Finset.mem_insert_self i S, hx⟩
+      · exact ⟨j, Finset.mem_insert_of_mem hj, hxj⟩
+    · rintro ⟨j, hj, hxj⟩
+      simp only [Finset.mem_insert] at hj
+      rcases hj with (rfl | hj)
+      · left
+        exact hxj
+      · right
+        exact ⟨j, hj, hxj⟩
+
+lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
+    x ∈ ForbiddenPattern I a b ↔
+    ∃ y u z : List α, x = y ++ [b] ++ u ++ [a] ++ z ∧ (∀ c ∈ u, I.rel a c) := by
+  unfold ForbiddenPattern IndependentLetters
+  constructor
+  · intro h
+    simp [Language.mem_mul] at h
+    rcases h with ⟨a1, b1, b2, b3, ⟨⟨ha1, hb1, hb2⟩, hb3⟩, ⟨x, hx, rfl⟩⟩
+    use a1, b2, x
+    constructor
+    · simp only [Letter] at hb3 hb1
+      rw [Set.mem_singleton_iff] at hb3 hb1
+      subst hb3 hb1
+      simp
+    · intro c hc
+      rw [Language.mem_kstar] at hb2
+      rcases hb2 with ⟨L, rfl, hL⟩
+      unfold Letter at hL
+      simp only [List.mem_flatten] at hc
+      rcases hc with ⟨y, hy, hcy⟩
+      have hy_indep := hL y hy
+      rw [mem_sum_language] at hy_indep
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hy_indep
+      rcases hy_indep with ⟨c', hc'_rel, hc'_eq⟩
+      rw [Set.mem_singleton_iff] at hc'_eq
+      subst hc'_eq
+      simp only [List.mem_singleton] at hcy
+      subst hcy
+      exact hc'_rel
+  · intro h
+    rcases h with ⟨y, u, z, rfl, h_indep⟩
+    simp [Language.mem_mul]
+    use y, [b], u, [a]
+    unfold Letter
+    and_intros
+    · apply mem_sigma
+    · rfl
+    · rw [Language.mem_kstar]
+      use u.map (fun c => [c])
+      constructor
+      · induction u with
+        | nil => rfl
+        | cons hd tl ih =>
+          simp only [List.map_cons, List.flatten_cons, List.cons_append, List.nil_append,
+            List.cons.injEq, true_and]
+          simp only [List.mem_cons, forall_eq_or_imp] at h_indep
+          rw [← ih h_indep.right]
+      · intro y hy
+        simp only [List.mem_map] at hy
+        rcases hy with ⟨c, hc, rfl⟩
+        rw [mem_sum_language]
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+        use c, h_indep c hc
+        rfl
+    · rfl
+    · use z
+      constructor
+      · apply mem_sigma
+      · simp
+
+lemma mem_allForbiddenPatterns_iff {x : List α} :
+    x ∈ AllForbiddenPatterns I ↔
+    ∃ a b, a < b ∧ I.rel a b ∧ x ∈ ForbiddenPattern I a b := by
+  unfold AllForbiddenPatterns
+  rw [mem_sum_language]
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and, Prod.exists, and_assoc]
+
+/-- The language LexNfLanguage contains exactly the strings satisfying the factor condition. -/
+theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
+    x ∈ LexNfLanguage I ↔ SatisfiesFactorCondition I x := by
+  unfold LexNfLanguage SatisfiesFactorCondition
+  rw [Set.mem_compl_iff, mem_allForbiddenPatterns_iff]
+  push_neg
+  constructor
+  · intro h y u z a b hx h_indep hlt
+    by_contra h_all_indep
+    push_neg at h_all_indep
+    have h_in_pattern : x ∈ ForbiddenPattern I a b := by
+      rw [mem_forbiddenPattern_iff]
+      exact ⟨y, u, z, hx, h_all_indep⟩
+    exact h a b hlt h_indep h_in_pattern
+  · intro h a b hlt h_indep h_in_pattern
+    rw [mem_forbiddenPattern_iff] at h_in_pattern
+    rcases h_in_pattern with ⟨y, u, z, hx, h_all_indep⟩
+    rcases h y u z a b hx h_indep hlt with ⟨c, hc_mem, hc_not_indep⟩
+    exact hc_not_indep (h_all_indep c hc_mem)
+
+theorem exists_lexNf_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ LexNfLanguage I := by
+  sorry
 
 end LexNf
 
