@@ -1,6 +1,8 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Computability.DFA
 import Mathlib.Computability.Language
+import Mathlib.Data.List.Permutation
+import Mathlib.Data.Set.Finite.Basic
 import TraceTheory.Basic
 import TraceTheory.Computability
 
@@ -287,8 +289,47 @@ theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
     rcases h y u z a b hx h_indep hlt with ⟨c, hc_mem, hc_not_indep⟩
     exact hc_not_indep (h_all_indep c hc_mem)
 
+omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
+lemma perm_of_traceEqv {w x : List α} (h : TraceEqv I w x) : w.Perm x := by
+  induction h with
+  | swap _ _ _ => apply List.Perm.swap
+  | refl _ => apply List.Perm.refl
+  | symm _ ih => exact List.Perm.symm ih
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+  | compat _ _ ih₁ ih₂ => exact List.Perm.append ih₁ ih₂
+
+omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
+lemma finite_traceEqv_class (w : List α) : {x : List α | TraceEqv I w x}.Finite := by
+  have h_sub : {x : List α | TraceEqv I w x} ⊆ {x : List α | x ∈ w.permutations} := by
+    intro x hx
+    rw [Set.mem_setOf] at hx ⊢
+    rw [List.mem_permutations, List.perm_comm]
+    exact perm_of_traceEqv I hx
+  exact Set.Finite.subset w.permutations.finite_toSet h_sub
+
 theorem exists_lexNf_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ LexNfLanguage I := by
-  sorry
+  rcases t with ⟨u⟩
+  change ∃ s, ⟦s⟧ = ⟦u⟧ ∧ s ∈ LexNfLanguage I
+  let S : Set (List α) := {x | TraceEqv I u x}
+  have h_fin : S.Finite := finite_traceEqv_class I u
+  have h_nonempty : S.Nonempty := ⟨u, TraceEqv.refl u⟩
+  haveI : Fintype S := h_fin.fintype
+  let S_finset := S.toFinset
+  have h_finset_nonempty : S_finset.Nonempty := Set.toFinset_nonempty.mpr h_nonempty
+  let s := S_finset.min' h_finset_nonempty
+  have hs_mem_finset : s ∈ S_finset := Finset.min'_mem S_finset h_finset_nonempty
+  have hs_eqv : TraceEqv I u s := by
+    simpa [S_finset, S] using hs_mem_finset
+  use s
+  constructor
+  · symm
+    apply Quotient.sound
+    exact hs_eqv
+  · rw [mem_lexNfLanguage_iff_factorCondition, ← isLexNf_iff_factorCondition]
+    intro s' hs'
+    have hs'_mem : s' ∈ S_finset := by
+      simp [S_finset, S, hs_eqv.trans hs']
+    exact Finset.min'_le S_finset s' hs'_mem
 
 end LexNf
 
