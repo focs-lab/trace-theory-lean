@@ -372,7 +372,7 @@ def IsValidFactorization
   TraceEqv I x xs.flatten ∧
   TraceEqv I y ys.flatten ∧
   ∀ i : ℕ, ∀ (h : i + 1 < xs.length),
-    Independent I (xs[i]'(Nat.lt_of_succ_lt h)) ((ys.drop i).flatten)
+    Independent I (xs[i + 1]'(h)) ((ys.take (i + 1)).flatten)
 
 /-- Predicate for language `X` having rank at most `k`. -/
 def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
@@ -385,9 +385,44 @@ def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
 def HasFiniteRank (I : Independence α) (X : Language α) : Prop :=
   ∃ k : ℕ, HasRankAtMost I X k
 
+variable [DecidableEq α]
+
 theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h₂ : IsClosed I X₂) :
     HasRankAtMost I (X₁ * X₂) 1 := by
-  sorry
+  intro x y hxy
+  rcases hxy with ⟨w, hw, heqv⟩
+  rcases hw with ⟨x₁, hx₁, x₂, hx₂, rfl⟩
+  unfold IsClosed traceClosure at h₁ h₂
+  rw [Language.ext_iff] at h₁ h₂
+  simp only at heqv
+  replace heqv := heqv.symm
+  have ⟨z₁, z₂, z₃, z₄, h_indep, hx, hy, hx₁_eqv, hx₂_eqv⟩ := levi_lemma heqv
+  use [z₁, z₂], [z₃, z₄]
+  unfold IsValidFactorization
+  and_intros
+  · simp
+  · simp
+  · simp only [List.zipWith_cons_cons, List.zipWith_self, List.map_nil, List.flatten_cons,
+      List.flatten_nil, List.append_nil]
+    replace h₁ := h₁ (z₁ ++ z₃)
+    replace h₂ := h₂ (z₂ ++ z₄)
+    rw [Set.mem_setOf] at h₁ h₂
+    use z₁ ++ z₃
+    constructor
+    · apply h₁.mp
+      use x₁
+    · use z₂ ++ z₄
+      simp only [List.append_assoc, and_true]
+      apply h₂.mp
+      use x₂
+  · simpa
+  · simpa
+  · intro i hlt
+    cases i with
+    | zero => simpa using h_indep
+    | succ i' =>
+      simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] at hlt
+      contradiction
 
 end rank
 
