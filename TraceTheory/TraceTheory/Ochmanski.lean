@@ -133,7 +133,22 @@ theorem recognizable_image_of_regular_finite_rank {X : Language α}
 lemma recognizable_zero : IsRecognizable (∅ : Set (Trace I)) :=
   ⟨PUnit, inferInstance, inferInstance, inferInstance, 1, by simp⟩
 
+inductive EpsMonoid
+  | one
+  | dead
+deriving DecidableEq, Fintype
+
+instance : Monoid EpsMonoid where
+  one := .one
+  mul
+  | .one, x => x
+  | .dead, _ => .dead
+  mul_one x := by cases x <;> rfl
+  one_mul x := by cases x <;> rfl
+  mul_assoc x y z := by cases x <;> cases y <;> cases z <;> rfl
+
 lemma recognizable_epsilon : IsRecognizable ({ 1 } : Set (Trace I)) := by
+  use EpsMonoid, inferInstance, inferInstance, inferInstance
   sorry
 
 lemma recognizable_char (a : α) : IsRecognizable ({ ⟦[a]⟧ } : Set (Trace I)) := by
