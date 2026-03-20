@@ -188,11 +188,11 @@ lemma depTrClIn_refl {w : List α} {a : α} (h : a ∈ w) : dependencyTransClosu
 noncomputable instance : ∀ w x y, Decidable (dependencyTransClosureInL I w x y) :=
   fun w x y => Classical.propDecidable (dependencyTransClosureInL I w x y)
 
-noncomputable def ccDec_aux' (I : Independence α) (w₀ w : List α) : List (List α) :=
+noncomputable def ccDec_aux (I : Independence α) (w₀ w : List α) : List (List α) :=
   match w with
   | [] => [[]]
   | a :: w =>
-    match ccDec_aux' I w₀ w with
+    match ccDec_aux I w₀ w with
     | [] => [] -- dummy value, unreachable by construction
     | v :: vs =>
       match v with
@@ -202,23 +202,25 @@ noncomputable def ccDec_aux' (I : Independence α) (w₀ w : List α) : List (Li
           then (a :: b :: v) :: vs
           else [a] :: (b :: v) :: vs
 
+noncomputable def ccDec (I : Independence α) (w : List α) : List (List α) := ccDec_aux I w w
+
 noncomputable def ccDec_aux_conn (I : Independence α) (w₀ w : List α) : Prop :=
   match w with
   | [] => True -- by convention
   | a :: w =>
-    match ccDec_aux' I w₀ w with
+    match ccDec_aux I w₀ w with
     | [] => False
     | v :: _ =>
       match v with
       | [] => True -- by convention to make casework easier (first char is inserted as `[[·]]` and not `[·] :: _`)
       | b :: _ => dependencyTransClosureInL I w₀ a b
 
-lemma ccDec_aux'_nonempty' (w₀ w : List α) : (ccDec_aux' I w₀ w) ≠ [] := by
+lemma ccDec_aux_nonempty (w₀ w : List α) : (ccDec_aux I w₀ w) ≠ [] := by
   induction w with
-  | nil => simp [ccDec_aux']
+  | nil => simp [ccDec_aux]
   | cons a u ih =>
-    simp [ccDec_aux']
-    cases hs : ccDec_aux' I w₀ u
+    simp [ccDec_aux]
+    cases hs : ccDec_aux I w₀ u
     · simp [hs] at ih
     · simp
       rename_i c_head c_tail
@@ -229,23 +231,23 @@ lemma ccDec_aux'_nonempty' (w₀ w : List α) : (ccDec_aux' I w₀ w) ≠ [] := 
         by_cases hab : dependencyTransClosureInL I w₀ a b
         all_goals simp [hab]
 
-lemma ccDec_aux_zero_idx {w₀ w : List α} : 0 < (ccDec_aux' I w₀ w).length := List.length_pos_iff.mpr (ccDec_aux'_nonempty' _ _)
+lemma ccDec_aux_zero_idx {w₀ w : List α} : 0 < (ccDec_aux I w₀ w).length := List.length_pos_iff.mpr (ccDec_aux_nonempty _ _)
 
-lemma ccDec_aux'_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ []) :
-    (ccDec_aux' I u w)[0]'(ccDec_aux_zero_idx) ≠ [] := by
+lemma ccDec_aux_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ []) :
+    (ccDec_aux I u w)[0]'(ccDec_aux_zero_idx) ≠ [] := by
   induction w with
   | nil => simp at h
   | cons a w ih =>
-    suffices hs_dec : ∃ _1 _2 _3, (ccDec_aux' I u (a :: w)) = (_1 ::_2) :: _3 from by
+    suffices hs_dec : ∃ _1 _2 _3, (ccDec_aux I u (a :: w)) = (_1 ::_2) :: _3 from by
       replace ⟨_1, _2, _3, hs_dec⟩ := hs_dec
       rw [List.getElem_of_eq hs_dec]
       simp
-    simp [ccDec_aux']
-    let t := ccDec_aux' I u w
-    have ht : ccDec_aux' I u w = t := rfl
+    simp [ccDec_aux]
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
     rcases t
     · exfalso
-      exact ccDec_aux'_nonempty' _ _ ht
+      exact ccDec_aux_nonempty _ _ ht
     · rename_i c_head c_tail
       simp [ht]
       cases c_head with
@@ -255,29 +257,29 @@ lemma ccDec_aux'_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ 
         by_cases hab : dependencyTransClosureInL I u a b
         all_goals simp [hab]
 
-lemma ccDec_aux'_len_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w)) :
-    (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length := by
+lemma ccDec_aux_len_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w)) :
+    (ccDec_aux I u (a :: w)).length = (ccDec_aux I u w).length := by
   simp [ccDec_aux_conn] at h
-  let t := ccDec_aux' I u w
-  have ht : ccDec_aux' I u w = t := rfl
+  let t := ccDec_aux I u w
+  have ht : ccDec_aux I u w = t := rfl
   rcases t
   · simp [ht] at h
   · rename_i c_head c_tail
     simp [ht] at h
     cases c_head with
-    | nil => simp [ccDec_aux', ht]
+    | nil => simp [ccDec_aux, ht]
     | cons b c_head =>
       simp at h
-      simp [ccDec_aux', ht, h]
+      simp [ccDec_aux, ht, h]
 
-lemma ccDec_aux'_len_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w)) :
-    (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length + 1 := by
+lemma ccDec_aux_len_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w)) :
+    (ccDec_aux I u (a :: w)).length = (ccDec_aux I u w).length + 1 := by
   simp [ccDec_aux_conn] at h
-  let t := ccDec_aux' I u w
-  have ht : ccDec_aux' I u w = t := rfl
+  let t := ccDec_aux I u w
+  have ht : ccDec_aux I u w = t := rfl
   rcases t
   · exfalso
-    exact ccDec_aux'_nonempty' _ _ ht
+    exact ccDec_aux_nonempty _ _ ht
   · rename_i c_head c_tail
     simp [ht] at h
     cases c_head with
@@ -285,34 +287,39 @@ lemma ccDec_aux'_len_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a ::
       cases w with
       | nil => simp at h
       | cons b w =>
-        have := ccDec_aux'_nonempty_head I u (b :: w) (List.cons_ne_nil b w)
+        have := ccDec_aux_nonempty_head I u (b :: w) (List.cons_ne_nil b w)
         simp [List.getElem_of_eq ht] at this
     | cons b c_head =>
       simp at h
-      simp [ccDec_aux', ht, h]
+      simp [ccDec_aux, ht, h]
 
-lemma ccDec_aux'_tail_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w))
-    (i : ℕ) (hi : i < (ccDec_aux' I u w).length) (hiz : i > 0) :
-    (ccDec_aux' I u (a :: w))[i]'(by rw [ccDec_aux'_len_C h]; exact hi) = (ccDec_aux' I u w)[i] := by
+lemma ccDec_aux_len_D' {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w)) :
+    (ccDec_aux I u (a :: w)).length - 1 = (ccDec_aux I u w).length := by
+  simp [ccDec_aux_len_D h]
+
+lemma ccDec_aux_tail_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w))
+    (i : ℕ) (hi : i < (ccDec_aux I u (a :: w)).length) (hiz : i > 0) :
+    (ccDec_aux I u (a :: w))[i] = (ccDec_aux I u w)[i]'(by rw [<- ccDec_aux_len_C h]; exact hi) := by
   by_cases hw : w = []
-  · simp [hw, ccDec_aux'] at hi
+  · simp [hw, ccDec_aux] at hi
     simp [hi] at hiz
   simp [ccDec_aux_conn] at h
-  let t := ccDec_aux' I u w
-  have ht : ccDec_aux' I u w = t := rfl
+  let t := ccDec_aux I u w
+  have ht : ccDec_aux I u w = t := rfl
   rcases t
-  · simp [ht] at hi
+  · rw [ccDec_aux_len_C h] at hi
+    simp [ht] at hi
   · rename_i c_head c_tail
     simp [ht] at h
     have : c_head ≠ [] := by
-      have := ccDec_aux'_nonempty_head I u w hw
+      have := ccDec_aux_nonempty_head I u w hw
       rw [List.getElem_of_eq ht] at this
       exact this
     cases c_head with
     | nil => simp at this
     | cons b c_head =>
       simp at h
-      simp [ccDec_aux', ht, h] at hi ⊢
+      simp [ccDec_aux, ht, h] at hi ⊢
       have : ((a :: b :: c_head) :: c_tail)[i] =
           ((a :: b :: c_head) :: c_tail)[i - 1 + 1]'(Nat.add_lt_of_lt_sub (Nat.sub_lt_right_of_lt_add hiz hi)) := by
         rw [getElem_congr _ (show i - 1 + 1 = i from Nat.sub_add_cancel (Nat.succ_le_of_lt hiz))]
@@ -323,29 +330,59 @@ lemma ccDec_aux'_tail_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w
         rw [getElem_congr _ (show i - 1 + 1 = i from Nat.sub_add_cancel (Nat.succ_le_of_lt hiz))]
         simp
       rw [this]
-      simp [List.getElem_cons_succ]
+      simp
 
-lemma ccDec_aux'_tail_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w))
-    (i : ℕ) (hi : i < (ccDec_aux' I u w).length) :
-    (ccDec_aux' I u (a :: w))[i + 1]'(by rw [ccDec_aux'_len_D h]; exact Nat.add_lt_add_right hi 1) = (ccDec_aux' I u w)[i] := by
+lemma ccDec_aux_tail_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w))
+    (i : ℕ) (hi : i + 1 < (ccDec_aux I u (a :: w)).length) :
+    (ccDec_aux I u (a :: w))[i + 1] = (ccDec_aux I u w)[i]'(by rw [<- ccDec_aux_len_D' h]; exact Nat.lt_sub_of_add_lt hi) := by
   by_cases hw : w = []
-  · simp [hw, ccDec_aux_conn, ccDec_aux'] at h
+  · simp [hw, ccDec_aux_conn, ccDec_aux] at h
   simp [ccDec_aux_conn] at h
-  let t := ccDec_aux' I u w
-  have ht : ccDec_aux' I u w = t := rfl
+  let t := ccDec_aux I u w
+  have ht : ccDec_aux I u w = t := rfl
   rcases t
-  · simp [ht] at hi
+  · rw [ccDec_aux_len_D h] at hi
+    simp [ht] at hi
   · rename_i c_head c_tail
     simp [ht] at h
     have : c_head ≠ [] := by
-      have := ccDec_aux'_nonempty_head I u w hw
+      have := ccDec_aux_nonempty_head I u w hw
       rw [List.getElem_of_eq ht] at this
       exact this
     cases c_head with
     | nil => simp at this
     | cons b c_head =>
       simp at h
-      simp [ccDec_aux', ht, h] at ⊢
+      simp [ccDec_aux, ht, h] at ⊢
+
+lemma ccDec_aux_tail_D' {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w))
+    (i : ℕ) (hi : i - 1 < (ccDec_aux I u w).length) :
+    (ccDec_aux I u (a :: w))[i]'(by rw [ccDec_aux_len_D h]; exact lt_add_of_tsub_lt_right hi) = (ccDec_aux I u w)[i - 1] := by
+  -- cases i with
+  by_cases hw : w = []
+  · simp [hw, ccDec_aux_conn, ccDec_aux] at h
+  simp [ccDec_aux_conn] at h
+  let t := ccDec_aux I u w
+  have ht : ccDec_aux I u w = t := rfl
+  rcases t
+  · simp [ht] at hi
+  · rename_i c_head c_tail
+    simp [ht] at h
+    have : c_head ≠ [] := by
+      have := ccDec_aux_nonempty_head I u w hw
+      rw [List.getElem_of_eq ht] at this
+      exact this
+    cases c_head with
+    | nil => simp at this
+    | cons b c_head =>
+      simp at h
+      simp [ccDec_aux, ht, h] at ⊢
+      have : ([a] :: (b :: c_head) :: c_tail)[i]'(sorry) =
+          ([a] :: (b :: c_head) :: c_tail)[i - 1 + 1]'(sorry) := by
+        sorry
+        --rw [getElem_congr _ (show i - 1 + 1 = i from Nat.sub_add_cancel (Nat.succ_le_of_lt hiz))]
+        --simp
+      simp [this]
 
 /-
 lemma ccDec'_aux_len (u w : List α) (a : α) :
@@ -374,21 +411,21 @@ lemma ccDec'_aux_sub_idx (u w : List α) (a : α) (i : Fin (ccDec_aux' I u (a ::
   sorry
 -/
 
-lemma ccDec'_aux_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux' I u w).length) (hz : w ≠ []) :
-    (ccDec_aux' I u w)[i] ≠ [] := by
+lemma ccDec_aux_elem_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux I u w).length) (hz : w ≠ []) :
+    (ccDec_aux I u w)[i] ≠ [] := by
   induction w generalizing i with
   | nil => simp at hz
   | cons a w ih =>
     clear hz
     by_cases hiz : i = 0
-    · suffices hs_dec : (∃ _1 _2 _3, (ccDec_aux' I u (a :: w)) = (_1 :: _2) :: _3) ∨ (ccDec_aux' I u (a :: w)) = [] from by
+    · suffices hs_dec : (∃ _1 _2 _3, (ccDec_aux I u (a :: w)) = (_1 :: _2) :: _3) ∨ (ccDec_aux I u (a :: w)) = [] from by
         rcases hs_dec with ⟨hs_dec⟩
         · replace ⟨_1, _2, _3, hs_dec⟩ := hs_dec
           simp [hs_dec, hiz]
         · rename_i hs_dec
           simp [hs_dec] at hi
-      simp [ccDec_aux']
-      cases ccDec_aux' I u w
+      simp [ccDec_aux]
+      cases ccDec_aux I u w
       · simp
       · rename_i c_head c_tail
         simp
@@ -400,230 +437,166 @@ lemma ccDec'_aux_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux' I u w)
           all_goals simp [hab]
     · have hw : w ≠ [] := by
         by_contra hw
-        simp [hw, ccDec_aux'] at hi
+        simp [hw, ccDec_aux] at hi
         exact hiz hi
-      have ⟨⟨j, hj⟩, hjw⟩ := ccDec'_aux_sub_idx u w a ⟨i, hi⟩ (Nat.zero_lt_of_ne_zero hiz)
-      simp at hjw
-      rw [hjw]
-      exact ih j hj hw
+      by_cases hab : ccDec_aux_conn I u (a :: w)
+      · rw [ccDec_aux_tail_C hab i hi (Nat.zero_lt_of_ne_zero hiz)]
+        apply ih
+        exact hw
+      · rw [ccDec_aux_tail_D' hab i (by rw [ccDec_aux_len_D hab] at hi; omega)]
+        apply ih
+        exact hw
 
-lemma ccDec'_subst (u w : List α) (p : α) (i : ℕ) (hi : i + 1 < (ccDec_aux' I u w).length) :
-    List.Sublist ((ccDec_aux' I u w)[i] ++ (ccDec_aux' I u w)[i + 1]) w := by
-  induction w generalizing i with
-  | nil => simp [ccDec_aux'] at hi
+lemma ccDec_aux_prefix (I : Independence α) (u w : List α) :
+    List.IsPrefix ((ccDec_aux I u w)[0]'(ccDec_aux_zero_idx)) w := by
+  induction w with
+  | nil => simp [ccDec_aux]
   | cons a w ih =>
-    by_cases hiz : i = 0
-    · simp [hiz]
-      sorry
-    ·
-      have ⟨⟨j, hj⟩, hjw⟩ := ccDec'_aux_sub_idx u w a ⟨i, by omega⟩ (Nat.zero_lt_of_ne_zero hiz)
-      simp at hjw
-      rw [hjw]
-      exact ih j hj
-    cases ccDec_aux' I u w
-    · simp
+    suffices hs_dec : ∃ _1 _2, (ccDec_aux I u (a :: w)) = _1 :: _2 ∧ List.IsPrefix _1 (a :: w) from by
+      replace ⟨_1, _2, ⟨hs_dec, hs⟩⟩ := hs_dec
+      simp [List.getElem_of_eq hs_dec, hs]
+    simp [ccDec_aux]
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · exfalso
+      exact (ccDec_aux_nonempty _ _) ht
     · rename_i c_head c_tail
-      simp
+      simp [ht]
       cases c_head with
       | nil => simp
       | cons b c_head =>
         simp
-        by_cases hab : dependencyTransClosureInL I w a b
-        all_goals simp [hab]
-        all_goals apply List.Sublist.cons
+        by_cases hab : dependencyTransClosureInL I u a b
+        · simp [hab]
+          simp [List.getElem_of_eq ht] at ih
+          exact ih
+        · simp [hab]
 
-noncomputable def ccDec_aux (I : Independence α) (w₀ w : List α) (p : α) : List (List α × List α) :=
-  match w with
-  | [] => [⟨[], []⟩]
-  | a :: w =>
-    match ccDec_aux I w₀ w p with
-    | [] => [] -- dummy value, unreachable by construction
-    | v :: vs =>
-      if dependencyTransClosureInL I w₀ a p
-        then match v.2 with
-        | [] => ⟨a :: v.1, v.2⟩ :: vs
-        | _ :: _ => ⟨[a], []⟩ :: v :: vs
-        else ⟨v.1, a :: v.2⟩ :: vs
+lemma ccDec_aux_infix (I : Independence α) (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) :
+    List.IsInfix ((ccDec_aux I u w)[i] ++ (ccDec_aux I u w)[i + 1]) w := by
+  induction w generalizing i with
+  | nil => simp [ccDec_aux] at hi
+  | cons a w ih =>
+    by_cases hiz : i = 0
+    · simp [hiz]
+      by_cases hab : ccDec_aux_conn I u (a :: w)
+      · sorry
+      · sorry
+    · by_cases hab : ccDec_aux_conn I u (a :: w)
+      · simp [ccDec_aux_len_C hab] at hi
+        rw [ccDec_aux_tail_C hab i (by omega) (Nat.zero_lt_of_ne_zero hiz)]
+        rw [ccDec_aux_tail_C hab (i + 1) (by omega) (Nat.zero_lt_succ i)]
+        apply List.infix_cons
+        apply ih
+      · simp [ccDec_aux_len_D hab] at hi
+        rw [ccDec_aux_tail_D' hab i (by omega)]
+        rw [ccDec_aux_tail_D' hab (i + 1) (by omega)]
+        simp
+        apply List.infix_cons
+        replace ih := ih (i - 1) (by omega)
+        have : (ccDec_aux I u w)[i - 1 + 1]'(by omega) = (ccDec_aux I u w)[i]'(by omega) := by
+          simp [getElem_congr _ (show i - 1 + 1 = i from Nat.succ_pred_eq_of_ne_zero hiz)]
+        rw [this] at ih
+        exact ih
 
-noncomputable def ccDec (I : Independence α) (w : List α) (p : α) : List (List α × List α) := ccDec_aux I w w p
+lemma ccDec_aux_prefix2 (I : Independence α) (u w : List α) (h : 1 < (ccDec_aux I u w).length) :
+    List.IsPrefix ((ccDec_aux I u w)[0] ++ (ccDec_aux I u w)[1]) w := by
+  induction w with
+  | nil => simp [ccDec_aux] at h
+  | cons a w ih =>
+    suffices hs_dec : ∃ _1 _2 _3, (ccDec_aux I u (a :: w)) = _1 :: _2 :: _3 ∧ List.IsPrefix (_1 ++ _2) (a :: w) from by
+      replace ⟨_1, _2, _3, ⟨hs_dec, hs⟩⟩ := hs_dec
+      simp [List.getElem_of_eq hs_dec, hs]
+    simp [ccDec_aux]
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · exfalso
+      exact (ccDec_aux_nonempty _ _) ht
+    · rename_i c_head c_tail
+      simp [ht]
+      cases c_head with
+      | nil =>
+        simp
+        sorry
+      | cons b c_head =>
+        simp
+        by_cases hab : dependencyTransClosureInL I u a b
+        · simp [hab]
+          simp [List.getElem_of_eq ht] at ih
+          sorry
+          --by_cases hct : c_tail = []
+          --· simp [hct] at ht
+          --use c_tail[0]
+          --exact ih
+        · simp [hab]
+          have := List.getElem_of_eq ht ccDec_aux_zero_idx
+          simp at this
+          rw [<- this]
+          exact ccDec_aux_prefix I u w
 
-lemma ccDec_aux_nonempty (w₀ w : List α) (p : α) : (ccDec_aux I w₀ w p) ≠ [] := by
+lemma ccDec_aux_suffix (I : Independence α) (u w : List α) :
+    List.IsSuffix ((ccDec_aux I u w).getLast (ccDec_aux_nonempty u w)) w := by
   induction w with
   | nil => simp [ccDec_aux]
-  | cons a u ih =>
-    simp [ccDec_aux]
-    cases hs : ccDec_aux I w₀ u p
-    · simp [hs] at ih
-    · simp
-      by_cases ha : dependencyTransClosureInL I w₀ a p
-      · rename_i s_head s_tail
-        cases s_head.2
-        all_goals simp [ha]
-      · simp [ha]
-
-lemma ccDec_aux_zero_idx {w₀ w : List α} {p : α} : 0 < (ccDec_aux I w₀ w p).length := List.length_pos_iff.mpr (ccDec_aux_nonempty _ _ _)
-
-lemma ccDEc_nonempty (w : List α) (p : α) : (ccDec I w p) ≠ [] := ccDec_aux_nonempty w w p
-
-/- lemma ccDec_invar (u w : List α) (a p : α) (i : Fin (ccDec_aux I (u ++ [p]) (w ++ [p]) p).length) :
-    (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p)[i] = (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i] ∨
-    (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p)[i] = (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i]
-  := by
-  simp [ccDec_aux] -/
-
-lemma ccDec_aux_1_nonempty_head (u w : List α) (p : α) (h : w ≠ []) :
-    ((ccDec_aux I (u ++ [p]) (w ++ [p]) p)[0]'(ccDec_aux_zero_idx)).1 ≠ [] := by
-  induction w with
-  | nil => simp at h
   | cons a w ih =>
-    clear h
-    by_cases hw : w = []
-    · simp [hw, ccDec_aux, depTrClIn_refl]
-      by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
-      all_goals simp [hau]
-    · simp [hw] at ih
-      let t := ccDec_aux I (u ++ [p]) (w ++ [p]) p
-      have ht : ccDec_aux I (u ++ [p]) (w ++ [p]) p = t := rfl
-      rcases t
-      · exfalso
-        exact ccDec_aux_nonempty _ _ _ ht
-      · rename_i s_head s_tail
-        by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
-        · suffices hs_dec : ∃ _1 _2 _3 _4, (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p) = (_1 ::_2, _3) :: _4 from by
-            replace ⟨_1, _2, _3, _4, hs_dec⟩ := hs_dec
-            rw [List.getElem_of_eq hs_dec]
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · simp [ccDec_aux, ht] at ih ⊢
+      exact List.suffix_cons_iff.mpr (Or.inr ih)
+    · rename_i c_head c_tail
+
+      /- by_cases hab : ccDec_aux_conn I u (a :: w)
+      · rw [List.getLast_eq_getElem]
+        rw [ccDec_aux_tail_C hab _ (by sorry) (by exact?)]
+        have : (ccDec_aux I u (a :: w)).length - 1 = (ccDec_aux I u w).length - 1 := by
+          rw [ccDec_aux_len_C hab]
+        rw [getElem_congr rfl this]
+        rw [<- List.getLast_eq_getElem]
+        apply List.suffix_cons_iff.mpr -/
+
+      by_cases hw : w = []
+      · simp [hw, ccDec_aux]
+      have hch : c_head ≠ [] := by
+        by_contra hcon
+        rw [hcon] at ht
+        replace ht := List.getElem_of_eq ht ccDec_aux_zero_idx
+        simp at ht
+        exact (ccDec_aux_nonempty_head _ _ _ hw) ht
+      simp [ccDec_aux, ht]
+      cases c_head with
+      | nil => simp at hch
+      | cons b c_head =>
+        simp
+        by_cases hab : dependencyTransClosureInL I u a b
+        · simp [hab]
+          sorry
+          /- induction c_tail using List.reverseRecOn with
+          | nil => simp
+          | append_singleton c_tail d ih2 =>
             simp
-          simp [ccDec_aux, ht, hau]
-          cases s_head.2
-          · simp
-          · simp
-        · simp [ccDec_aux, ht, hau]
-          have hs_dec : (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[0]'(ccDec_aux_zero_idx) = (s_head :: s_tail)[0] := List.getElem_of_eq ht _
-          simp [hs_dec] at ih
-          exact ih
-
-lemma ccDec_aux_1_nonempty (u w : List α) (p : α) (i : Fin (ccDec_aux I (u ++ [p]) (w ++ [p]) p).length) :
-    (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i].1 ≠ [] := by
-  induction w with
-  | nil =>
-    suffices hs_dec : ccDec_aux I (u ++ [p]) ([] ++ [p]) p = [([p], [])] from by
-      rw [Fin.getElem_fin]
-      rw [List.getElem_of_eq hs_dec]
-      simp
-    simp [ccDec_aux, dependencyTransClosureInL]
-    unfold dependencyInL
-    apply Relation.TransGen.single
-    simp [inducedDependence, Independence.irrefl]
-  | cons a w ih =>
-    by_cases hw : w = []
-    · rcases i with ⟨i, hi⟩
-      simp [hw, ccDec_aux, depTrClIn_refl]
-      by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
-      all_goals simp [hau]
-    · simp [hw] at ih
-      rcases i with ⟨i, hi⟩
-      cases i with
-      | zero => exact ccDec_aux_1_nonempty_head _ _ _ (by simp)
-      | succ i =>
-        by_cases hau : dependencyTransClosureInL I (u ++ [p]) a p
-        · let temp := ccDec_aux I (u ++ [p]) (w ++ [p]) p
-          have htemp : ccDec_aux I (u ++ [p]) (w ++ [p]) p = temp := rfl
-          rcases temp
-          · exfalso
-            exact ccDec_aux_nonempty _ _ _ htemp
-          · rename_i s_head s_tail
-            suffices hs_dec : (∃ _1 _2, (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p) = _1 :: _2) from by
-              replace ⟨_1, _2, hs_dec⟩ := hs_dec
-              have h_2ne : (_2[i]'(by rw [hs_dec] at hi; exact Nat.succ_lt_succ_iff.mp hi)).1 ≠ [] := by
-                simp [ccDec_aux, htemp, hau] at hs_dec
-                contrapose hs_dec
-                cases s_head.2
-                · simp
-                  intro _
-                  contrapose hs_dec
-                  rw [<- List.getElem_of_eq hs_dec]
-                  all_goals sorry
-                · simp
-                  intro _
-                  contrapose hs_dec
-                  rw [<- List.getElem_of_eq hs_dec, <- List.getElem_of_eq htemp]
-                  · exact ih ⟨i, by sorry⟩
-                  · rw [<- htemp]
-                    sorry
-              rw [Fin.getElem_fin]
-              rw [List.getElem_of_eq hs_dec]
-              simp [h_2ne]
-            simp [ccDec_aux, htemp, hau]
-            cases s_head.2
-            · simp
-            · simp
-        · suffices hs_dec : (∃ _1 _2, (ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p) = _1 :: _2) from by
-            replace ⟨_1, _2, hs_dec⟩ := hs_dec
-            have h_2ne : (_2[i]'(by rw [hs_dec] at hi; exact Nat.succ_lt_succ_iff.mp hi)).1 ≠ [] := by
-              sorry
-            rw [Fin.getElem_fin]
-            rw [List.getElem_of_eq hs_dec]
-            simp [h_2ne]
-          simp [ccDec_aux, hau]
-          let temp := ccDec_aux I (u ++ [p]) (w ++ [p]) p
-          have htemp : ccDec_aux I (u ++ [p]) (w ++ [p]) p = temp := rfl
-          rcases temp
-          · exfalso
-            exact ccDec_aux_nonempty _ _ _ htemp
-          · simp [htemp]
-
-lemma ccDec_aux_2_nonempty (u w : List α) (p : α) (i : Fin (ccDec_aux I (u ++ [p]) (w ++ [p]) p).length) (hi : i.1 > 0) :
-    (ccDec_aux I (u ++ [p]) (w ++ [p]) p)[i].2 ≠ [] := by sorry
-
-lemma ccDec_aux_disconn_2_nonempty (u w : List α) (p : α) (h : ¬ IsConnectedL I (w ++ [p])) :
-    ((ccDec_aux I (u ++ [p]) (w ++ [p]) p).getLast (ccDec_aux_nonempty _ _ _)).2 ≠ [] := by
-  induction w with
-  | nil => simp [IsConnectedL, depTrClIn_refl] at h
-  | cons a w ih =>
-    by_cases hpa : dependencyTransClosureInL I (u ++ [p]) a p
-    · suffices hs_dec : ∃ _1 _2 _3 _4, ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p = _1 ++ [(_2, _3 :: _4)] from by
-        replace ⟨_1, _2, _3, _4, hs_dec⟩ := hs_dec
-        rw [List.getLast.congr_simp _ _ hs_dec]
-        simp
-      simp [ccDec_aux, hpa]
-      let temp := ccDec_aux I (u ++ [p]) (w ++ [p]) p
-      have htemp : ccDec_aux I (u ++ [p]) (w ++ [p]) p = temp := rfl
-      rcases temp
-      · exfalso; exact ccDec_aux_nonempty _ _ _ htemp
-      · rename_i c_head c_tail
-        simp [htemp]
-        cases c_head.2
-        · simp
-          -- ccDec_aux_2_nonempty
+            rw [List.getLast_congr ht] at ih -/
+        · simp [hab]
           sorry
-        · simp
-          -- ccDec_aux_2_nonempty
-          sorry
-    · have ih_cond : ¬IsConnectedL I (w ++ [p]) := by sorry
-      replace ih := ih ih_cond
-      suffices hs_dec : ∃ _1 _2 _3 _4, ccDec_aux I (u ++ [p]) (a :: w ++ [p]) p = _1 ++ [(_2, _3 :: _4)] from by
-        replace ⟨_1, _2, _3, _4, hs_dec⟩ := hs_dec
-        rw [List.getLast.congr_simp _ _ hs_dec]
-        simp
-      have hr_dec : ∃ _1 _2 _3 _4, ccDec_aux I (u ++ [p]) (w ++ [p]) p = _1 ++ [(_2, _3 :: _4)] := by
-        sorry
-      replace ⟨_1, _2, _3, _4, hr_dec⟩ := hr_dec
-      simp [ccDec_aux, hr_dec]
-      sorry
 
-lemma ccDec_1_2_subst (w : List α) (p : α) (i : ℕ) (hi : i < (ccDec I (w ++ [p]) p).length) :
-    List.Sublist ((ccDec I (w ++ [p]) p)[i].1 ++ (ccDec I (w ++ [p]) p)[i].2) w := by sorry
+lemma ccDec_across_substr (I : Independence α) (w : List α) (h : 1 < (ccDec I w).length) :
+    List.IsInfix (
+      ((ccDec I w).getLast (ccDec_aux_nonempty w w)) ++ (ccDec I w)[0] ++ (ccDec I w)[1]
+    ) (w ++ w) := by
+  unfold ccDec
+  have ⟨s, hs⟩ := ccDec_aux_suffix I w w
+  have ⟨t, ht⟩ := ccDec_aux_prefix2 I w w h
+  use s, t
+  simp only [List.append_assoc] at ht ⊢
+  simp [ht]
+  simp only [<- List.append_assoc]
+  rw [hs]
 
-lemma ccDec_2_1_subst (w : List α) (p : α) (i : ℕ) (hi : i + 1 < (ccDec I (w ++ [p]) p).length) :
-    List.Sublist ((ccDec I (w ++ [p]) p)[i].2 ++ (ccDec I (w ++ [p]) p)[i + 1].1) w := by sorry
-
-lemma ccDec_across_substr (w : List α) (p : α) (i : ℕ) (hi : i + 1 < (ccDec I (w ++ [p]) p).length) :
-    List.Sublist (
-      ((ccDec I (w ++ [p]) p).getLast (ccDEc_nonempty _ _)).1 ++
-      ((ccDec I (w ++ [p]) p).getLast (ccDEc_nonempty _ _)).2 ++
-      (ccDec I (w ++ [p]) p)[0].1 ++
-      (ccDec I (w ++ [p]) p)[0].2
-    ) (w ++ w) := by sorry
+lemma ccDec_aux_indep (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) :
+    Independent I (ccDec_aux I u w)[i] (ccDec_aux I u w)[i + 1] := by
+  sorry
 
 /-
 def proj2 (S : Set α) (hd : ∀ x, Decidable (x ∈ S)) (w : List α) : List α := w.filter (· ∈ S)
