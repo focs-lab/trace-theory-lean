@@ -204,16 +204,16 @@ noncomputable def ccDec_aux' (I : Independence α) (w₀ w : List α) : List (Li
 
 noncomputable def ccDec_aux_conn (I : Independence α) (w₀ w : List α) : Prop :=
   match w with
-  | [] => False
+  | [] => True -- by convention
   | a :: w =>
     match ccDec_aux' I w₀ w with
     | [] => False
     | v :: _ =>
       match v with
-      | [] => False
+      | [] => True -- by convention to make casework easier (first char is inserted as `[[·]]` and not `[·] :: _`)
       | b :: _ => dependencyTransClosureInL I w₀ a b
 
-lemma ccDec'_aux_nonempty' (w₀ w : List α) : (ccDec_aux' I w₀ w) ≠ [] := by
+lemma ccDec_aux'_nonempty' (w₀ w : List α) : (ccDec_aux' I w₀ w) ≠ [] := by
   induction w with
   | nil => simp [ccDec_aux']
   | cons a u ih =>
@@ -229,7 +229,33 @@ lemma ccDec'_aux_nonempty' (w₀ w : List α) : (ccDec_aux' I w₀ w) ≠ [] := 
         by_cases hab : dependencyTransClosureInL I w₀ a b
         all_goals simp [hab]
 
-lemma ccDec_aux'_len_C (u w : List α) (a : α) (h : ccDec_aux_conn I u (a :: w)) :
+lemma ccDec_aux_zero_idx {w₀ w : List α} : 0 < (ccDec_aux' I w₀ w).length := List.length_pos_iff.mpr (ccDec_aux'_nonempty' _ _)
+
+lemma ccDec_aux'_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ []) :
+    (ccDec_aux' I u w)[0]'(ccDec_aux_zero_idx) ≠ [] := by
+  induction w with
+  | nil => simp at h
+  | cons a w ih =>
+    suffices hs_dec : ∃ _1 _2 _3, (ccDec_aux' I u (a :: w)) = (_1 ::_2) :: _3 from by
+      replace ⟨_1, _2, _3, hs_dec⟩ := hs_dec
+      rw [List.getElem_of_eq hs_dec]
+      simp
+    simp [ccDec_aux']
+    let t := ccDec_aux' I u w
+    have ht : ccDec_aux' I u w = t := rfl
+    rcases t
+    · exfalso
+      exact ccDec_aux'_nonempty' _ _ ht
+    · rename_i c_head c_tail
+      simp [ht]
+      cases c_head with
+      | nil => simp
+      | cons b c_head =>
+        simp
+        by_cases hab : dependencyTransClosureInL I u a b
+        all_goals simp [hab]
+
+lemma ccDec_aux'_len_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w)) :
     (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length := by
   simp [ccDec_aux_conn] at h
   let t := ccDec_aux' I u w
@@ -239,55 +265,91 @@ lemma ccDec_aux'_len_C (u w : List α) (a : α) (h : ccDec_aux_conn I u (a :: w)
   · rename_i c_head c_tail
     simp [ht] at h
     cases c_head with
-    | nil => simp at h
+    | nil => simp [ccDec_aux', ht]
     | cons b c_head =>
       simp at h
       simp [ccDec_aux', ht, h]
 
-lemma ccDec_aux'_len_D (u w : List α) (a : α) (h : ¬ ccDec_aux_conn I u (a :: w)) (hw : w ≠ []) :
+lemma ccDec_aux'_len_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w)) :
     (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length + 1 := by
   simp [ccDec_aux_conn] at h
   let t := ccDec_aux' I u w
   have ht : ccDec_aux' I u w = t := rfl
   rcases t
   · exfalso
-    exact ccDec'_aux_nonempty' _ _ ht
+    exact ccDec_aux'_nonempty' _ _ ht
   · rename_i c_head c_tail
     simp [ht] at h
     cases c_head with
     | nil =>
       cases w with
-      | nil => simp at hw
+      | nil => simp at h
       | cons b w =>
-        simp [ccDec_aux'] at ht
-        let t' := ccDec_aux' I u w
-        have ht' : ccDec_aux' I u w = t' := rfl
-        rcases t'
-        · exfalso
-          exact ccDec'_aux_nonempty' _ _ ht'
-        · rename_i c'_head c'_tail
-          simp [ht'] at ht
+        have := ccDec_aux'_nonempty_head I u (b :: w) (List.cons_ne_nil b w)
+        simp [List.getElem_of_eq ht] at this
     | cons b c_head =>
       simp at h
       simp [ccDec_aux', ht, h]
 
+lemma ccDec_aux'_tail_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w))
+    (i : ℕ) (hi : i < (ccDec_aux' I u w).length) (hiz : i > 0) :
+    (ccDec_aux' I u (a :: w))[i]'(by rw [ccDec_aux'_len_C h]; exact hi) = (ccDec_aux' I u w)[i] := by
+  by_cases hw : w = []
+  · simp [hw, ccDec_aux'] at hi
+    simp [hi] at hiz
+  simp [ccDec_aux_conn] at h
+  let t := ccDec_aux' I u w
+  have ht : ccDec_aux' I u w = t := rfl
+  rcases t
+  · simp [ht] at hi
+  · rename_i c_head c_tail
+    simp [ht] at h
+    have : c_head ≠ [] := by
+      have := ccDec_aux'_nonempty_head I u w hw
+      rw [List.getElem_of_eq ht] at this
+      exact this
+    cases c_head with
+    | nil => simp at this
+    | cons b c_head =>
+      simp at h
+      simp [ccDec_aux', ht, h] at hi ⊢
+      have : ((a :: b :: c_head) :: c_tail)[i] =
+          ((a :: b :: c_head) :: c_tail)[i - 1 + 1]'(Nat.add_lt_of_lt_sub (Nat.sub_lt_right_of_lt_add hiz hi)) := by
+        rw [getElem_congr _ (show i - 1 + 1 = i from Nat.sub_add_cancel (Nat.succ_le_of_lt hiz))]
+        simp
+      rw [this]
+      have : ((b :: c_head) :: c_tail)[i] =
+          ((b :: c_head) :: c_tail)[i - 1 + 1]'(Nat.add_lt_of_lt_sub (Nat.sub_lt_right_of_lt_add hiz hi)) := by
+        rw [getElem_congr _ (show i - 1 + 1 = i from Nat.sub_add_cancel (Nat.succ_le_of_lt hiz))]
+        simp
+      rw [this]
+      simp [List.getElem_cons_succ]
+
+lemma ccDec_aux'_tail_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w))
+    (i : ℕ) (hi : i < (ccDec_aux' I u w).length) :
+    (ccDec_aux' I u (a :: w))[i + 1]'(by rw [ccDec_aux'_len_D h]; exact Nat.add_lt_add_right hi 1) = (ccDec_aux' I u w)[i] := by
+  by_cases hw : w = []
+  · simp [hw, ccDec_aux_conn, ccDec_aux'] at h
+  simp [ccDec_aux_conn] at h
+  let t := ccDec_aux' I u w
+  have ht : ccDec_aux' I u w = t := rfl
+  rcases t
+  · simp [ht] at hi
+  · rename_i c_head c_tail
+    simp [ht] at h
+    have : c_head ≠ [] := by
+      have := ccDec_aux'_nonempty_head I u w hw
+      rw [List.getElem_of_eq ht] at this
+      exact this
+    cases c_head with
+    | nil => simp at this
+    | cons b c_head =>
+      simp at h
+      simp [ccDec_aux', ht, h] at ⊢
+
+/-
 lemma ccDec'_aux_len (u w : List α) (a : α) :
     (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length ∨
-    (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length + 1 := by
-  simp [ccDec_aux']
-  cases ccDec_aux' I u w
-  · simp
-  · rename_i c_head c_tail
-    simp
-    cases c_head with
-    | nil => simp
-    | cons b c_head =>
-      simp
-      by_cases hab : dependencyTransClosureInL I u a b
-      all_goals simp [hab]
-
-lemma ccDec'_aux_offset (u w : List α) (a : α) :
-    (∀ i, ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length ∨
     (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length + 1 := by
   simp [ccDec_aux']
   cases ccDec_aux' I u w
@@ -310,6 +372,7 @@ lemma ccDec'_aux_len_le (u w : List α) (a : α) :
 lemma ccDec'_aux_sub_idx (u w : List α) (a : α) (i : Fin (ccDec_aux' I u (a :: w)).length) (hiz : i.1 > 0) :
     ∃ j : Fin (ccDec_aux' I u w).length, (ccDec_aux' I u (a :: w))[i] = (ccDec_aux' I u w)[j] := by
   sorry
+-/
 
 lemma ccDec'_aux_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux' I u w).length) (hz : w ≠ []) :
     (ccDec_aux' I u w)[i] ≠ [] := by
