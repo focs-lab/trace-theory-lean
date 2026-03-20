@@ -124,6 +124,12 @@ theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConne
     rw [connectedComponents_of_connected _ hP_conn]
     rw [kstar_eq_minusEps_trace]
 
+theorem recognizable_image_of_regular_finite_rank {X : Language α}
+    (hX_reg : X.IsRegular)
+    (hX_rank : HasFiniteRank I X) :
+    IsRecognizable (⇑(mk' (I := I)) '' X) := by
+  sorry
+
 lemma recognizable_zero : IsRecognizable (∅ : Set (Trace I)) :=
   ⟨PUnit, inferInstance, inferInstance, inferInstance, 1, by simp⟩
 
