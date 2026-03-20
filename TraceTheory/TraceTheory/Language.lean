@@ -288,7 +288,27 @@ theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
     exact hc_not_indep (h_all_indep c hc_mem)
 
 theorem exists_lexNf_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ LexNfLanguage I := by
-  sorry
+  rcases t with ⟨u⟩
+  rw [show Quot.mk (⇑(TraceSetoid I)) u = ⟦u⟧ from rfl]
+  induction u using List.reverseRecOn with
+  | nil =>
+    use []
+    simp
+    apply (mem_lexNfLanguage_iff_factorCondition _ _).mpr
+    apply (isLexNf_iff_factorCondition _ _).mp
+    unfold IsLexNf
+    intro w h_equiv
+    replace h_equiv : w = [] := by
+      simp [List.eq_nil_of_length_eq_zero, length_eq_of_eqv h_equiv.symm]
+    exact ge_of_eq h_equiv
+  | append_singleton u a ih =>
+    rcases ih with ⟨s, hs_equiv, hs_lexNf⟩
+    have h_equiv : TraceEqv I ([a] ++ s) ([a] ++ u) := by
+      apply TraceEqv.compat
+      · exact TraceEqv.refl [a]
+      · --exact hs_equiv
+        sorry
+    sorry
 
 end LexNf
 
