@@ -182,6 +182,20 @@ lemma depTrClIn_refl {w : List α} {a : α} (h : a ∈ w) : dependencyTransClosu
   apply Relation.TransGen.single
   simp [Dependence.refl, h]
 
+lemma depIn_symm {w : List α} {a b : α} : dependencyInL I w a b = dependencyInL I w b a := by
+  simp [dependencyInL, inducedDependence]
+  apply Iff.intro
+  · exact fun ⟨h, ha, hb⟩ => ⟨(by contrapose h; exact I.symm b a h), hb, ha⟩
+  · exact fun ⟨h, hb, ha⟩ => ⟨(by contrapose h; exact I.symm a b h), ha, hb⟩
+
+lemma depTrClIn_symm {w : List α} {a b : α} : dependencyTransClosureInL I w a b = dependencyTransClosureInL I w b a := by
+  unfold dependencyTransClosureInL
+  rw [Relation.transGen_swap]
+  have h_symm : (fun x y => dependencyInL I w y x) = (dependencyInL I w) := by
+    ext a' b'
+    rw [depIn_symm]
+  rw [h_symm]
+
 --- variable [DecidableRel I.rel]
 
 ---
@@ -581,7 +595,7 @@ lemma ccDec_aux_suffix (I : Independence α) (u w : List α) :
         · simp [hab]
           sorry
 
-lemma ccDec_across_substr (I : Independence α) (w : List α) (h : 1 < (ccDec I w).length) :
+lemma ccDec_across_infix (I : Independence α) (w : List α) (h : 1 < (ccDec I w).length) :
     List.IsInfix (
       ((ccDec I w).getLast (ccDec_aux_nonempty w w)) ++ (ccDec I w)[0] ++ (ccDec I w)[1]
     ) (w ++ w) := by
@@ -594,69 +608,179 @@ lemma ccDec_across_substr (I : Independence α) (w : List α) (h : 1 < (ccDec I 
   simp only [<- List.append_assoc]
   rw [hs]
 
-lemma ccDec_aux_indep (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) :
-    Independent I (ccDec_aux I u w)[i] (ccDec_aux I u w)[i + 1] := by
-  sorry
-
-/-
-def proj2 (S : Set α) (hd : ∀ x, Decidable (x ∈ S)) (w : List α) : List α := w.filter (· ∈ S)
-
-lemma proj2_prop {S : Set α} {hd : ∀ x, Decidable (x ∈ S)} {w : List α} {a : α} : a ∈ proj2 S hd w → a ∈ S := by
+lemma ccDec_aux_head_conn (u w : List α) (hwu : w ⊆ u) :
+    ∀ m n, m ∈ (ccDec_aux I u w)[0]'(ccDec_aux_zero_idx) → n ∈ (ccDec_aux I u w)[0]'(ccDec_aux_zero_idx) →
+    dependencyTransClosureInL I u m n := by
   induction w with
-  | nil => simp [proj2]
-  | cons b u ih =>
-    intro h
-    by_cases hab : a = b
-    · simp [proj2, <- hab] at h
-      exact h
-    · simp [proj2] at h
-      exact h.2
+  | nil => simp [ccDec_aux]
+  | cons a w ih =>
+    intro m n hm hn
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · exfalso
+      exact (ccDec_aux_nonempty _ _) ht
+    · rename_i c_head c_tail
+      cases c_head with
+      | nil =>
+        simp [ccDec_aux, ht] at hm hn
+        rw [hm, hn]
+        exact depTrClIn_refl (hwu List.mem_cons_self)
+      | cons b c_head =>
+        simp [ccDec_aux, ht] at hm hn
+        by_cases hab : dependencyTransClosureInL I u a b
+        · simp [hab] at hm hn
+          simp [ht] at ih
+          replace ih := ih (List.subset_of_cons_subset hwu)
+          by_cases hma : m = a <;> by_cases hna : n = a
+          · rw [hma, hna]
+            exact depTrClIn_refl (hwu List.mem_cons_self)
+          · rw [hma]
+            simp [hna] at hn
+            cases hn with
+            | inl hn =>
+              rw [hn]
+              exact hab
+            | inr hn =>
+              replace ih := ih b n (by simp) (by simp [hn])
+              exact Relation.TransGen.trans hab ih
+          · rw [hna]
+            simp [hma] at hm
+            cases hm with
+            | inl hm =>
+              rw [hm, depTrClIn_symm]
+              exact hab
+            | inr hm =>
+              replace ih := ih b m (by simp) (by simp [hm])
+              rw [depTrClIn_symm]
+              exact Relation.TransGen.trans hab ih
+          · simp [hma, hna] at hm hn
+            exact ih m n hm hn
+        · simp [hab] at hm hn
+          rw [hm, hn]
+          exact depTrClIn_refl (hwu List.mem_cons_self)
 
-variable [LinearOrder α] in
-theorem lexNf_dup_lexNf_isConnected {w : List α} (h : IsLexNf I (w ++ w)) : IsConnectedL I w := by
-  have h' : IsLexNf I w := by
-    contrapose h
-    simp [IsLexNf] at h ⊢
-    rcases h with ⟨u, h⟩
-    use w ++ u
-    exact ⟨TraceEqv.compat (TraceEqv.refl w) h.1, List.append_left_lt h.right⟩
+lemma ccDec_aux_elem_conn (u w : List α) (hwu : w ⊆ u) (i : ℕ) (hi : i < (ccDec_aux I u w).length) :
+    ∀ m n, m ∈ (ccDec_aux I u w)[i] → n ∈ (ccDec_aux I u w)[i] →
+    dependencyTransClosureInL I u m n := by
+  induction w generalizing i with
+  | nil => simp [ccDec_aux]
+  | cons a w ih =>
+    by_cases hiz : i = 0
+    · simp [hiz]
+      apply ccDec_aux_head_conn
+      exact hwu
+    · by_cases hab : ccDec_aux_conn I u (a :: w)
+      · rw [ccDec_aux_tail_C hab]
+        apply ih (List.subset_of_cons_subset hwu)
+        exact Nat.zero_lt_of_ne_zero hiz
+      · rw [ccDec_aux_tail_D' hab]
+        apply ih (List.subset_of_cons_subset hwu)
+        rw [ccDec_aux_len_D hab] at hi
+        cases i with
+        | zero => simp at hiz
+        | succ i => exact Nat.succ_lt_succ_iff.mp hi
 
-  by_contra h_con
-  simp [IsConnectedL] at h_con
-  choose a b h_con using h_con
-  let A := {x | dependencyTransClosureInL I w a x}
-  let B := {x | ¬ dependencyTransClosureInL I w a x}
-  have hA_dec : ∀ x, Decidable (x ∈ A) := fun x => Classical.propDecidable (x ∈ A)
-  have hB_dec : ∀ x, Decidable (x ∈ B) := fun x => Classical.propDecidable (x ∈ B)
-  let u := proj2 A hA_dec w
-  let v := proj2 B hB_dec w
-  have : Independent I u v := by
-    intro j hj k hk
-    have hjw : j ∈ w := List.mem_of_mem_filter hj
-    have hkw : k ∈ w := List.mem_of_mem_filter hk
-    unfold u at hj
-    unfold v at hk
-    replace hj := proj2_prop hj
-    replace hk := proj2_prop hk
-    replace hj : dependencyTransClosureInL I w a j := hj
-    replace hk : ¬ dependencyTransClosureInL I w a k := hk
-    by_contra hjk
+lemma ccDec_aux_adj_head_char_indep (u w : List α) (h : 1 < (ccDec_aux I u w).length) (hw : w ≠ []) :
+    ¬dependencyTransClosureInL I u
+    ((ccDec_aux I u w)[0].getLast (ccDec_aux_elem_nonempty u w 0 ccDec_aux_zero_idx hw))
+    ((ccDec_aux I u w)[1][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty u w 1 h hw))) := by
+  induction w with
+  | nil => simp at hw
+  | cons a w ih =>
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · exfalso
+      exact (ccDec_aux_nonempty _ _) ht
+    · rename_i c_head c_tail
+      by_cases hw' : w = []
+      · simp [hw', ccDec_aux] at h -- #1 of 3 actually useful parts?
+      cases c_head with
+      | nil =>
+        have := ccDec_aux_nonempty_head I u w hw'
+        simp [List.getElem_of_eq ht] at this
+      | cons b c_head =>
+        simp [ccDec_aux, ht]
+        by_cases hab : dependencyTransClosureInL I u a b
+        · simp [hab] -- #2 of 3 actually useful parts?
+          simp [ht] at ih
+          simp [ccDec_aux, ht, hab] at h
+          exact ih h hw'
+        · simp [hab] -- #3 of 3 actually useful parts?
 
-    have : dependencyTransClosureInL I w a k := by
-      have : dependencyInL I w j k := ⟨hjk, hjw, hkw⟩
-      exact Relation.TransGen.tail hj this
+lemma ccDec_aux_adj_char_indep (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) (hw : w ≠ []) :
+    ¬dependencyTransClosureInL I u
+    ((ccDec_aux I u w)[i].getLast (ccDec_aux_elem_nonempty u w i (Nat.lt_of_succ_lt hi) hw))
+    ((ccDec_aux I u w)[i + 1][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty u w (i + 1) hi hw))) := by
+  by_cases hiz : i = 0
+  · simp [hiz] at hi ⊢
+    exact ccDec_aux_adj_head_char_indep u w hi hw
+  · induction w generalizing i with
+    | nil => simp at hw
+    | cons a w ih =>
+      sorry
+      /- by_cases hab : ccDec_aux_conn I u (a :: w)
+      · rw [ccDec_aux_tail_C hab]
+        apply ih (List.subset_of_cons_subset hwu)
+        exact Nat.zero_lt_of_ne_zero hiz
+      · rw [ccDec_aux_tail_D' hab]
+        apply ih (List.subset_of_cons_subset hwu)
+        rw [ccDec_aux_len_D hab] at hi
+        cases i with
+        | zero => simp at hiz
+        | succ i => exact Nat.succ_lt_succ_iff.mp hi -/
 
-    exact hk this
+lemma ccDec_aux_adj_indep (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) :
+    Independent I (ccDec_aux I u w)[i] (ccDec_aux I u w)[i + 1] := by
+  induction w generalizing i with
+  | nil => simp [ccDec_aux]
+  | cons a w ih =>
+    intro p hp q hq
+    sorry
 
-  /- have : a ∈ u := by
-    have ha_A : a ∈ A := ⟨ha, ha, Relation.TransGen.single ((inducedDependence I).refl a)⟩
-    exact List.mem_filter_of_mem ha (decide_eq_true ha_A)
-  have : b ∈ v := by
-    have hb_B : b ∈ B := by simp [B, dependencyTransClosureInL, h_con]
-    exact List.mem_filter_of_mem hb (decide_eq_true hb_B) -/
-  sorry
+lemma ccDec_aux_flatten (u w : List α) :
+    (ccDec_aux I u w).flatten = w := by
+  induction w with
+  | nil => simp [ccDec_aux]
+  | cons a w ih =>
+    simp [ccDec_aux]
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · exfalso
+      exact (ccDec_aux_nonempty _ _) ht
+    · rename_i c_head c_tail
+      simp [ht] at ih ⊢
+      cases c_head with
+      | nil => simp at ih ⊢; exact ih
+      | cons b c_head =>
+        by_cases hab : dependencyTransClosureInL I u a b
+        all_goals simp [hab] at ih ⊢; exact ih
 
--/
+lemma ccDec_disconnected_len (w : List α) (h : ¬ IsConnectedL I w) :
+    (ccDec I w).length ≥ 2 := by
+  by_contra h_len
+  simp at h_len
+  replace h_len : (ccDec I w).length = 1 := Nat.eq_of_le_of_lt_succ ccDec_aux_zero_idx h_len
+  let t := ccDec I w
+  have ht : ccDec I w = t := rfl
+  rcases t
+  · simp [ht] at h_len
+  · rename_i c_head c_tail
+    have h_conn := @ccDec_aux_head_conn α I w w (List.Subset.refl _)
+    unfold ccDec at ht h_len
+    simp [ht] at h_conn
+    simp [ht] at h_len
+    rw [h_len] at ht
+    replace ht : (ccDec_aux I w w).flatten = c_head := by simp [ht]
+    rw [ccDec_aux_flatten] at ht
+    rw [ht] at h
+    simp [IsConnectedL] at h
+    replace ⟨m, hm, n, hn, h⟩ := h
+    replace h_conn := (h_conn m n hm hn)
+    rw [<- ht] at h
+    exact h h_conn
 
 -----
 
