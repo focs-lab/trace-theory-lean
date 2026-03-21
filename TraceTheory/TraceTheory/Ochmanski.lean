@@ -124,6 +124,7 @@ theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConne
     rw [connectedComponents_of_connected _ hP_conn]
     rw [kstar_eq_minusEps_trace]
 
+/-- Hashiguchi's Theorem. -/
 theorem recognizable_image_of_regular_finite_rank {X : Language α}
     (hX_reg : X.IsRegular)
     (hX_rank : HasFiniteRank I X) :
@@ -147,12 +148,132 @@ instance : Monoid EpsMonoid where
   one_mul x := by cases x <;> rfl
   mul_assoc x y z := by cases x <;> cases y <;> cases z <;> rfl
 
-lemma recognizable_epsilon : IsRecognizable ({ 1 } : Set (Trace I)) := by
-  use EpsMonoid, inferInstance, inferInstance, inferInstance
-  sorry
+def eps_map_aux : List α → EpsMonoid
+  | [] => .one
+  | _ :: _ => .dead
 
-lemma recognizable_char (a : α) : IsRecognizable ({ ⟦[a]⟧ } : Set (Trace I)) := by
-  sorry
+lemma eps_map_aux_append (x y : List α) :
+    eps_map_aux (x ++ y) = eps_map_aux x * eps_map_aux y := by
+  cases x <;> cases y <;> rfl
+
+def eps_map : Trace I →* EpsMonoid where
+  toFun := Quotient.lift
+    eps_map_aux
+    (by
+      intro a b
+      cases a <;> cases b
+      · simp
+      · intro heqv
+        apply length_eq_of_eqv at heqv
+        simp at heqv
+      · intro heqv
+        apply length_eq_of_eqv at heqv
+        simp at heqv
+      · simp [eps_map_aux]
+    )
+  map_one' := rfl
+  map_mul' := by
+    rintro ⟨x⟩ ⟨y⟩
+    exact eps_map_aux_append x y
+
+lemma recognizable_epsilon : IsRecognizable ({ 1 } : Set (Trace I)) := by
+  use EpsMonoid, inferInstance, inferInstance, inferInstance, eps_map
+  simp only [Set.image_singleton, map_one]
+  ext t
+  rcases t with ⟨w⟩
+  change ⟦w⟧ ∈ {1} ↔ ⟦w⟧ ∈ ⇑eps_map ⁻¹' {1}
+  constructor
+  · intro h
+    rw [h, Set.mem_preimage, map_one, Set.mem_singleton_iff]
+  · intro h
+    cases w with
+    | nil =>
+      rw [Set.mem_singleton_iff]
+      rfl
+    | cons a w' =>
+      have h_map : eps_map (I := I) ⟦a :: w'⟧ = eps_map (I := I) ⟦[a]⟧ * eps_map (I := I) ⟦w'⟧ := rfl
+      simp only [Set.mem_preimage, Set.mem_singleton_iff] at h
+      rw [h_map] at h
+      have h_dead : eps_map (I := I) ⟦[a]⟧ = EpsMonoid.dead := rfl
+      rw [h_dead] at h
+      contradiction
+
+inductive CharMonoid
+  | one
+  | saw_a
+  | dead
+deriving DecidableEq, Fintype
+
+instance : Monoid CharMonoid where
+  one := .one
+  mul
+  | .one, x => x
+  | x, .one => x
+  | _, _ => .dead
+  mul_one x := by cases x <;> rfl
+  one_mul x := by cases x <;> rfl
+  mul_assoc x y z := by cases x <;> cases y <;> cases z <;> rfl
+
+def char_map_aux [DecidableEq α] (a : α) : List α → CharMonoid
+  | [] => .one
+  | c :: w => (if c = a then .saw_a else .dead) * char_map_aux a w
+
+lemma char_map_aux_append [DecidableEq α] (a : α) (x y : List α) :
+    char_map_aux a (x ++ y) = char_map_aux a x * char_map_aux a y := by
+  induction x with
+  | nil =>
+    simp only [char_map_aux]
+    rfl
+  | cons b x' ih => simp [char_map_aux, ih, mul_assoc]
+
+def char_map [DecidableEq α] (a : α) : Trace I →* CharMonoid where
+  toFun := Quotient.lift
+    (char_map_aux a)
+    (by
+      intro b c heqv
+      induction heqv with
+      | swap e f hrel =>
+        by_cases hea : e = a <;> by_cases hfa : f = a
+        · subst hea hfa
+          rfl
+        · subst hea
+          simp only [char_map_aux, ↓reduceIte, hfa]
+          rfl
+        · subst hfa
+          simp only [char_map_aux, ↓reduceIte, hea]
+          rfl
+        · simp only [char_map_aux, ↓reduceIte, hea, hfa]
+      | refl => rfl
+      | symm _ ih => exact ih.symm
+      | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+      | compat _ _ ih₁ ih₂ => rw [char_map_aux_append, char_map_aux_append, ih₁, ih₂]
+    )
+  map_one' := rfl
+  map_mul' := by
+    rintro ⟨x⟩ ⟨y⟩
+    exact char_map_aux_append a x y
+
+lemma recognizable_char [DecidableEq α] (a : α) : IsRecognizable ({ ⟦[a]⟧ } : Set (Trace I)) := by
+  use CharMonoid, inferInstance, inferInstance, inferInstance, char_map a
+  simp only [Set.image_singleton]
+  ext t
+  rcases t with ⟨w⟩
+  change ⟦w⟧ ∈ {⟦[a]⟧} ↔ ⟦w⟧ ∈ ⇑(char_map a) ⁻¹' {(char_map a) ⟦[a]⟧}
+  simp only [Set.mem_singleton_iff, Set.mem_preimage]
+  constructor
+  · intro h
+    rw [h]
+  · intro h
+    rcases w with _ | ⟨b, _ | ⟨c, w'⟩⟩
+    · simp [char_map, char_map_aux] at h
+    · simp_all [char_map, char_map_aux]
+    · simp [char_map, char_map_aux] at h
+      split_ifs at h
+      all_goals (
+        generalize hw' : char_map_aux a w' = x at h
+        cases x
+        all_goals (simp at h)
+      )
 
 lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P ∪ Q) := by
@@ -167,7 +288,7 @@ lemma recognizable_cstar {P : Set (Trace I)}
   sorry
 
 /-- Theorem 4.1 (iv) => (i) -/
-theorem recognizable_of_cRational (X : RegularExpression α) :
+theorem recognizable_of_cRational [DecidableEq α] (X : RegularExpression α) :
     IsRecognizable (matches_cstar_trace I X) := by
   induction X with
   | zero => exact recognizable_zero
