@@ -347,11 +347,10 @@ lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
       exact hy
     · exact traceClosure.le_closure
   have h_mul_reg : (L_P * L_Q).IsRegular := Language.IsRegular.mul hL_P_reg hL_Q_reg
-  have h_rank : HasFiniteRank I (L_P * L_Q) := by
-    use 1
-    exact concat_closed_rank L_P L_Q hL_P_closed hL_Q_closed
+  have h_rank : HasFiniteRank I (L_P * L_Q) :=
+    ⟨1, concat_closed_rank L_P L_Q hL_P_closed hL_Q_closed⟩
   have h_hash := recognizable_image_of_regular_finite_rank h_mul_reg h_rank
-  have h_image_eq : ⇑(mk' (I := I)) '' (L_P * L_Q) = P * Q := by
+  have h_image_eq : mk' (I := I) '' (L_P * L_Q) = P * Q := by
     ext t
     constructor
     · rintro ⟨w, ⟨u, hu, v, hv, rfl⟩, rfl⟩
@@ -361,9 +360,77 @@ lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
   rw [← h_image_eq]
   exact h_hash
 
+open Computability in
+theorem star_connected_closed_rank {X : Language α}
+    (hX_closed : IsClosed I X)
+    (hX_conn : ∀ w ∈ X, IsConnected I ⟦w⟧) :
+    HasFiniteRank I X∗ := by
+  sorry
+
+open Computability in
 lemma recognizable_cstar {P : Set (Trace I)}
     (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
-  sorry
+  let C := connectedComponents P
+  let L_C : Language α := ⇑(mk' (I := I)) ⁻¹' C
+  have hC_recog : IsRecognizable C := sorry -- Requires a lemma that connected components of recognizable sets are recognizable
+  have hL_C_reg : L_C.IsRegular :=
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hC_recog)
+  have hL_C_closed : IsClosed I L_C := by
+    apply le_antisymm
+    · rintro x ⟨y, hy, heqv⟩
+      simp only [L_C, Set.mem_preimage] at hy ⊢
+      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      rw [← heq]
+      exact hy
+    · exact traceClosure.le_closure
+  have hL_C_conn : ∀ w ∈ L_C, IsConnected I ⟦w⟧ := by
+    intro w hw
+    simp only [L_C, C, connectedComponents] at hw
+    rw [Set.preimage_setOf_eq, Set.mem_setOf] at hw
+    exact hw.left
+  have h_star_reg : (L_C∗).IsRegular := Language.IsRegular.kstar hL_C_reg
+  have h_rank : HasFiniteRank I (L_C∗) := star_connected_closed_rank hL_C_closed hL_C_conn
+  have h_hash := recognizable_image_of_regular_finite_rank h_star_reg h_rank
+  have h_image_eq : mk' (I := I) '' ((L_C∗) : Language α) = kstar C := by
+    unfold kstar
+    ext t
+    constructor
+    · rintro ⟨w, ⟨ws, rfl, hws⟩, rfl⟩
+      use ws.map (mk' (I := I))
+      constructor
+      · intro t' ht'
+        simp only [List.mem_map] at ht'
+        rcases ht' with ⟨w', hw', rfl⟩
+        exact hws w' hw'
+      · induction ws with
+        | nil => rfl
+        | cons w' ws' ih =>
+          simp only [List.flatten_cons, List.map_cons, List.prod_cons]
+          have h_mul : mk' (I := I) (w' ++ ws'.flatten) =
+                       mk' (I := I) w' * mk' (I := I) ws'.flatten := rfl
+          simp only [List.mem_cons, forall_eq_or_imp] at hws
+          rw [h_mul, ih hws.right]
+    · rintro ⟨ts, hts, rfl⟩
+      induction ts with
+      | nil => exact ⟨[], by apply Language.nil_mem_kstar, rfl⟩
+      | cons t' ts' ih =>
+        have ht' : t' ∈ C := hts t' (by simp)
+        have hts' : ∀ x ∈ ts', x ∈ C := fun x hx => hts x (by simp [hx])
+        rcases ih hts' with ⟨w', hw'_star, hw'_eq⟩
+        rcases t' with ⟨u⟩
+        have hu_in_LC : u ∈ L_C := ht'
+        use u ++ w'
+        constructor
+        · rw [Language.mem_kstar] at hw'_star ⊢
+          rcases hw'_star with ⟨ws', rfl, hws'⟩
+          use u :: ws'
+          simp only [List.flatten_cons, List.mem_cons, forall_eq_or_imp, true_and]
+          exact ⟨hu_in_LC, hws'⟩
+        · have h_mul : mk' (I := I) (u ++ w') = mk' (I := I) u * mk' (I := I) w' := rfl
+          rw [h_mul, hw'_eq]
+          rfl
+  rw [← h_image_eq]
+  exact h_hash
 
 /-- Theorem 4.1 (iv) => (i) -/
 theorem recognizable_of_cRational [DecidableEq α] (X : RegularExpression α) :
