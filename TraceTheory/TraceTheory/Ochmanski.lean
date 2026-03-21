@@ -277,7 +277,22 @@ lemma recognizable_char [DecidableEq α] (a : α) : IsRecognizable ({ ⟦[a]⟧ 
 
 lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P ∪ Q) := by
-  sorry
+  rcases hP with ⟨F_P, hFin_P, hMon_P, hDec_P, f_P, hP_eq⟩
+  rcases hQ with ⟨F_Q, hFin_Q, hMon_Q, hDec_Q, f_Q, hQ_eq⟩
+  use F_P × F_Q, inferInstance, inferInstance, inferInstance, MonoidHom.prod f_P f_Q
+  ext x
+  simp only [Set.mem_union, MonoidHom.prod_apply, Set.mem_preimage, Set.mem_image, Prod.mk.injEq]
+  constructor
+  · rintro (h | h)
+    · exact ⟨x, Or.inl h, rfl, rfl⟩
+    · exact ⟨x, Or.inr h, rfl, rfl⟩
+  · rintro ⟨y, (hy | hy), hyp, hyq⟩
+    · left
+      rw [hP_eq, Set.mem_preimage]
+      exact ⟨y, hy, hyp⟩
+    · right
+      rw [hQ_eq, Set.mem_preimage]
+      exact ⟨y, hy, hyq⟩
 
 lemma recognizable_mul {P Q : Set (Trace I)}
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
