@@ -294,9 +294,72 @@ lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
       rw [hQ_eq, Set.mem_preimage]
       exact ⟨y, hy, hyq⟩
 
-lemma recognizable_mul {P Q : Set (Trace I)}
+lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
+    L.IsRegular := by
+  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
+  rw [Language.isRegular_iff]
+  let M_DFA : DFA α σ := {
+    step := fun q a => M.step q [a]
+    start := M.start
+    accept := M.accept
+  }
+  use σ, h_fin, M_DFA
+  rw [hM]
+  ext w
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  unfold DFMA.accepts DFMA.eval
+  rw [Set.mem_setOf, Set.mem_setOf]
+  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
+    induction w with
+    | nil =>
+      intro q
+      simp only [List.foldl_nil]
+      exact (M.idempotent q).symm
+    | cons a ws ih =>
+      intro q
+      simp only [List.foldl_cons]
+      rw [ih (M.step q [a])]
+      exact (M.composition q [a] ws)
+  rw [h_eval M_DFA.start]
+
+lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
-  sorry
+  let L_P : Language α := ⇑(mk' (I := I)) ⁻¹' P
+  let L_Q : Language α := ⇑(mk' (I := I)) ⁻¹' Q
+  have hL_P_reg : L_P.IsRegular :=
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hP)
+  have hL_Q_reg : L_Q.IsRegular :=
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hQ)
+  have hL_P_closed : IsClosed I L_P := by
+    apply le_antisymm
+    · rintro x ⟨y, hy, heqv⟩
+      simp only [L_P, Set.mem_preimage] at hy ⊢
+      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      rw [← heq]
+      exact hy
+    · exact traceClosure.le_closure
+  have hL_Q_closed : IsClosed I L_Q := by
+    apply le_antisymm
+    · rintro x ⟨y, hy, heqv⟩
+      simp only [L_Q, Set.mem_preimage] at hy ⊢
+      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      rw [← heq]
+      exact hy
+    · exact traceClosure.le_closure
+  have h_mul_reg : (L_P * L_Q).IsRegular := Language.IsRegular.mul hL_P_reg hL_Q_reg
+  have h_rank : HasFiniteRank I (L_P * L_Q) := by
+    use 1
+    exact concat_closed_rank L_P L_Q hL_P_closed hL_Q_closed
+  have h_hash := recognizable_image_of_regular_finite_rank h_mul_reg h_rank
+  have h_image_eq : ⇑(mk' (I := I)) '' (L_P * L_Q) = P * Q := by
+    ext t
+    constructor
+    · rintro ⟨w, ⟨u, hu, v, hv, rfl⟩, rfl⟩
+      exact ⟨mk' u, hu, mk' v, hv, rfl⟩
+    · rintro ⟨⟨u⟩, ht₁, ⟨v⟩, ht₂, rfl⟩
+      exact ⟨u ++ v, ⟨u, ht₁, v, ht₂, rfl⟩, rfl⟩
+  rw [← h_image_eq]
+  exact h_hash
 
 lemma recognizable_cstar {P : Set (Trace I)}
     (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
@@ -374,34 +437,6 @@ lemma connected_iterativeFactor_of_subset_lexNf {X : Language α}
   have h_ww_lex : w ++ w ∈ LexNfLanguage I := lexNf_of_subword h_lex2
   exact connected_of_lexNf_sq h_w_lex h_ww_lex
 
-omit [Fintype α] [LinearOrder α] in
-lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
-    L.IsRegular := by
-  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
-  rw [Language.isRegular_iff]
-  let M_DFA : DFA α σ := {
-    step := fun q a => M.step q [a]
-    start := M.start
-    accept := M.accept
-  }
-  use σ, h_fin, M_DFA
-  rw [hM]
-  ext w
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  unfold DFMA.accepts DFMA.eval
-  rw [Set.mem_setOf, Set.mem_setOf]
-  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
-    induction w with
-    | nil =>
-      intro q
-      simp only [List.foldl_nil]
-      exact (M.idempotent q).symm
-    | cons a ws ih =>
-      intro q
-      simp only [List.foldl_cons]
-      rw [ih (M.step q [a])]
-      exact (M.composition q [a] ws)
-  rw [h_eval M_DFA.start]
 
 /-- Theorem 4.1 (i) => (ii) -/
 theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
