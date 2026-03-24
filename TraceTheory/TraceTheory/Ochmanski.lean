@@ -124,6 +124,7 @@ theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConne
     rw [connectedComponents_of_connected _ hP_conn]
     rw [kstar_eq_minusEps_trace]
 
+/-- Hashiguchi's Theorem. -/
 theorem recognizable_image_of_regular_finite_rank {X : Language α}
     (hX_reg : X.IsRegular)
     (hX_rank : HasFiniteRank I X) :
@@ -133,26 +134,306 @@ theorem recognizable_image_of_regular_finite_rank {X : Language α}
 lemma recognizable_zero : IsRecognizable (∅ : Set (Trace I)) :=
   ⟨PUnit, inferInstance, inferInstance, inferInstance, 1, by simp⟩
 
-lemma recognizable_epsilon : IsRecognizable ({ 1 } : Set (Trace I)) := by
-  sorry
+inductive EpsMonoid
+  | one
+  | dead
+deriving DecidableEq, Fintype
 
-lemma recognizable_char (a : α) : IsRecognizable ({ ⟦[a]⟧ } : Set (Trace I)) := by
-  sorry
+instance : Monoid EpsMonoid where
+  one := .one
+  mul
+  | .one, x => x
+  | .dead, _ => .dead
+  mul_one x := by cases x <;> rfl
+  one_mul x := by cases x <;> rfl
+  mul_assoc x y z := by cases x <;> cases y <;> cases z <;> rfl
+
+def eps_map_aux : List α → EpsMonoid
+  | [] => .one
+  | _ :: _ => .dead
+
+lemma eps_map_aux_append (x y : List α) :
+    eps_map_aux (x ++ y) = eps_map_aux x * eps_map_aux y := by
+  cases x <;> cases y <;> rfl
+
+def eps_map : Trace I →* EpsMonoid where
+  toFun := Quotient.lift
+    eps_map_aux
+    (by
+      intro a b
+      cases a <;> cases b
+      · simp
+      · intro heqv
+        apply length_eq_of_eqv at heqv
+        simp at heqv
+      · intro heqv
+        apply length_eq_of_eqv at heqv
+        simp at heqv
+      · simp [eps_map_aux]
+    )
+  map_one' := rfl
+  map_mul' := by
+    rintro ⟨x⟩ ⟨y⟩
+    exact eps_map_aux_append x y
+
+lemma recognizable_epsilon : IsRecognizable ({ 1 } : Set (Trace I)) := by
+  use EpsMonoid, inferInstance, inferInstance, inferInstance, eps_map
+  simp only [Set.image_singleton, map_one]
+  ext t
+  rcases t with ⟨w⟩
+  change ⟦w⟧ ∈ {1} ↔ ⟦w⟧ ∈ ⇑eps_map ⁻¹' {1}
+  constructor
+  · intro h
+    rw [h, Set.mem_preimage, map_one, Set.mem_singleton_iff]
+  · intro h
+    cases w with
+    | nil =>
+      rw [Set.mem_singleton_iff]
+      rfl
+    | cons a w' =>
+      have h_map : eps_map (I := I) ⟦a :: w'⟧ = eps_map (I := I) ⟦[a]⟧ * eps_map (I := I) ⟦w'⟧ := rfl
+      simp only [Set.mem_preimage, Set.mem_singleton_iff] at h
+      rw [h_map] at h
+      have h_dead : eps_map (I := I) ⟦[a]⟧ = EpsMonoid.dead := rfl
+      rw [h_dead] at h
+      contradiction
+
+inductive CharMonoid
+  | one
+  | saw_a
+  | dead
+deriving DecidableEq, Fintype
+
+instance : Monoid CharMonoid where
+  one := .one
+  mul
+  | .one, x => x
+  | x, .one => x
+  | _, _ => .dead
+  mul_one x := by cases x <;> rfl
+  one_mul x := by cases x <;> rfl
+  mul_assoc x y z := by cases x <;> cases y <;> cases z <;> rfl
+
+def char_map_aux [DecidableEq α] (a : α) : List α → CharMonoid
+  | [] => .one
+  | c :: w => (if c = a then .saw_a else .dead) * char_map_aux a w
+
+lemma char_map_aux_append [DecidableEq α] (a : α) (x y : List α) :
+    char_map_aux a (x ++ y) = char_map_aux a x * char_map_aux a y := by
+  induction x with
+  | nil =>
+    simp only [char_map_aux]
+    rfl
+  | cons b x' ih => simp [char_map_aux, ih, mul_assoc]
+
+def char_map [DecidableEq α] (a : α) : Trace I →* CharMonoid where
+  toFun := Quotient.lift
+    (char_map_aux a)
+    (by
+      intro b c heqv
+      induction heqv with
+      | swap e f hrel =>
+        by_cases hea : e = a <;> by_cases hfa : f = a
+        · subst hea hfa
+          rfl
+        · subst hea
+          simp only [char_map_aux, ↓reduceIte, hfa]
+          rfl
+        · subst hfa
+          simp only [char_map_aux, ↓reduceIte, hea]
+          rfl
+        · simp only [char_map_aux, ↓reduceIte, hea, hfa]
+      | refl => rfl
+      | symm _ ih => exact ih.symm
+      | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+      | compat _ _ ih₁ ih₂ => rw [char_map_aux_append, char_map_aux_append, ih₁, ih₂]
+    )
+  map_one' := rfl
+  map_mul' := by
+    rintro ⟨x⟩ ⟨y⟩
+    exact char_map_aux_append a x y
+
+lemma recognizable_char [DecidableEq α] (a : α) : IsRecognizable ({ ⟦[a]⟧ } : Set (Trace I)) := by
+  use CharMonoid, inferInstance, inferInstance, inferInstance, char_map a
+  simp only [Set.image_singleton]
+  ext t
+  rcases t with ⟨w⟩
+  change ⟦w⟧ ∈ {⟦[a]⟧} ↔ ⟦w⟧ ∈ ⇑(char_map a) ⁻¹' {(char_map a) ⟦[a]⟧}
+  simp only [Set.mem_singleton_iff, Set.mem_preimage]
+  constructor
+  · intro h
+    rw [h]
+  · intro h
+    rcases w with _ | ⟨b, _ | ⟨c, w'⟩⟩
+    · simp [char_map, char_map_aux] at h
+    · simp_all [char_map, char_map_aux]
+    · simp [char_map, char_map_aux] at h
+      split_ifs at h
+      all_goals (
+        generalize hw' : char_map_aux a w' = x at h
+        cases x
+        all_goals (simp at h)
+      )
 
 lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P ∪ Q) := by
-  sorry
+  rcases hP with ⟨F_P, hFin_P, hMon_P, hDec_P, f_P, hP_eq⟩
+  rcases hQ with ⟨F_Q, hFin_Q, hMon_Q, hDec_Q, f_Q, hQ_eq⟩
+  use F_P × F_Q, inferInstance, inferInstance, inferInstance, MonoidHom.prod f_P f_Q
+  ext x
+  simp only [Set.mem_union, MonoidHom.prod_apply, Set.mem_preimage, Set.mem_image, Prod.mk.injEq]
+  constructor
+  · rintro (h | h)
+    · exact ⟨x, Or.inl h, rfl, rfl⟩
+    · exact ⟨x, Or.inr h, rfl, rfl⟩
+  · rintro ⟨y, (hy | hy), hyp, hyq⟩
+    · left
+      rw [hP_eq, Set.mem_preimage]
+      exact ⟨y, hy, hyp⟩
+    · right
+      rw [hQ_eq, Set.mem_preimage]
+      exact ⟨y, hy, hyq⟩
 
-lemma recognizable_mul {P Q : Set (Trace I)}
+lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
+    L.IsRegular := by
+  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
+  rw [Language.isRegular_iff]
+  let M_DFA : DFA α σ := {
+    step := fun q a => M.step q [a]
+    start := M.start
+    accept := M.accept
+  }
+  use σ, h_fin, M_DFA
+  rw [hM]
+  ext w
+  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
+  unfold DFMA.accepts DFMA.eval
+  rw [Set.mem_setOf, Set.mem_setOf]
+  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
+    induction w with
+    | nil =>
+      intro q
+      simp only [List.foldl_nil]
+      exact (M.idempotent q).symm
+    | cons a ws ih =>
+      intro q
+      simp only [List.foldl_cons]
+      rw [ih (M.step q [a])]
+      exact (M.composition q [a] ws)
+  rw [h_eval M_DFA.start]
+
+lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
+  let L_P : Language α := ⇑(mk' (I := I)) ⁻¹' P
+  let L_Q : Language α := ⇑(mk' (I := I)) ⁻¹' Q
+  have hL_P_reg : L_P.IsRegular :=
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hP)
+  have hL_Q_reg : L_Q.IsRegular :=
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hQ)
+  have hL_P_closed : IsClosed I L_P := by
+    apply le_antisymm
+    · rintro x ⟨y, hy, heqv⟩
+      simp only [L_P, Set.mem_preimage] at hy ⊢
+      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      rw [← heq]
+      exact hy
+    · exact traceClosure.le_closure
+  have hL_Q_closed : IsClosed I L_Q := by
+    apply le_antisymm
+    · rintro x ⟨y, hy, heqv⟩
+      simp only [L_Q, Set.mem_preimage] at hy ⊢
+      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      rw [← heq]
+      exact hy
+    · exact traceClosure.le_closure
+  have h_mul_reg : (L_P * L_Q).IsRegular := Language.IsRegular.mul hL_P_reg hL_Q_reg
+  have h_rank : HasFiniteRank I (L_P * L_Q) :=
+    ⟨1, concat_closed_rank L_P L_Q hL_P_closed hL_Q_closed⟩
+  have h_hash := recognizable_image_of_regular_finite_rank h_mul_reg h_rank
+  have h_image_eq : mk' (I := I) '' (L_P * L_Q) = P * Q := by
+    ext t
+    constructor
+    · rintro ⟨w, ⟨u, hu, v, hv, rfl⟩, rfl⟩
+      exact ⟨mk' u, hu, mk' v, hv, rfl⟩
+    · rintro ⟨⟨u⟩, ht₁, ⟨v⟩, ht₂, rfl⟩
+      exact ⟨u ++ v, ⟨u, ht₁, v, ht₂, rfl⟩, rfl⟩
+  rw [← h_image_eq]
+  exact h_hash
+
+open Computability in
+theorem star_connected_closed_rank {X : Language α}
+    (hX_closed : IsClosed I X)
+    (hX_conn : ∀ w ∈ X, IsConnected I ⟦w⟧) :
+    HasFiniteRank I X∗ := by
   sorry
 
+open Computability in
 lemma recognizable_cstar {P : Set (Trace I)}
     (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
-  sorry
+  let C := connectedComponents P
+  let L_C : Language α := ⇑(mk' (I := I)) ⁻¹' C
+  have hC_recog : IsRecognizable C := sorry -- Requires a lemma that connected components of recognizable sets are recognizable
+  have hL_C_reg : L_C.IsRegular :=
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hC_recog)
+  have hL_C_closed : IsClosed I L_C := by
+    apply le_antisymm
+    · rintro x ⟨y, hy, heqv⟩
+      simp only [L_C, Set.mem_preimage] at hy ⊢
+      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      rw [← heq]
+      exact hy
+    · exact traceClosure.le_closure
+  have hL_C_conn : ∀ w ∈ L_C, IsConnected I ⟦w⟧ := by
+    intro w hw
+    simp only [L_C, C, connectedComponents] at hw
+    rw [Set.preimage_setOf_eq, Set.mem_setOf] at hw
+    exact hw.left
+  have h_star_reg : (L_C∗).IsRegular := Language.IsRegular.kstar hL_C_reg
+  have h_rank : HasFiniteRank I (L_C∗) := star_connected_closed_rank hL_C_closed hL_C_conn
+  have h_hash := recognizable_image_of_regular_finite_rank h_star_reg h_rank
+  have h_image_eq : mk' (I := I) '' ((L_C∗) : Language α) = kstar C := by
+    unfold kstar
+    ext t
+    constructor
+    · rintro ⟨w, ⟨ws, rfl, hws⟩, rfl⟩
+      use ws.map (mk' (I := I))
+      constructor
+      · intro t' ht'
+        simp only [List.mem_map] at ht'
+        rcases ht' with ⟨w', hw', rfl⟩
+        exact hws w' hw'
+      · induction ws with
+        | nil => rfl
+        | cons w' ws' ih =>
+          simp only [List.flatten_cons, List.map_cons, List.prod_cons]
+          have h_mul : mk' (I := I) (w' ++ ws'.flatten) =
+                       mk' (I := I) w' * mk' (I := I) ws'.flatten := rfl
+          simp only [List.mem_cons, forall_eq_or_imp] at hws
+          rw [h_mul, ih hws.right]
+    · rintro ⟨ts, hts, rfl⟩
+      induction ts with
+      | nil => exact ⟨[], by apply Language.nil_mem_kstar, rfl⟩
+      | cons t' ts' ih =>
+        have ht' : t' ∈ C := hts t' (by simp)
+        have hts' : ∀ x ∈ ts', x ∈ C := fun x hx => hts x (by simp [hx])
+        rcases ih hts' with ⟨w', hw'_star, hw'_eq⟩
+        rcases t' with ⟨u⟩
+        have hu_in_LC : u ∈ L_C := ht'
+        use u ++ w'
+        constructor
+        · rw [Language.mem_kstar] at hw'_star ⊢
+          rcases hw'_star with ⟨ws', rfl, hws'⟩
+          use u :: ws'
+          simp only [List.flatten_cons, List.mem_cons, forall_eq_or_imp, true_and]
+          exact ⟨hu_in_LC, hws'⟩
+        · have h_mul : mk' (I := I) (u ++ w') = mk' (I := I) u * mk' (I := I) w' := rfl
+          rw [h_mul, hw'_eq]
+          rfl
+  rw [← h_image_eq]
+  exact h_hash
 
 /-- Theorem 4.1 (iv) => (i) -/
-theorem recognizable_of_cRational (X : RegularExpression α) :
+theorem recognizable_of_cRational [DecidableEq α] (X : RegularExpression α) :
     IsRecognizable (matches_cstar_trace I X) := by
   induction X with
   | zero => exact recognizable_zero
@@ -870,34 +1151,6 @@ lemma connected_iterativeFactor_of_subset_lexNf {X : Language α}
   have h_ww_lex : w ++ w ∈ LexNfLanguage I := lexNf_of_subword h_lex2
   exact connected_of_lexNf_sq h_w_lex h_ww_lex
 
-omit [Fintype α] [LinearOrder α] in
-lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
-    L.IsRegular := by
-  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
-  rw [Language.isRegular_iff]
-  let M_DFA : DFA α σ := {
-    step := fun q a => M.step q [a]
-    start := M.start
-    accept := M.accept
-  }
-  use σ, h_fin, M_DFA
-  rw [hM]
-  ext w
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  unfold DFMA.accepts DFMA.eval
-  rw [Set.mem_setOf, Set.mem_setOf]
-  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
-    induction w with
-    | nil =>
-      intro q
-      simp only [List.foldl_nil]
-      exact (M.idempotent q).symm
-    | cons a ws ih =>
-      intro q
-      simp only [List.foldl_cons]
-      rw [ih (M.step q [a])]
-      exact (M.composition q [a] ws)
-  rw [h_eval M_DFA.start]
 
 /-- Theorem 4.1 (i) => (ii) -/
 theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}

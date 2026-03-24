@@ -1,6 +1,8 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Computability.DFA
 import Mathlib.Computability.Language
+import Mathlib.Data.List.Permutation
+import Mathlib.Data.Set.Finite.Basic
 import TraceTheory.Basic
 import TraceTheory.Computability
 
@@ -287,28 +289,47 @@ theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
     rcases h y u z a b hx h_indep hlt with ⟨c, hc_mem, hc_not_indep⟩
     exact hc_not_indep (h_all_indep c hc_mem)
 
+omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
+lemma perm_of_traceEqv {w x : List α} (h : TraceEqv I w x) : w.Perm x := by
+  induction h with
+  | swap _ _ _ => apply List.Perm.swap
+  | refl _ => apply List.Perm.refl
+  | symm _ ih => exact List.Perm.symm ih
+  | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
+  | compat _ _ ih₁ ih₂ => exact List.Perm.append ih₁ ih₂
+
+omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
+lemma finite_traceEqv_class (w : List α) : {x : List α | TraceEqv I w x}.Finite := by
+  have h_sub : {x : List α | TraceEqv I w x} ⊆ {x : List α | x ∈ w.permutations} := by
+    intro x hx
+    rw [Set.mem_setOf] at hx ⊢
+    rw [List.mem_permutations, List.perm_comm]
+    exact perm_of_traceEqv I hx
+  exact Set.Finite.subset w.permutations.finite_toSet h_sub
+
 theorem exists_lexNf_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ LexNfLanguage I := by
   rcases t with ⟨u⟩
-  rw [show Quot.mk (⇑(TraceSetoid I)) u = ⟦u⟧ from rfl]
-  induction u using List.reverseRecOn with
-  | nil =>
-    use []
-    simp
-    apply (mem_lexNfLanguage_iff_factorCondition _ _).mpr
-    apply (isLexNf_iff_factorCondition _ _).mp
-    unfold IsLexNf
-    intro w h_equiv
-    replace h_equiv : w = [] := by
-      simp [List.eq_nil_of_length_eq_zero, length_eq_of_eqv h_equiv.symm]
-    exact ge_of_eq h_equiv
-  | append_singleton u a ih =>
-    rcases ih with ⟨s, hs_equiv, hs_lexNf⟩
-    have h_equiv : TraceEqv I ([a] ++ s) ([a] ++ u) := by
-      apply TraceEqv.compat
-      · exact TraceEqv.refl [a]
-      · --exact hs_equiv
-        sorry
-    sorry
+  change ∃ s, ⟦s⟧ = ⟦u⟧ ∧ s ∈ LexNfLanguage I
+  let S : Set (List α) := {x | TraceEqv I u x}
+  have h_fin : S.Finite := finite_traceEqv_class I u
+  have h_nonempty : S.Nonempty := ⟨u, TraceEqv.refl u⟩
+  haveI : Fintype S := h_fin.fintype
+  let S_finset := S.toFinset
+  have h_finset_nonempty : S_finset.Nonempty := Set.toFinset_nonempty.mpr h_nonempty
+  let s := S_finset.min' h_finset_nonempty
+  have hs_mem_finset : s ∈ S_finset := Finset.min'_mem S_finset h_finset_nonempty
+  have hs_eqv : TraceEqv I u s := by
+    simpa [S_finset, S] using hs_mem_finset
+  use s
+  constructor
+  · symm
+    apply Quotient.sound
+    exact hs_eqv
+  · rw [mem_lexNfLanguage_iff_factorCondition, ← isLexNf_iff_factorCondition]
+    intro s' hs'
+    have hs'_mem : s' ∈ S_finset := by
+      simp [S_finset, S, hs_eqv.trans hs']
+    exact Finset.min'_le S_finset s' hs'_mem
 
 end LexNf
 
@@ -351,7 +372,7 @@ def IsValidFactorization
   TraceEqv I x xs.flatten ∧
   TraceEqv I y ys.flatten ∧
   ∀ i : ℕ, ∀ (h : i + 1 < xs.length),
-    Independent I (xs[i]'(Nat.lt_of_succ_lt h)) ((ys.drop i).flatten)
+    Independent I (xs[i + 1]'(h)) ((ys.take (i + 1)).flatten)
 
 /-- Predicate for language `X` having rank at most `k`. -/
 def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
@@ -364,9 +385,44 @@ def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
 def HasFiniteRank (I : Independence α) (X : Language α) : Prop :=
   ∃ k : ℕ, HasRankAtMost I X k
 
+variable [DecidableEq α]
+
 theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h₂ : IsClosed I X₂) :
     HasRankAtMost I (X₁ * X₂) 1 := by
-  sorry
+  intro x y hxy
+  rcases hxy with ⟨w, hw, heqv⟩
+  rcases hw with ⟨x₁, hx₁, x₂, hx₂, rfl⟩
+  unfold IsClosed traceClosure at h₁ h₂
+  rw [Language.ext_iff] at h₁ h₂
+  simp only at heqv
+  replace heqv := heqv.symm
+  have ⟨z₁, z₂, z₃, z₄, h_indep, hx, hy, hx₁_eqv, hx₂_eqv⟩ := levi_lemma heqv
+  use [z₁, z₂], [z₃, z₄]
+  unfold IsValidFactorization
+  and_intros
+  · simp
+  · simp
+  · simp only [List.zipWith_cons_cons, List.zipWith_self, List.map_nil, List.flatten_cons,
+      List.flatten_nil, List.append_nil]
+    replace h₁ := h₁ (z₁ ++ z₃)
+    replace h₂ := h₂ (z₂ ++ z₄)
+    rw [Set.mem_setOf] at h₁ h₂
+    use z₁ ++ z₃
+    constructor
+    · apply h₁.mp
+      use x₁
+    · use z₂ ++ z₄
+      simp only [List.append_assoc, and_true]
+      apply h₂.mp
+      use x₂
+  · simpa
+  · simpa
+  · intro i hlt
+    cases i with
+    | zero => simpa using h_indep
+    | succ i' =>
+      simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] at hlt
+      contradiction
 
 end rank
 
