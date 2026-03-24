@@ -360,6 +360,97 @@ lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
   rw [← h_image_eq]
   exact h_hash
 
+abbrev AlphMonoid (α : Type) := Finset α
+
+instance [DecidableEq α] : Monoid (AlphMonoid α) where
+  one := ∅
+  mul x y := x ∪ y
+  mul_assoc x y z := Finset.union_assoc x y z
+  one_mul x := Finset.empty_union x
+  mul_one x := Finset.union_empty x
+
+def alph_map_aux [DecidableEq α] (w : List α) : AlphMonoid α :=
+  w.toFinset
+
+lemma alph_map_aux_append [DecidableEq α] (x y : List α) :
+    alph_map_aux (x ++ y) = alph_map_aux x * alph_map_aux y := by
+  apply List.toFinset_append
+
+def alph_map [DecidableEq α] : Trace I →* AlphMonoid α where
+  toFun := Quotient.lift
+    alph_map_aux
+    (by
+      intro u v heqv
+      dsimp [alph_map_aux]
+      ext a
+      simp only [List.mem_toFinset]
+      exact mem_iff_mem a heqv
+    )
+  map_one' := rfl
+  map_mul' := by
+    rintro ⟨x⟩ ⟨y⟩
+    exact alph_map_aux_append x y
+
+lemma alph_map_eq_iff_mems_eq [DecidableEq α] {t t' : Trace I} :
+    alph_map (I := I) t = alph_map (I := I) t' ↔ ∀ a, a ∈ t ↔ a ∈ t' := by
+  rcases t with ⟨w⟩
+  rcases t' with ⟨w'⟩
+  change w.toFinset = w'.toFinset ↔ _
+  simp only [Finset.ext_iff, List.mem_toFinset]
+  rfl
+
+lemma lift_dependency_path [DecidableEq α] {t t' : Trace I} (h_mem_eq : ∀ a, a ∈ t' ↔ a ∈ t)
+    (x y : {a // a ∈ t'}) (h_path : dependencyTransClosureIn t' x y) :
+    dependencyTransClosureIn t ⟨x.1, (h_mem_eq x.1).mp x.2⟩ ⟨y.1, (h_mem_eq y.1).mp y.2⟩ := by
+  induction h_path with
+  | single h_dep =>
+    apply Relation.TransGen.single
+    exact h_dep
+  | tail path step ih =>
+    apply Relation.TransGen.tail ih
+    exact step
+
+lemma recognizable_connectedComponents {P : Set (Trace I)} [DecidableEq α] [Fintype α]
+    (hP : IsRecognizable P) : IsRecognizable (connectedComponents P) := by
+  rcases hP with ⟨M, hFin, hMon, hDec, f_P, hP_eq⟩
+  use M × AlphMonoid α, inferInstance, inferInstance, inferInstance
+  use MonoidHom.prod f_P (alph_map (I := I))
+  ext t
+  simp only [MonoidHom.prod_apply, Set.mem_preimage, Set.mem_image, Prod.ext_iff]
+  constructor
+  · intro h
+    exact ⟨t, h, rfl, rfl⟩
+  · rintro ⟨t', ht', h_f_eq, h_alph_eq⟩
+    have h_mem_eq : ∀ a, a ∈ t' ↔ a ∈ t := by
+      intro a
+      have h_alph := alph_map_eq_iff_mems_eq.mp h_alph_eq
+      exact h_alph a
+    have h_conn : IsConnected I t := by
+      intro a b
+      let a' : {x // x ∈ t'} := ⟨a.1, (h_mem_eq a.1).mpr a.2⟩
+      let b' : {x // x ∈ t'} := ⟨b.1, (h_mem_eq b.1).mpr b.2⟩
+      have h_path := ht'.1 a' b'
+      exact lift_dependency_path h_mem_eq a' b' h_path
+    have h_neq_1 : t ≠ 1 := by
+      intro ht_eq_1
+      subst ht_eq_1
+      have ht'_eq_1 : t' = 1 := by
+        by_contra ht'_neq_1
+        rcases empty_is_eps t' ht'_neq_1 with ⟨a, ha⟩
+        exact eps_is_empty a ((h_mem_eq a).mp ha)
+      exact ht'.2.1 ht'_eq_1
+    rcases ht'.2.2 with ⟨v, hv_in_P, h_indep_t'_v⟩
+    have hv_in_P_t : t * v ∈ P := by
+      have h_f_mul : f_P (t * v) = f_P (t' * v) := by
+        simp only [map_mul, h_f_eq.symm]
+      rw [hP_eq, Set.mem_preimage] at hv_in_P ⊢
+      rw [← h_f_mul] at hv_in_P
+      exact hv_in_P
+    have h_indep_t_v : Independent' t v := by
+      intro a b ha hb
+      exact h_indep_t'_v a b ((h_mem_eq a).mpr ha) hb
+    exact ⟨h_conn, h_neq_1, v, hv_in_P_t, h_indep_t_v⟩
+
 open Computability in
 theorem star_connected_closed_rank {X : Language α}
     (hX_closed : IsClosed I X)
@@ -368,11 +459,11 @@ theorem star_connected_closed_rank {X : Language α}
   sorry
 
 open Computability in
-lemma recognizable_cstar {P : Set (Trace I)}
+lemma recognizable_cstar {P : Set (Trace I)} [DecidableEq α] [Fintype α]
     (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
   let C := connectedComponents P
   let L_C : Language α := ⇑(mk' (I := I)) ⁻¹' C
-  have hC_recog : IsRecognizable C := sorry -- Requires a lemma that connected components of recognizable sets are recognizable
+  have hC_recog : IsRecognizable C := recognizable_connectedComponents hP
   have hL_C_reg : L_C.IsRegular :=
     isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hC_recog)
   have hL_C_closed : IsClosed I L_C := by
@@ -392,48 +483,22 @@ lemma recognizable_cstar {P : Set (Trace I)}
   have h_rank : HasFiniteRank I (L_C∗) := star_connected_closed_rank hL_C_closed hL_C_conn
   have h_hash := recognizable_image_of_regular_finite_rank h_star_reg h_rank
   have h_image_eq : mk' (I := I) '' ((L_C∗) : Language α) = kstar C := by
-    unfold kstar
-    ext t
-    constructor
-    · rintro ⟨w, ⟨ws, rfl, hws⟩, rfl⟩
-      use ws.map (mk' (I := I))
+    change toTrace I (L_C∗) = kstar C
+    rw [kstar_toTrace_comm]
+    have h_surj : toTrace I L_C = C := by
+      ext t
       constructor
-      · intro t' ht'
-        simp only [List.mem_map] at ht'
-        rcases ht' with ⟨w', hw', rfl⟩
-        exact hws w' hw'
-      · induction ws with
-        | nil => rfl
-        | cons w' ws' ih =>
-          simp only [List.flatten_cons, List.map_cons, List.prod_cons]
-          have h_mul : mk' (I := I) (w' ++ ws'.flatten) =
-                       mk' (I := I) w' * mk' (I := I) ws'.flatten := rfl
-          simp only [List.mem_cons, forall_eq_or_imp] at hws
-          rw [h_mul, ih hws.right]
-    · rintro ⟨ts, hts, rfl⟩
-      induction ts with
-      | nil => exact ⟨[], by apply Language.nil_mem_kstar, rfl⟩
-      | cons t' ts' ih =>
-        have ht' : t' ∈ C := hts t' (by simp)
-        have hts' : ∀ x ∈ ts', x ∈ C := fun x hx => hts x (by simp [hx])
-        rcases ih hts' with ⟨w', hw'_star, hw'_eq⟩
-        rcases t' with ⟨u⟩
-        have hu_in_LC : u ∈ L_C := ht'
-        use u ++ w'
-        constructor
-        · rw [Language.mem_kstar] at hw'_star ⊢
-          rcases hw'_star with ⟨ws', rfl, hws'⟩
-          use u :: ws'
-          simp only [List.flatten_cons, List.mem_cons, forall_eq_or_imp, true_and]
-          exact ⟨hu_in_LC, hws'⟩
-        · have h_mul : mk' (I := I) (u ++ w') = mk' (I := I) u * mk' (I := I) w' := rfl
-          rw [h_mul, hw'_eq]
-          rfl
+      · rintro ⟨w, hw, rfl⟩
+        exact hw
+      · intro ht
+        rcases t with ⟨w⟩
+        exact ⟨w, ht, rfl⟩
+    rw [h_surj]
   rw [← h_image_eq]
   exact h_hash
 
 /-- Theorem 4.1 (iv) => (i) -/
-theorem recognizable_of_cRational [DecidableEq α] (X : RegularExpression α) :
+theorem recognizable_of_cRational [DecidableEq α] [Fintype α] (X : RegularExpression α) :
     IsRecognizable (matches_cstar_trace I X) := by
   induction X with
   | zero => exact recognizable_zero
