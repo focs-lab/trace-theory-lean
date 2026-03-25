@@ -8,7 +8,7 @@ namespace TraceTheory
 
 open scoped Pointwise
 
-open RegularExpression
+open RegularExpression Computability
 
 variable {α : Type} {I : Independence α}
 
@@ -451,14 +451,151 @@ lemma recognizable_connectedComponents {P : Set (Trace I)} [DecidableEq α] [Fin
       exact h_indep_t'_v a b ((h_mem_eq a).mpr ha) hb
     exact ⟨h_conn, h_neq_1, v, hv_in_P_t, h_indep_t_v⟩
 
-open Computability in
-theorem star_connected_closed_rank {X : Language α}
+lemma dependent_letters_of_connected [DecidableEq α] {u v : List α}
+    (h_conn : IsConnected I ⟦u ++ v⟧)
+    (hu : u ≠ []) (hv : v ≠ []) :
+    ∃ a ∈ u, ∃ b ∈ v, ¬ I.rel a b := by
+  by_contra h_all_indep
+  push_neg at h_all_indep
+  have h_indep_trace : Independent' (I := I) ⟦u⟧ ⟦v⟧ := by
+    intro a b ha hb
+    change a ∈ u at ha
+    change b ∈ v at hb
+    exact h_all_indep a ha b hb
+  have hu_trace : ⟦u⟧ ≠ (1 : Trace I) := by simpa [empty_iff]
+  have hv_trace : ⟦v⟧ ≠ (1 : Trace I) := by simpa [empty_iff]
+  exact append_indep_is_disconnected ⟦u⟧ ⟦v⟧ h_indep_trace hu_trace hv_trace h_conn
+
+-- TODO clean up LLM generated proof
+lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List (List α)}
+    (hps_len : ps.length = n) (hqs_len : qs.length = n)
+    (hpq_conn : ∀ i (hi : i < n), IsConnected I ⟦ps[i] ++ qs[i]⟧)
+    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → Independent I qs[i] ps[j]) :
+    (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card ≤
+    Fintype.card α := by
+  let S := Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])
+
+  -- 2. Extract the dependent cross-letters for each split index
+  have h_ex' : ∀ i : S, ∃ b ∈ qs[i.val.val], ∃ a ∈ ps[i.val.val], ¬ I.rel a b := by
+    intro ⟨i, hi⟩
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hi
+    -- Since ps[i] and qs[i] are connected and non-empty, they share a dependent pair
+    have ⟨a, ha, b, hb, hrel⟩ := dependent_letters_of_connected (hpq_conn i.val i.isLt) hi.1 hi.2
+    exact ⟨b, hb, a, ha, hrel⟩
+
+  -- 3. Define the mapping function f(i) = b_i
+  let f : S → α := fun i => Classical.choose (h_ex' i)
+  have hf_spec : ∀ i : S, f i ∈ qs[i.val.val] ∧ ∃ a ∈ ps[i.val.val], ¬ I.rel a (f i) :=
+    fun i => Classical.choose_spec (h_ex' i)
+
+  -- 4. Prove f is injective (the letters b_i are pairwise distinct)
+  have h_inj : Function.Injective f := by
+    intro ⟨i, hi⟩ ⟨j, hj⟩ heq
+    by_contra h_neq
+    have h_neq_val : i.val ≠ j.val := by
+      intro h_eq_val; apply h_neq; exact Subtype.ext (Fin.ext h_eq_val)
+
+    -- Since they are distinct indices, one must be strictly less than the other
+    rcases lt_trichotomy i.val j.val with hlt | heq_val | hgt
+    · -- Case: i < j
+      have h_indep_ij := h_indep i.val j.val i.isLt j.isLt hlt
+      have h_bi_in := (hf_spec ⟨i, hi⟩).1
+      rcases (hf_spec ⟨j, hj⟩).2 with ⟨aj, haj, hdep⟩
+      -- b_i must commute with a_j
+      have h_rel := h_indep_ij (f ⟨i, hi⟩) h_bi_in aj haj
+      have h_symm := I.symm (f ⟨i, hi⟩) aj h_rel
+      rw [heq] at h_symm
+      -- But b_j does NOT commute with a_j. Contradiction.
+      exact hdep h_symm
+    · contradiction
+    · -- Case: j < i (Symmetric to above)
+      have h_indep_ji := h_indep j.val i.val j.isLt i.isLt hgt
+      have h_bj_in := (hf_spec ⟨j, hj⟩).1
+      rcases (hf_spec ⟨i, hi⟩).2 with ⟨ai, hai, hdep⟩
+      have h_rel := h_indep_ji (f ⟨j, hj⟩) h_bj_in ai hai
+      have h_symm := I.symm (f ⟨j, hj⟩) ai h_rel
+      rw [← heq] at h_symm
+      exact hdep h_symm
+
+  -- 5. Because f is injective, the cardinality of S is bounded by the alphabet
+  have h_card := Fintype.card_le_of_injective f h_inj
+  rw [← Fintype.card_coe S]
+  exact h_card
+
+lemma compress_factorization_core {n : ℕ} {X : Language α} [DecidableEq α]
+    (ps qs : List (List α))
+    (hps_len : ps.length = n) (hqs_len : qs.length = n)
+    (hpq_in_X : ∀ i (hi : i < n), ps[i] ++ qs[i] ∈ X)
+    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → Independent I qs[i] ps[j]) :
+    ∃ xs ys : List (List α),
+      xs.length = ys.length ∧
+      -- The critical bound: length is ≤ 2 * (number of splits) + 1
+      xs.length ≤ 2 * (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card + 1 ∧
+      (List.zipWith (· ++ ·) xs ys).flatten ∈ X∗ ∧
+      TraceEqv I ps.flatten xs.flatten ∧
+      TraceEqv I qs.flatten ys.flatten ∧
+      ∀ (i : ℕ) (h : i + 1 < xs.length), Independent I xs[i + 1] (List.take (i + 1) ys).flatten := by
+  sorry
+
+lemma group_split_factors
+    {x y : List α} {X : Language α} {n : ℕ} {ps qs : List (List α)} [Fintype α] [DecidableEq α]
+    (hps_len : ps.length = n) (hqs_len : qs.length = n)
+    (hx_eqv : TraceEqv I x ps.flatten)
+    (hy_eqv : TraceEqv I y qs.flatten)
+    (hpq_in_X : ∀ i (hi : i < n), ps[i] ++ qs[i] ∈ X)
+    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → Independent I qs[i] ps[j])
+    (h_bound : (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card ≤
+      Fintype.card α) :
+    ∃ xs ys : List (List α),
+      xs.length ≤ 2 * Fintype.card α + 1 ∧
+      IsValidFactorization I (X∗) x y xs ys := by
+  have ⟨xs, ys, h_len_eq, h_len_bound, h_zip_in, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
+    compress_factorization_core ps qs hps_len hqs_len hpq_in_X h_indep
+  use xs, ys
+  constructor
+  · omega
+  · unfold IsValidFactorization
+    refine ⟨h_len_eq, h_zip_in, ?_, ?_, h_xs_indep⟩
+    · exact TraceEqv.trans hx_eqv h_ps_eqv
+    · exact TraceEqv.trans hy_eqv h_qs_eqv
+
+theorem star_connected_closed_rank {X : Language α} [Fintype α] [DecidableEq α]
     (hX_closed : IsClosed I X)
     (hX_conn : ∀ w ∈ X, IsConnected I ⟦w⟧) :
     HasFiniteRank I X∗ := by
-  sorry
+  use 2 * Fintype.card α
+  intro x y hxy
+  rcases hxy with ⟨w, hw, heqv⟩
+  rw [Language.mem_kstar] at hw
+  rcases hw with ⟨ts, rfl, hts⟩
+  have ⟨ps, qs, hps_len, hqs_len, hx_eqv, hy_eqv, h_pq_eqv, h_indep⟩ :=
+    levi_lemma_gen heqv.symm
+  have hpq_in_X : ∀ i (hi : i < ts.length),
+      ps[i] ++ qs[i] ∈ X := by
+    intro i hi
+    have h_t_in_X : ts[i] ∈ X := hts (ts[i]) (List.getElem_mem hi)
+    have h_eqv_i := h_pq_eqv i hi (by omega) (by omega)
+    rw [← hX_closed]
+    exact ⟨ts[i], h_t_in_X, h_eqv_i⟩
+  have hpq_conn : ∀ i (hi : i < ts.length),
+      IsConnected I ⟦ps[i] ++ qs[i]⟧ := by
+    intro i hi
+    have h_t_conn := hX_conn ts[i] (hts ts[i] (List.getElem_mem hi))
+    have h_eqv_i := h_pq_eqv i hi (by omega) (by omega)
+    have h_trace_eq : (⟦ts[i]⟧ : Trace I) = ⟦ps[i] ++ qs[i]⟧ := by
+      apply Quotient.sound
+      exact h_eqv_i
+    rw [← h_trace_eq]
+    exact h_t_conn
+  have h_indep_adapted : ∀ i j (hi : i < ts.length) (hj : j < ts.length), i < j →
+      Independent I qs[i] ps[j] := by
+    intro i j hi hj hij
+    exact h_indep i j (by omega) (by omega) hij
+  have h_bound := split_indices_bound hps_len hqs_len hpq_conn h_indep_adapted
+  have ⟨xs, ys, h_len, h_valid⟩ :=
+    group_split_factors hps_len hqs_len hx_eqv hy_eqv hpq_in_X h_indep_adapted h_bound
+  use xs, ys
 
-open Computability in
 lemma recognizable_cstar {P : Set (Trace I)} [DecidableEq α] [Fintype α]
     (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
   let C := connectedComponents P
