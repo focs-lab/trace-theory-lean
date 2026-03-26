@@ -368,11 +368,11 @@ theorem traceClosure.idem {X : Language α} :
 def IsValidFactorization
     (I : Independence α) (X : Language α) (x y : List α) (xs ys : List (List α)) : Prop :=
   xs.length = ys.length ∧
-  (List.zipWith (· ++ ·) xs ys).flatten ∈ X ∧
+  (List.zipWith (· ++ ·) xs ys).flatten ∈ traceClosure I X ∧
   TraceEqv I x xs.flatten ∧
   TraceEqv I y ys.flatten ∧
-  ∀ i : ℕ, ∀ (h : i + 1 < xs.length),
-    Independent I (xs[i + 1]'(h)) ((ys.take (i + 1)).flatten)
+  ∀ i j (hi : i < ys.length) (hj : j < xs.length), i < j →
+    Independent I ys[i] xs[j]
 
 /-- Predicate for language `X` having rank at most `k`. -/
 def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
@@ -407,22 +407,24 @@ theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h
     replace h₁ := h₁ (z₁ ++ z₃)
     replace h₂ := h₂ (z₂ ++ z₄)
     rw [Set.mem_setOf] at h₁ h₂
-    use z₁ ++ z₃
+    use z₁ ++ z₃ ++ (z₂ ++ z₄)
     constructor
-    · apply h₁.mp
-      use x₁
-    · use z₂ ++ z₄
-      simp only [List.append_assoc, and_true]
-      apply h₂.mp
-      use x₂
+    · rw [Language.mem_mul]
+      exact ⟨z₁ ++ z₃, h₁.mp ⟨x₁, hx₁, hx₁_eqv⟩, z₂ ++ z₄, h₂.mp ⟨x₂, hx₂, hx₂_eqv⟩, rfl⟩
+    · apply TraceEqv.refl
   · simpa
   · simpa
-  · intro i hlt
+  · intro i j
+    simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Independent]
+    intro hi hj hlt
     cases i with
-    | zero => simpa using h_indep
-    | succ i' =>
-      simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] at hlt
-      contradiction
+    | zero =>
+      cases j with
+      | zero => contradiction
+      | succ j' =>
+        simp only [List.getElem_cons_zero, List.getElem_cons_succ, List.getElem_singleton]
+        exact independent_symm h_indep
+    | succ i' => omega
 
 end rank
 

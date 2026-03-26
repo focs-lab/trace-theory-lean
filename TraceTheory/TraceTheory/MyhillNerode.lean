@@ -9,18 +9,17 @@ namespace TraceTheory
 variable {α : Type*} {I : Independence α}
 
 lemma indep_of_flatten {u : List α} {vs : List (List α)}
-    (i : Fin vs.length) (h : Independent I u vs.flatten) :
-    Independent I u vs[i] := by
-  rcases i with ⟨i, hi⟩
+    (i : ℕ) (hi : i < vs.length) (h : Independent I u vs.flatten) :
+    Independent I u (vs[i]'(hi)) := by
   induction vs generalizing i with
   | nil => contradiction
   | cons v vs' ih =>
     simp [-Independent] at h ⊢
     cases i with
     | zero => exact (indep_of_indep_append_right h).left
-    | succ i =>
-      simp at hi
-      exact ih (indep_of_indep_append_right h).right i hi
+    | succ i' =>
+      simp only [List.length_cons, add_lt_add_iff_right] at hi
+      exact ih i' hi (indep_of_indep_append_right h).right
 
 /-- (i) → (ii) of Corollary (2.3) in `Partial Commutation and Traces`.
   Note that t₁, t₂, …, tₙ is expressed as a list [ts], and (t₁ ++ t₂ ++ … ++ tₙ) via [ts.flatten].
@@ -32,55 +31,48 @@ theorem levi_lemma_gen {u v : List α} {ts : List (List α)} [DecidableEq α]
       qs.length = ts.length ∧
       TraceEqv I u ps.flatten ∧
       TraceEqv I v qs.flatten ∧
-      (∀ i : Fin (min ts.length (min ps.length qs.length)), TraceEqv I ts[i] (ps[i] ++ qs[i])) ∧
-      ∀ i : Fin qs.length, ∀ j : Fin ps.length, i.val < j.val → Independent I qs[i] ps[j] := by
+      (∀ i (ht : i < ts.length) (hp : i < ps.length) (hq : i < qs.length),
+        TraceEqv I ts[i] (ps[i] ++ qs[i])) ∧
+      (∀ i j (hi : i < qs.length) (hj : j < ps.length), i < j →
+        Independent I qs[i] ps[j]) := by
   induction ts generalizing u v with
   | nil =>
-    rw [List.flatten_nil] at h
-    replace h := length_eq_of_eqv h
-    simp only [List.length_append, List.length_nil, Nat.add_eq_zero_iff,
-      List.length_eq_zero_iff] at h
-    rcases h with ⟨rfl, rfl⟩
+    simp only [List.flatten_nil] at h
+    have h_len := length_eq_of_eqv h
+    simp only [List.length_append, List.length_nil] at h_len
+    have hu : u = [] := List.length_eq_zero_iff.mp (by omega)
+    have hv : v = [] := List.length_eq_zero_iff.mp (by omega)
+    subst hu hv
     use [], []
-    simp only [List.length_nil, List.flatten_nil, Fin.getElem_fin, Independent, IsEmpty.forall_iff,
-      and_true, true_and, TraceEqv.refl]
-    intro ⟨i, hi⟩
-    contradiction
+    simp [TraceEqv.refl]
   | cons t tsuf ih =>
     rcases levi_lemma h with ⟨p, psuf, q, qsuf, h_ind, h_up, h_vq, h_tpq, h_tpq_suf⟩
     rcases ih h_tpq_suf.symm with ⟨ps_i, qs_i, ih_p_len, ih_q_len, ih_p, ih_q, ih_tpq, ih_ind⟩
     use p :: ps_i, q :: qs_i
     and_intros
-    · simpa
-    · simpa
+    · simp [ih_p_len]
+    · simp [ih_q_len]
     · apply TraceEqv.trans h_up
       simp only [List.flatten_cons]
       exact TraceEqv.compat (TraceEqv.refl p) ih_p
     · apply TraceEqv.trans h_vq
       simp only [List.flatten_cons]
       exact TraceEqv.compat (TraceEqv.refl q) ih_q
-    · intro ⟨i, hi⟩
-      by_cases hzi : i = 0
-      · simp [hzi, h_tpq]
-      · cases i with
-        | zero => contradiction
-        | succ i =>
-          simp only [List.length_cons, Nat.add_min_add_right, Nat.add_lt_add_iff_right, lt_inf_iff,
-            Fin.getElem_fin, List.getElem_cons_succ] at hi ⊢
-          exact ih_tpq ⟨i, by simpa⟩
-    · intro ⟨i, hi⟩ ⟨j, hj⟩ hij
+    · intro i ht hp hq
+      cases i with
+      | zero => exact h_tpq
+      | succ i' => apply ih_tpq i'
+    · intro i j hi hj hij
       cases j with
       | zero => contradiction
-      | succ j =>
+      | succ j' =>
         cases i with
         | zero =>
-          simp only [List.length_cons, Nat.add_lt_add_iff_right, Independent, Fin.zero_eta,
-            Fin.getElem_fin, Fin.val_zero, List.getElem_cons_zero, List.getElem_cons_succ] at hj ⊢
-          exact indep_of_flatten ⟨j, hj⟩ (indep_of_indep_of_eqv (independent_symm h_ind) ih_p)
-        | succ i =>
-          simp only [List.length_cons, Nat.add_lt_add_iff_right, Independent, Fin.getElem_fin,
-            List.getElem_cons_succ] at hi hj hij ⊢
-          exact ih_ind ⟨i, hi⟩ ⟨j, hj⟩ hij
+          simp only [List.length_cons, add_lt_add_iff_right] at hj
+          exact indep_of_flatten j' hj (indep_of_indep_of_eqv (independent_symm h_ind) ih_p)
+        | succ i' =>
+          apply ih_ind i' j'
+          exact Nat.succ_lt_succ_iff.mp hij
 
 variable {M : Type} {σ : Type} [Monoid M] [Monoid α]
 
