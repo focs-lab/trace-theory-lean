@@ -124,7 +124,6 @@ theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConne
     rw [connectedComponents_of_connected _ hP_conn]
     rw [kstar_eq_minusEps_trace]
 
-/-- Hashiguchi's Theorem. -/
 theorem recognizable_image_of_regular_finite_rank {X : Language α}
     (hX_reg : X.IsRegular)
     (hX_rank : HasFiniteRank I X) :
@@ -552,6 +551,37 @@ lemma ccDec_aux_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ [
         by_cases hab : dependencyTransClosureInL I u a b
         all_goals simp [hab]
 
+--#check List.reverseRecOn
+--todo: make this work?
+theorem ccDec_cases {motive : List (List α) → Prop} (u w : List α)
+    (nil : motive [[]])
+    (char : ∀ (a : α), motive [[a]])
+    (cons_conn : ∀ (a : α) (v : List α) (_h_conn : ccDec_aux_conn I u (a :: v)), motive (ccDec_aux I u v) → motive (ccDec_aux I u (a :: v)))
+    (cons_disc : ∀ (a : α) (v : List α) (_h_disc : ¬ ccDec_aux_conn I u (a :: v)), motive (ccDec_aux I u v) → motive (ccDec_aux I u (a :: v))) :
+    motive (ccDec_aux I u w) := by
+  induction w with
+  | nil => simp [ccDec_aux]; exact nil
+  | cons a w ih =>
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · exfalso
+      exact (ccDec_aux_nonempty _ _) ht
+    · rename_i c_head c_tail
+      by_cases hw : w = []
+      · simp [hw, ccDec_aux]
+        exact char a
+      cases c_head with
+      | nil =>
+        have := ccDec_aux_nonempty_head I u w hw
+        simp [List.getElem_of_eq ht] at this
+      | cons b c_head =>
+        by_cases hab : dependencyTransClosureInL I u a b
+        · apply cons_conn _ _ _ ih
+          simp [ccDec_aux_conn, ht, hab]
+        · apply cons_disc _ _ _ ih
+          simp [ccDec_aux_conn, ht, hab]
+
 lemma ccDec_aux_len_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w)) :
     (ccDec_aux I u (a :: w)).length = (ccDec_aux I u w).length := by
   simp [ccDec_aux_conn] at h
@@ -657,33 +687,6 @@ lemma ccDec_aux_tail_D' {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :
   | zero => simp at hiz
   | succ i => apply ccDec_aux_tail_D h i
 
-/-
-lemma ccDec'_aux_len (u w : List α) (a : α) :
-    (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length ∨
-    (ccDec_aux' I u (a :: w)).length = (ccDec_aux' I u w).length + 1 := by
-  simp [ccDec_aux']
-  cases ccDec_aux' I u w
-  · simp
-  · rename_i c_head c_tail
-    simp
-    cases c_head with
-    | nil => simp
-    | cons b c_head =>
-      simp
-      by_cases hab : dependencyTransClosureInL I u a b
-      all_goals simp [hab]
-
-lemma ccDec'_aux_len_le (u w : List α) (a : α) :
-    (ccDec_aux' I u w).length ≤ (ccDec_aux' I u (a :: w)).length := by
-  cases ccDec'_aux_len u w a with
-  | inl h => rw [h]
-  | inr h => simp [h]
-
-lemma ccDec'_aux_sub_idx (u w : List α) (a : α) (i : Fin (ccDec_aux' I u (a :: w)).length) (hiz : i.1 > 0) :
-    ∃ j : Fin (ccDec_aux' I u w).length, (ccDec_aux' I u (a :: w))[i] = (ccDec_aux' I u w)[j] := by
-  sorry
--/
-
 lemma ccDec_aux_elem_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux I u w).length) (hz : w ≠ []) :
     (ccDec_aux I u w)[i] ≠ [] := by
   induction w generalizing i with
@@ -720,14 +723,11 @@ lemma ccDec_aux_elem_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux I u
         apply ih
         exact hw
 
-lemma ccDec_aux_prefix (I : Independence α) (u w : List α) :
-    List.IsPrefix ((ccDec_aux I u w)[0]'(ccDec_aux_zero_idx)) w := by
+lemma ccDec_aux_flatten (I : Independence α) (u w : List α) :
+    (ccDec_aux I u w).flatten = w := by
   induction w with
   | nil => simp [ccDec_aux]
   | cons a w ih =>
-    suffices hs_dec : ∃ _1 _2, (ccDec_aux I u (a :: w)) = _1 :: _2 ∧ List.IsPrefix _1 (a :: w) from by
-      replace ⟨_1, _2, ⟨hs_dec, hs⟩⟩ := hs_dec
-      simp [List.getElem_of_eq hs_dec, hs]
     simp [ccDec_aux]
     let t := ccDec_aux I u w
     have ht : ccDec_aux I u w = t := rfl
@@ -735,124 +735,75 @@ lemma ccDec_aux_prefix (I : Independence α) (u w : List α) :
     · exfalso
       exact (ccDec_aux_nonempty _ _) ht
     · rename_i c_head c_tail
-      simp [ht]
+      simp [ht] at ih ⊢
       cases c_head with
-      | nil => simp
+      | nil => simp at ih ⊢; exact ih
       | cons b c_head =>
-        simp
         by_cases hab : dependencyTransClosureInL I u a b
-        · simp [hab]
-          simp [List.getElem_of_eq ht] at ih
-          exact ih
-        · simp [hab]
+        all_goals simp [hab] at ih ⊢; exact ih
+
+lemma List.flatten_prefix (L : List (List α)) (h : L ≠ []) :
+    List.IsPrefix (L[0]'(List.length_pos_iff.mpr h)) L.flatten := by
+  cases L with
+  | nil => simp at h
+  | cons w L => simp
+
+lemma ccDec_flatten_prefix2 (L : List (List α)) (h : 1 < L.length) :
+    List.IsPrefix (L[0] ++ L[1]) L.flatten := by
+  cases L with
+  | nil => simp at h
+  | cons w L =>
+    cases L with
+    | nil => simp at h
+    | cons v L => simp
+
+lemma List.flatten_adj_infix (L : List (List α)) (i : ℕ) (hi : i + 1 < L.length) :
+    List.IsInfix (L[i] ++ L[i + 1]) L.flatten := by
+  induction L generalizing i with
+  | nil => simp at hi
+  | cons w L ih =>
+    cases i with
+    | zero =>
+      cases L with
+      | nil => simp at hi
+      | cons v L =>
+        simp [<- List.append_assoc]
+        exact List.infix_append_left
+    | succ i =>
+      simp
+      exact List.infix_append_of_infix_right (ih i (Nat.succ_lt_succ_iff.mp hi))
+
+lemma List.flatten_suffix (L : List (List α)) (h : L ≠ []) :
+    List.IsSuffix (L.getLast h) L.flatten := by
+  induction L with
+  | nil => simp at h
+  | cons w L ih =>
+    cases L with
+    | nil => simp
+    | cons v L =>
+      simp at ih ⊢
+      exact List.suffix_append_of_suffix ih
+
+
+lemma ccDec_aux_prefix (I : Independence α) (u w : List α) :
+    List.IsPrefix ((ccDec_aux I u w)[0]'(ccDec_aux_zero_idx)) w := by
+  nth_rw 3 [<- ccDec_aux_flatten I u w]
+  exact List.flatten_prefix _ (ccDec_aux_nonempty u w)
 
 lemma ccDec_aux_infix (I : Independence α) (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) :
     List.IsInfix ((ccDec_aux I u w)[i] ++ (ccDec_aux I u w)[i + 1]) w := by
-  induction w generalizing i with
-  | nil => simp [ccDec_aux] at hi
-  | cons a w ih =>
-    by_cases hiz : i = 0
-    · simp [hiz]
-      by_cases hab : ccDec_aux_conn I u (a :: w)
-      · sorry
-      · sorry
-    · by_cases hab : ccDec_aux_conn I u (a :: w)
-      · simp [ccDec_aux_len_C hab] at hi
-        rw [ccDec_aux_tail_C hab i (by omega) (Nat.zero_lt_of_ne_zero hiz)]
-        rw [ccDec_aux_tail_C hab (i + 1) (by omega) (Nat.zero_lt_succ i)]
-        apply List.infix_cons
-        apply ih
-      · simp [ccDec_aux_len_D hab] at hi
-        rw [ccDec_aux_tail_D' hab i (by omega) hiz]
-        rw [ccDec_aux_tail_D' hab (i + 1) (by omega) (Ne.symm (Nat.zero_ne_add_one i))]
-        simp
-        apply List.infix_cons
-        replace ih := ih (i - 1) (by omega)
-        have : (ccDec_aux I u w)[i - 1 + 1]'(by omega) = (ccDec_aux I u w)[i]'(by omega) := by
-          simp [getElem_congr _ (show i - 1 + 1 = i from Nat.succ_pred_eq_of_ne_zero hiz)]
-        rw [this] at ih
-        exact ih
+  nth_rw 7 [<- ccDec_aux_flatten I u w]
+  exact List.flatten_adj_infix (ccDec_aux I u w) i hi
 
 lemma ccDec_aux_prefix2 (I : Independence α) (u w : List α) (h : 1 < (ccDec_aux I u w).length) :
     List.IsPrefix ((ccDec_aux I u w)[0] ++ (ccDec_aux I u w)[1]) w := by
-  induction w with
-  | nil => simp [ccDec_aux] at h
-  | cons a w ih =>
-    suffices hs_dec : ∃ _1 _2 _3, (ccDec_aux I u (a :: w)) = _1 :: _2 :: _3 ∧ List.IsPrefix (_1 ++ _2) (a :: w) from by
-      replace ⟨_1, _2, _3, ⟨hs_dec, hs⟩⟩ := hs_dec
-      simp [List.getElem_of_eq hs_dec, hs]
-    simp [ccDec_aux]
-    let t := ccDec_aux I u w
-    have ht : ccDec_aux I u w = t := rfl
-    rcases t
-    · exfalso
-      exact (ccDec_aux_nonempty _ _) ht
-    · rename_i c_head c_tail
-      simp [ht]
-      cases c_head with
-      | nil =>
-        simp
-        sorry
-      | cons b c_head =>
-        simp
-        by_cases hab : dependencyTransClosureInL I u a b
-        · simp [hab]
-          simp [List.getElem_of_eq ht] at ih
-          sorry
-          --by_cases hct : c_tail = []
-          --· simp [hct] at ht
-          --use c_tail[0]
-          --exact ih
-        · simp [hab]
-          have := List.getElem_of_eq ht ccDec_aux_zero_idx
-          simp at this
-          rw [<- this]
-          exact ccDec_aux_prefix I u w
+  nth_rw 7 [<- ccDec_aux_flatten I u w]
+  exact ccDec_flatten_prefix2 (ccDec_aux I u w) h
 
 lemma ccDec_aux_suffix (I : Independence α) (u w : List α) :
     List.IsSuffix ((ccDec_aux I u w).getLast (ccDec_aux_nonempty u w)) w := by
-  induction w with
-  | nil => simp [ccDec_aux]
-  | cons a w ih =>
-    let t := ccDec_aux I u w
-    have ht : ccDec_aux I u w = t := rfl
-    rcases t
-    · simp [ccDec_aux, ht] at ih ⊢
-      exact List.suffix_cons_iff.mpr (Or.inr ih)
-    · rename_i c_head c_tail
-
-      /- by_cases hab : ccDec_aux_conn I u (a :: w)
-      · rw [List.getLast_eq_getElem]
-        rw [ccDec_aux_tail_C hab _ (by sorry) (by exact?)]
-        have : (ccDec_aux I u (a :: w)).length - 1 = (ccDec_aux I u w).length - 1 := by
-          rw [ccDec_aux_len_C hab]
-        rw [getElem_congr rfl this]
-        rw [<- List.getLast_eq_getElem]
-        apply List.suffix_cons_iff.mpr -/
-
-      by_cases hw : w = []
-      · simp [hw, ccDec_aux]
-      have hch : c_head ≠ [] := by
-        by_contra hcon
-        rw [hcon] at ht
-        replace ht := List.getElem_of_eq ht ccDec_aux_zero_idx
-        simp at ht
-        exact (ccDec_aux_nonempty_head _ _ _ hw) ht
-      simp [ccDec_aux, ht]
-      cases c_head with
-      | nil => simp at hch
-      | cons b c_head =>
-        simp
-        by_cases hab : dependencyTransClosureInL I u a b
-        · simp [hab]
-          sorry
-          /- induction c_tail using List.reverseRecOn with
-          | nil => simp
-          | append_singleton c_tail d ih2 =>
-            simp
-            rw [List.getLast_congr ht] at ih -/
-        · simp [hab]
-          sorry
+  nth_rw 3 [<- ccDec_aux_flatten I u w]
+  exact List.flatten_suffix (ccDec_aux I u w) (ccDec_aux_nonempty u w)
 
 lemma ccDec_across_infix (I : Independence α) (w : List α) (h : 1 < (ccDec I w).length) :
     List.IsInfix (
@@ -999,25 +950,6 @@ lemma ccDec_aux_adj_indep (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u
     intro p hp q hq
     sorry
 
-lemma ccDec_aux_flatten (u w : List α) :
-    (ccDec_aux I u w).flatten = w := by
-  induction w with
-  | nil => simp [ccDec_aux]
-  | cons a w ih =>
-    simp [ccDec_aux]
-    let t := ccDec_aux I u w
-    have ht : ccDec_aux I u w = t := rfl
-    rcases t
-    · exfalso
-      exact (ccDec_aux_nonempty _ _) ht
-    · rename_i c_head c_tail
-      simp [ht] at ih ⊢
-      cases c_head with
-      | nil => simp at ih ⊢; exact ih
-      | cons b c_head =>
-        by_cases hab : dependencyTransClosureInL I u a b
-        all_goals simp [hab] at ih ⊢; exact ih
-
 lemma ccDec_disconnected_len (w : List α) (h : ¬ IsConnectedL I w) :
     (ccDec I w).length ≥ 2 := by
   by_contra h_len
@@ -1046,6 +978,17 @@ lemma ccDec_disconnected_len (w : List α) (h : ¬ IsConnectedL I w) :
 
 variable [Fintype α] [LinearOrder α] [DecidableRel I.rel]
 
+omit [Fintype α] [DecidableRel I.rel] in
+lemma lexNf_infix_is_lexNf {s t : List α} (hst : List.IsInfix s t) (ht : IsLexNf I t) :
+    IsLexNf I s := by
+  apply (isLexNf_iff_factorCondition _ _).mp at ht
+  apply (isLexNf_iff_factorCondition _ _).mpr
+  replace ⟨s', s'', hst⟩ := hst
+  intro y u z a b hs
+  replace ht := ht (s' ++ y) u (z ++ s'') a b
+  simp [<- hst, hs] at ht
+  exact ht
+
 lemma lexNf_sq_is_lexNf {w : List α} (h : w ++ w ∈ LexNfLanguage I) :
     w ∈ LexNfLanguage I := by
   apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at h
@@ -1070,6 +1013,68 @@ lemma connected_of_lexNf_sq {w : List α}
     have hz : w ≠ [] := List.cons_ne_nil a w'
     rw [show a :: w' = w from rfl] at hw hww ⊢
     by_contra h_con
+    replace h_con := ccDec_disconnected_len _ h_con
+
+    have h_lt : ∀ (i : ℕ), ∀ (hi : i + 1 < (ccDec_aux I w w).length),
+        (ccDec_aux I w w)[i][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w i (Nat.lt_of_succ_lt hi) hz)) <
+        ((ccDec_aux I w w)[i + 1][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w (i + 1) hi hz))) := by
+      intro i hi
+      have h_infix := ccDec_aux_infix I w w i hi
+      apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hw
+      apply (isLexNf_iff_factorCondition _ _).mpr at hw
+      replace h_infix := lexNf_infix_is_lexNf h_infix hw
+      apply (isLexNf_iff_factorCondition _ _).mp at h_infix
+
+      have h_indep : Independent I (ccDec_aux I w w)[i] (ccDec_aux I w w)[i + 1] := ccDec_aux_adj_indep w w i hi
+
+      let t₁ := (ccDec_aux I w w)[i]
+      have ht₁ : (ccDec_aux I w w)[i] = t₁ := rfl
+      rcases t₁
+      · exfalso
+        exact (ccDec_aux_elem_nonempty _ _ _ _ hz) ht₁
+      rename_i a₁ s₁
+
+      let t₂ := (ccDec_aux I w w)[i + 1]
+      have ht₂ : (ccDec_aux I w w)[i + 1] = t₂ := rfl
+      rcases t₂
+      · exfalso
+        exact (ccDec_aux_elem_nonempty _ _ _ _ hz) ht₂
+      rename_i a₂ s₂
+
+      replace h_infix := h_infix [] s₁ s₂ a₂ a₁
+      simp [ht₁, ht₂] at h_infix h_indep
+      simp [List.getElem_of_eq ht₁, List.getElem_of_eq ht₂]
+      replace h_infix := h_infix (I.symm _ _ h_indep.1.1)
+
+      by_contra h_ge
+      have h_ne : a₁ ≠ a₂ := by
+        by_contra h_eq
+        rw [h_eq] at h_indep
+        exact (I.irrefl _) h_indep.1.1
+      have h_gt : a₂ < a₁ := by
+        simp at h_ge
+        exact Std.lt_of_le_of_ne h_ge (Ne.symm h_ne)
+
+      replace ⟨c, hcs, hac⟩ := h_infix h_gt
+      exact hac (I.symm _ _ (h_indep.2 c hcs).1)
+
+    replace h_lt : ∀ (i : ℕ), ∀ (hi : i + 1 < (ccDec_aux I w w).length),
+        (ccDec_aux I w w)[i][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w i (Nat.lt_of_succ_lt hi) hz)) <
+        ((ccDec_aux I w w)[(ccDec_aux I w w).length - 1][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w ((ccDec_aux I w w).length - 1) (Nat.sub_one_lt_of_lt h_con) hz))) := by
+      intro i hi
+      replace hi : i < (ccDec_aux I w w).length - 1 := Nat.lt_sub_of_add_lt hi
+      replace hi : i ≤ (ccDec_aux I w w).length - 1 := Nat.le_of_succ_le hi
+      induction hi using Nat.decreasingInduction with
+      | self =>
+        replace hi : (ccDec_aux I w w).length = 0 := by
+          contrapose hi
+          simp
+          exact le_tsub_add
+        exfalso
+        exact (ccDec_aux_nonempty _ _) (List.eq_nil_iff_length_eq_zero.mpr hi)
+      | of_succ k h ih =>
+        sorry
+
     sorry
 
 lemma connected_of_lexNf_sq' {w : List α}
