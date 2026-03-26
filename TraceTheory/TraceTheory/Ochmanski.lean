@@ -651,33 +651,11 @@ lemma ccDec_aux_tail_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a ::
       simp [ccDec_aux, ht, h] at ⊢
 
 lemma ccDec_aux_tail_D' {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w))
-    (i : ℕ) (hi : i - 1 < (ccDec_aux I u w).length) :
+    (i : ℕ) (hi : i - 1 < (ccDec_aux I u w).length) (hiz : i ≠ 0) :
     (ccDec_aux I u (a :: w))[i]'(by rw [ccDec_aux_len_D h]; exact lt_add_of_tsub_lt_right hi) = (ccDec_aux I u w)[i - 1] := by
-  -- cases i with
-  by_cases hw : w = []
-  · simp [hw, ccDec_aux_conn, ccDec_aux] at h
-  simp [ccDec_aux_conn] at h
-  let t := ccDec_aux I u w
-  have ht : ccDec_aux I u w = t := rfl
-  rcases t
-  · simp [ht] at hi
-  · rename_i c_head c_tail
-    simp [ht] at h
-    have : c_head ≠ [] := by
-      have := ccDec_aux_nonempty_head I u w hw
-      rw [List.getElem_of_eq ht] at this
-      exact this
-    cases c_head with
-    | nil => simp at this
-    | cons b c_head =>
-      simp at h
-      simp [ccDec_aux, ht, h] at ⊢
-      have : ([a] :: (b :: c_head) :: c_tail)[i]'(sorry) =
-          ([a] :: (b :: c_head) :: c_tail)[i - 1 + 1]'(sorry) := by
-        sorry
-        --rw [getElem_congr _ (show i - 1 + 1 = i from Nat.sub_add_cancel (Nat.succ_le_of_lt hiz))]
-        --simp
-      simp [this]
+  cases i with
+  | zero => simp at hiz
+  | succ i => apply ccDec_aux_tail_D h i
 
 /-
 lemma ccDec'_aux_len (u w : List α) (a : α) :
@@ -738,7 +716,7 @@ lemma ccDec_aux_elem_nonempty (u w : List α) (i : ℕ) (hi : i < (ccDec_aux I u
       · rw [ccDec_aux_tail_C hab i hi (Nat.zero_lt_of_ne_zero hiz)]
         apply ih
         exact hw
-      · rw [ccDec_aux_tail_D' hab i (by rw [ccDec_aux_len_D hab] at hi; omega)]
+      · rw [ccDec_aux_tail_D' hab i (by rw [ccDec_aux_len_D hab] at hi; omega) hiz]
         apply ih
         exact hw
 
@@ -785,8 +763,8 @@ lemma ccDec_aux_infix (I : Independence α) (u w : List α) (i : ℕ) (hi : i + 
         apply List.infix_cons
         apply ih
       · simp [ccDec_aux_len_D hab] at hi
-        rw [ccDec_aux_tail_D' hab i (by omega)]
-        rw [ccDec_aux_tail_D' hab (i + 1) (by omega)]
+        rw [ccDec_aux_tail_D' hab i (by omega) hiz]
+        rw [ccDec_aux_tail_D' hab (i + 1) (by omega) (Ne.symm (Nat.zero_ne_add_one i))]
         simp
         apply List.infix_cons
         replace ih := ih (i - 1) (by omega)
@@ -955,12 +933,13 @@ lemma ccDec_aux_elem_conn (u w : List α) (hwu : w ⊆ u) (i : ℕ) (hi : i < (c
       · rw [ccDec_aux_tail_C hab]
         apply ih (List.subset_of_cons_subset hwu)
         exact Nat.zero_lt_of_ne_zero hiz
-      · rw [ccDec_aux_tail_D' hab]
+      · replace hi : i - 1 < (ccDec_aux I u w).length := by
+          rw [ccDec_aux_len_D hab] at hi
+          cases i with
+          | zero => simp at hiz
+          | succ i => exact Nat.succ_lt_succ_iff.mp hi
+        rw [ccDec_aux_tail_D' hab i hi hiz]
         apply ih (List.subset_of_cons_subset hwu)
-        rw [ccDec_aux_len_D hab] at hi
-        cases i with
-        | zero => simp at hiz
-        | succ i => exact Nat.succ_lt_succ_iff.mp hi
 
 lemma ccDec_aux_adj_head_char_indep (u w : List α) (h : 1 < (ccDec_aux I u w).length) (hw : w ≠ []) :
     ¬dependencyTransClosureInL I u
