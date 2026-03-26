@@ -466,7 +466,6 @@ lemma dependent_letters_of_connected [DecidableEq α] {u v : List α}
   have hv_trace : ⟦v⟧ ≠ (1 : Trace I) := by simpa [empty_iff]
   exact append_indep_is_disconnected ⟦u⟧ ⟦v⟧ h_indep_trace hu_trace hv_trace h_conn
 
--- TODO clean up LLM generated proof
 lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List (List α)}
     (hps_len : ps.length = n) (hqs_len : qs.length = n)
     (hpq_conn : ∀ i (hi : i < n), IsConnected I ⟦ps[i] ++ qs[i]⟧)
@@ -474,68 +473,157 @@ lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List 
     (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card ≤
     Fintype.card α := by
   let S := Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])
-
-  -- 2. Extract the dependent cross-letters for each split index
   have h_ex' : ∀ i : S, ∃ b ∈ qs[i.val.val], ∃ a ∈ ps[i.val.val], ¬ I.rel a b := by
     intro ⟨i, hi⟩
     simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-    -- Since ps[i] and qs[i] are connected and non-empty, they share a dependent pair
     have ⟨a, ha, b, hb, hrel⟩ := dependent_letters_of_connected (hpq_conn i.val i.isLt) hi.1 hi.2
     exact ⟨b, hb, a, ha, hrel⟩
-
-  -- 3. Define the mapping function f(i) = b_i
   let f : S → α := fun i => Classical.choose (h_ex' i)
   have hf_spec : ∀ i : S, f i ∈ qs[i.val.val] ∧ ∃ a ∈ ps[i.val.val], ¬ I.rel a (f i) :=
     fun i => Classical.choose_spec (h_ex' i)
-
-  -- 4. Prove f is injective (the letters b_i are pairwise distinct)
   have h_inj : Function.Injective f := by
     intro ⟨i, hi⟩ ⟨j, hj⟩ heq
     by_contra h_neq
     have h_neq_val : i.val ≠ j.val := by
-      intro h_eq_val; apply h_neq; exact Subtype.ext (Fin.ext h_eq_val)
-
-    -- Since they are distinct indices, one must be strictly less than the other
+      intro h_eq_val
+      apply h_neq
+      exact Subtype.ext (Fin.ext h_eq_val)
     rcases lt_trichotomy i.val j.val with hlt | heq_val | hgt
-    · -- Case: i < j
-      have h_indep_ij := h_indep i.val j.val i.isLt j.isLt hlt
+    · have h_indep_ij := h_indep i.val j.val i.isLt j.isLt hlt
       have h_bi_in := (hf_spec ⟨i, hi⟩).1
       rcases (hf_spec ⟨j, hj⟩).2 with ⟨aj, haj, hdep⟩
-      -- b_i must commute with a_j
       have h_rel := h_indep_ij (f ⟨i, hi⟩) h_bi_in aj haj
       have h_symm := I.symm (f ⟨i, hi⟩) aj h_rel
       rw [heq] at h_symm
-      -- But b_j does NOT commute with a_j. Contradiction.
       exact hdep h_symm
     · contradiction
-    · -- Case: j < i (Symmetric to above)
-      have h_indep_ji := h_indep j.val i.val j.isLt i.isLt hgt
+    · have h_indep_ji := h_indep j.val i.val j.isLt i.isLt hgt
       have h_bj_in := (hf_spec ⟨j, hj⟩).1
       rcases (hf_spec ⟨i, hi⟩).2 with ⟨ai, hai, hdep⟩
       have h_rel := h_indep_ji (f ⟨j, hj⟩) h_bj_in ai hai
       have h_symm := I.symm (f ⟨j, hj⟩) ai h_rel
       rw [← heq] at h_symm
       exact hdep h_symm
-
-  -- 5. Because f is injective, the cardinality of S is bounded by the alphabet
   have h_card := Fintype.card_le_of_injective f h_inj
   rw [← Fintype.card_coe S]
   exact h_card
 
-lemma compress_factorization_core {n : ℕ} {X : Language α} [DecidableEq α]
+lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
     (ps qs : List (List α))
     (hps_len : ps.length = n) (hqs_len : qs.length = n)
     (hpq_in_X : ∀ i (hi : i < n), ps[i] ++ qs[i] ∈ X)
     (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → Independent I qs[i] ps[j]) :
     ∃ xs ys : List (List α),
       xs.length = ys.length ∧
-      -- The critical bound: length is ≤ 2 * (number of splits) + 1
-      xs.length ≤ 2 * (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card + 1 ∧
-      (List.zipWith (· ++ ·) xs ys).flatten ∈ X∗ ∧
+      xs.length ≤
+        2 * (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card + 1 ∧
+      (List.zipWith (· ++ ·) xs ys).flatten ∈ traceClosure I X∗ ∧
       TraceEqv I ps.flatten xs.flatten ∧
       TraceEqv I qs.flatten ys.flatten ∧
-      ∀ (i : ℕ) (h : i + 1 < xs.length), Independent I xs[i + 1] (List.take (i + 1) ys).flatten := by
-  sorry
+      ∀ (i j : ℕ) (hi : i < ys.length) (hj : j < xs.length), i < j →
+        Independent I ys[i] xs[j] := by
+  induction n generalizing ps qs with
+  | zero =>
+    have hps : ps = [] := List.length_eq_zero_iff.mp hps_len
+    have hqs : qs = [] := List.length_eq_zero_iff.mp hqs_len
+    subst hps hqs
+    use [[]], [[]]
+    simp [TraceEqv.refl]
+    unfold traceClosure
+    use []
+    simp [TraceEqv.refl, Language.nil_mem_kstar]
+  | succ n' ih =>
+    cases ps with | nil => contradiction | cons p ps' =>
+    cases qs with | nil => contradiction | cons q qs' =>
+      have hps'_len : ps'.length = n' := by simpa using hps_len
+      have hqs'_len : qs'.length = n' := by simpa using hqs_len
+      have hpq_in_X' : ∀ i (hi : i < n'), ps'[i] ++ qs'[i] ∈ X := by
+        intro i hi
+        simpa using hpq_in_X (i + 1) (by omega)
+      have h_indep' : ∀ i j (hi : i < n') (hj : j < n'), i < j → Independent I qs'[i] ps'[j] := by
+        intro i j hi hj hlt
+        simpa using h_indep (i + 1) (j + 1) (by omega) (by omega) (by omega)
+      have ⟨xs', ys', h_len_eq, h_bound, h_zip_in, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
+        ih ps' qs' hps'_len hqs'_len hpq_in_X' h_indep'
+      by_cases h_split : p ≠ [] ∧ q ≠ []
+      · use (p :: xs'), (q :: ys')
+        and_intros
+        · simp [h_len_eq]
+        · simp only [List.length_cons]
+          have h_S_eq : Finset.univ.filter (fun (i : Fin (n' + 1)) => (p :: ps')[i.val] ≠ [] ∧ (q :: qs')[i.val] ≠ []) =
+            insert (0 : Fin (n' + 1)) ((Finset.univ.filter (fun (i : Fin n') => ps'[i.val] ≠ [] ∧ qs'[i.val] ≠ [])).image Fin.succ) := by
+            ext x
+            simp only [Finset.mem_insert, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+            cases x using Fin.cases with
+            | zero =>
+              simp only [Fin.val_zero, List.getElem_cons_zero]
+              apply iff_of_true h_split
+              left
+              trivial
+            | succ x' =>
+              simp only [Fin.val_succ, List.getElem_cons_succ]
+              have h_ne : Fin.succ x' ≠ 0 := Fin.succ_ne_zero x'
+              simp only [h_ne, false_or]
+              constructor
+              · intro h
+                exact ⟨x', h, rfl⟩
+              · rintro ⟨y, hy, h_eq⟩
+                injection h_eq with h_eq
+                simp only [Nat.add_right_cancel_iff] at h_eq
+                simp_rw [← h_eq]
+                exact hy
+          have h_card : (Finset.univ.filter (fun (i : Fin (n' + 1)) => (p :: ps')[i.val] ≠ [] ∧ (q :: qs')[i.val] ≠ [])).card =
+            (Finset.univ.filter (fun (i : Fin n') => ps'[i.val] ≠ [] ∧ qs'[i.val] ≠ [])).card + 1 := by
+            rw [h_S_eq, Finset.card_insert_of_notMem]
+            · rw [Finset.card_image_of_injective _ (Fin.succ_injective _)]
+            · intro h_mem
+              simp only [Finset.mem_image] at h_mem
+              rcases h_mem with ⟨y, _, hy_eq⟩
+              exact Fin.succ_ne_zero y hy_eq
+          rw [h_card]
+          omega
+        · simp only [List.zipWith_cons_cons, List.flatten_cons]
+          unfold traceClosure at h_zip_in ⊢
+          sorry
+        · simp only [List.flatten_cons]
+          exact TraceEqv.compat (TraceEqv.refl _) h_ps_eqv
+        · simp only [List.flatten_cons]
+          exact TraceEqv.compat (TraceEqv.refl _) h_qs_eqv
+        · intro i j hi hj hlt
+          cases i with
+          | zero =>
+            cases j with
+            | zero => contradiction
+            | succ j' =>
+              simp only [List.getElem_cons_zero, List.getElem_cons_succ]
+              have hq_ps_flat : Independent I q ps'.flatten := by
+                intro a ha b hb
+                simp only [List.mem_flatten] at hb
+                rcases hb with ⟨p_k, hp_k_in, hb_in⟩
+                rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
+                exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a ha b hb_in
+              have hq_xs_flat : Independent I q xs'.flatten :=
+                indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
+              exact indep_of_flatten j' (by simpa using hj) hq_xs_flat
+          | succ i' =>
+            cases j with
+            | zero => contradiction
+            | succ j' =>
+              simp only [List.getElem_cons_succ]
+              exact h_xs_indep i' j' (by simpa using hi) (by simpa using hj) (by omega)
+      · rcases xs' with _ | ⟨x_head, xs_tail⟩
+        · sorry
+        rcases ys' with _ | ⟨y_head, ys_tail⟩
+        · sorry
+
+        use ((p ++ x_head) :: xs_tail), ((q ++ y_head) :: ys_tail)
+
+        -- To prove the zip is in traceClosure I (X*):
+        -- 1. The new zipped head is `p ++ x_head ++ q ++ y_head`.
+        -- 2. Because `q` is independent of `x_head` (from h_indep), this is equivalent to `p ++ q ++ x_head ++ y_head`.
+        -- 3. `p ++ q` is in X, and `x_head ++ y_head` (attached to the tail) is in traceClosure I (X*) from the IH.
+        -- 4. Therefore, the whole sequence belongs to traceClosure I (X*).
+        sorry
 
 lemma group_split_factors
     {x y : List α} {X : Language α} {n : ℕ} {ps qs : List (List α)} [Fintype α] [DecidableEq α]
@@ -548,9 +636,9 @@ lemma group_split_factors
       Fintype.card α) :
     ∃ xs ys : List (List α),
       xs.length ≤ 2 * Fintype.card α + 1 ∧
-      IsValidFactorization I (X∗) x y xs ys := by
+      IsValidFactorization I X∗ x y xs ys := by
   have ⟨xs, ys, h_len_eq, h_len_bound, h_zip_in, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
-    compress_factorization_core ps qs hps_len hqs_len hpq_in_X h_indep
+    group_split_factors_aux ps qs hps_len hqs_len hpq_in_X h_indep
   use xs, ys
   constructor
   · omega
@@ -705,7 +793,6 @@ lemma connected_iterativeFactor_of_subset_lexNf {X : Language α}
   have h_w_lex : w ∈ LexNfLanguage I := lexNf_of_subword h_lex1
   have h_ww_lex : w ++ w ∈ LexNfLanguage I := lexNf_of_subword h_lex2
   exact connected_of_lexNf_sq h_w_lex h_ww_lex
-
 
 /-- Theorem 4.1 (i) => (ii) -/
 theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
