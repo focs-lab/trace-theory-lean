@@ -399,15 +399,17 @@ lemma alph_map_eq_iff_mems_eq [DecidableEq α] {t t' : Trace I} :
   rfl
 
 lemma lift_dependency_path [DecidableEq α] {t t' : Trace I} (h_mem_eq : ∀ a, a ∈ t' ↔ a ∈ t)
-    (x y : {a // a ∈ t'}) (h_path : dependencyTransClosureIn t' x y) :
-    dependencyTransClosureIn t ⟨x.1, (h_mem_eq x.1).mp x.2⟩ ⟨y.1, (h_mem_eq y.1).mp y.2⟩ := by
+    (x y : α) (h_path : dependencyTransClosureIn t' x y) :
+    dependencyTransClosureIn t x y := by
   induction h_path with
   | single h_dep =>
     apply Relation.TransGen.single
-    exact h_dep
+    have ⟨hxz, hx, hz⟩ := h_dep
+    exact ⟨hxz, (h_mem_eq x).mp hx, (h_mem_eq _).mp hz⟩
   | tail path step ih =>
     apply Relation.TransGen.tail ih
-    exact step
+    have ⟨hxz, hx, hz⟩ := step
+    exact ⟨hxz, (h_mem_eq _).mp hx, (h_mem_eq _).mp hz⟩
 
 lemma recognizable_connectedComponents {P : Set (Trace I)} [DecidableEq α] [Fintype α]
     (hP : IsRecognizable P) : IsRecognizable (connectedComponents P) := by
@@ -445,7 +447,7 @@ lemma recognizable_connectedComponents {P : Set (Trace I)} [DecidableEq α] [Fin
       rw [hP_eq, Set.mem_preimage] at hv_in_P ⊢
       rw [← h_f_mul] at hv_in_P
       exact hv_in_P
-    have h_indep_t_v : Independent' t v := by
+    have h_indep_t_v : IndependentT t v := by
       intro a b ha hb
       exact h_indep_t'_v a b ((h_mem_eq a).mpr ha) hb
     exact ⟨h_conn, h_neq_1, v, hv_in_P_t, h_indep_t_v⟩
@@ -456,7 +458,7 @@ lemma dependent_letters_of_connected [DecidableEq α] {u v : List α}
     ∃ a ∈ u, ∃ b ∈ v, ¬ I.rel a b := by
   by_contra h_all_indep
   push_neg at h_all_indep
-  have h_indep_trace : Independent' (I := I) ⟦u⟧ ⟦v⟧ := by
+  have h_indep_trace : IndependentT (I := I) ⟦u⟧ ⟦v⟧ := by
     intro a b ha hb
     change a ∈ u at ha
     change b ∈ v at hb
@@ -1359,7 +1361,7 @@ lemma connected_dep_concat {u v : List α} (hu : IsConnectedL I u) (hv : IsConne
       exact Relation.TransGen.trans haa' (Relation.TransGen.trans ha'b' hb'b)
     | inr hb => exact depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv ⟨a, ha⟩ ⟨b, hb⟩)
 
-omit [Fintype α] [LinearOrder α] [DecidableRel I.rel] in
+/- omit [Fintype α] [LinearOrder α] [DecidableRel I.rel] in
 lemma connected_dup_is_connected {w : List α} (hw : IsConnectedL I w) :
     IsConnectedL I (w ++ w) := by
   cases w with
@@ -1370,7 +1372,7 @@ lemma connected_dup_is_connected {w : List α} (hw : IsConnectedL I w) :
       intro ha
       exfalso
       exact I.irrefl a ha
-    exact connected_dep_concat hw hw h_dep
+    exact connected_dep_concat hw hw h_dep -/
 
 lemma lexNf_sq_is_lexNf {w : List α} (h : w ++ w ∈ LexNfLanguage I) :
     w ∈ LexNfLanguage I := by
@@ -1436,73 +1438,82 @@ lemma lexNf_ccDec_order {w : List α} (hw : w ∈ LexNfLanguage I) (hz : w ≠ [
     rename_i j
     exact lt_trans (ih (Nat.lt_of_succ_lt hj)) (lexNf_ccDec_adj_order hw hz j hj)
 
+lemma ccDec_aux_across_indep (I : Independence α) (u w : List α) (hi : 1 < (ccDec_aux I u w).length) (hwu : w ⊆ u) :
+    Independent I ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _)) (ccDec_aux I u w)[0] ∨
+    (Independent I ((ccDec_aux I w w).getLast (ccDec_aux_nonempty _ _) ++ (ccDec_aux I u w)[0]) (ccDec_aux I u w)[1] ∧
+    2 < (ccDec_aux I u w).length):= by
+  by_contra h
+  rw [not_or] at h
+  rcases h with ⟨h, h'⟩
+  apply h'
+  clear h'
+
+  sorry
+
+
 lemma connected_of_lexNf_sq {w : List α}
     (hw : w ∈ LexNfLanguage I)
     (hww : w ++ w ∈ LexNfLanguage I) :
     IsConnected I ⟦w⟧ := by
   rw [<- IsConnected_eq]
-  -- by_contra h_con
-  -- have h_dec_len := @ccDec_disconnected_len α I (w ++ w) (by)
-  cases w with
-  | nil => simp [IsConnectedL]
-  | cons a w' =>
-    let w := a :: w'
-    have hz : w ≠ [] := List.cons_ne_nil a w'
-    rw [show a :: w' = w from rfl] at hw hww ⊢
-    by_contra h_con
-    replace h_con := ccDec_disconnected_len _ h_con
+  -- apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hw
+  -- apply (isLexNf_iff_factorCondition _ _).mpr at hw
+  apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hww
+  apply (isLexNf_iff_factorCondition _ _).mpr at hww
 
-    have h_lt : ∀ (i : ℕ), ∀ (hi : i + 1 < (ccDec_aux I w w).length),
-        (ccDec_aux I w w)[i][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w i (Nat.lt_of_succ_lt hi) hz)) <
-        ((ccDec_aux I w w)[i + 1][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w (i + 1) hi hz))) := by
-      intro i hi
-      have h_infix := ccDec_aux_adj_infix I w w i hi
-      apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hw
-      apply (isLexNf_iff_factorCondition _ _).mpr at hw
-      replace h_infix := lexNf_infix_is_lexNf h_infix hw
-      apply (isLexNf_iff_factorCondition _ _).mp at h_infix
+  by_cases hz : w = []
+  · simp [hz, IsConnectedL]
+  by_contra h_con
+  have h_con_ww : ¬IsConnectedL I (w ++ w) := by
+    contrapose h_con
+    intro ⟨a, ha⟩ ⟨b, hb⟩
+    replace h_con := h_con ⟨a, List.mem_append_left w ha⟩ ⟨b, List.mem_append_left w hb⟩
+    exact depTrClIn_sub (List.append_subset_of_subset_of_subset (by simp) (by simp)) h_con
+  have h_dec_w_len := @ccDec_disconnected_len α I w h_con
+  have h_dec_ww_len := @ccDec_disconnected_len α I (w ++ w) h_con_ww
+  unfold ccDec at h_dec_ww_len
 
-      have h_indep : Independent I (ccDec_aux I w w)[i] (ccDec_aux I w w)[i + 1] := ccDec_aux_adj_indep w w i hi (by simp)
-
-      let t₁ := (ccDec_aux I w w)[i]
-      have ht₁ : (ccDec_aux I w w)[i] = t₁ := rfl
-      rcases t₁
-      · exfalso
-        exact (ccDec_aux_elem_nonempty _ _ _ _ hz) ht₁
-      rename_i a₁ s₁
-
-      let t₂ := (ccDec_aux I w w)[i + 1]
-      have ht₂ : (ccDec_aux I w w)[i + 1] = t₂ := rfl
-      rcases t₂
-      · exfalso
-        exact (ccDec_aux_elem_nonempty _ _ _ _ hz) ht₂
-      rename_i a₂ s₂
-
-      replace h_infix := h_infix [] s₁ s₂ a₂ a₁
-      simp [ht₁, ht₂] at h_infix h_indep
-      simp [List.getElem_of_eq ht₁, List.getElem_of_eq ht₂]
-      replace h_infix := h_infix (I.symm _ _ h_indep.1.1)
-
-      by_contra h_ge
-      have h_ne : a₁ ≠ a₂ := by
-        by_contra h_eq
-        rw [h_eq] at h_indep
-        exact (I.irrefl _) h_indep.1.1
-      have h_gt : a₂ < a₁ := by
-        simp at h_ge
-        exact Std.lt_of_le_of_ne h_ge (Ne.symm h_ne)
-
-      replace ⟨c, hcs, hac⟩ := h_infix h_gt
-      exact hac (I.symm _ _ (h_indep.2 c hcs).1)
-
-    replace h_lt : ∀ (i : ℕ), ∀ (hi : i + 1 < (ccDec_aux I w w).length),
-        (ccDec_aux I w w)[i][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w i (Nat.lt_of_succ_lt hi) hz)) <
-        ((ccDec_aux I w w)[(ccDec_aux I w w).length - 1][0]'(List.length_pos_iff.mpr (ccDec_aux_elem_nonempty w w ((ccDec_aux I w w).length - 1) (Nat.sub_one_lt_of_lt h_con) hz))) := by
-      intro i hi
-      -- exact @lexNf_ccDec_order α I _ _ _ _ _ _ i (i + 1) _ _
-      sorry
-
-    sorry
+  have h_across_indep := ccDec_aux_across_indep I w w (Nat.lt_of_succ_le h_dec_w_len) (by simp)
+  cases h_across_indep with
+  | inl h_across_indep =>
+    have h_across_infix := ccDec_across_infix I w (Nat.lt_of_succ_le h_dec_w_len)
+    replace h_across_infix : List.IsInfix
+        (((ccDec_aux I w w).getLast (ccDec_aux_nonempty _ _)) ++
+        ((ccDec_aux I w w)[0]'(ccDec_aux_zero_idx)))
+        (w ++ w) := by
+      unfold ccDec at h_across_infix
+      replace ⟨s, t, h_across_infix⟩ := h_across_infix
+      use s, (ccDec_aux I w w)[1] ++ t
+      simp only [<- List.append_assoc] at h_across_infix ⊢
+      exact h_across_infix
+    have h_across_lexNf := lexNf_infix_is_lexNf h_across_infix hww
+    have h_last_ne : (ccDec_aux I w w).getLast (ccDec_aux_nonempty _ _) ≠ [] := by
+      rw [List.getLast_eq_getElem]
+      exact ccDec_aux_elem_nonempty w w _ _ hz
+    rw [List.getLast_eq_getElem] at h_across_indep h_across_lexNf
+    have h_gt := lexNf_concat_of_indep h_across_indep h_across_lexNf
+        (ccDec_aux_elem_nonempty w w _ _ hz) (ccDec_aux_nonempty_head I w w hz)
+    have h_lt := lexNf_ccDec_order hw hz 0 ((ccDec_aux I w w).length - 1) (Nat.zero_lt_sub_of_lt h_dec_w_len)
+        (Nat.sub_one_lt_of_lt h_dec_w_len)
+    exact LT.lt.asymm h_gt h_lt
+  | inr h_across_indep =>
+    replace ⟨h_across_indep, h_dec_w_len2⟩ := h_across_indep
+    have h_across_infix := ccDec_across_infix I w (Nat.lt_of_succ_le h_dec_w_len)
+    have h_across_lexNf := lexNf_infix_is_lexNf h_across_infix hww
+    rw [List.getLast_eq_getElem] at h_across_indep h_across_lexNf
+    have h_across_ne : (ccDec I w)[(ccDec I w).length - 1] ++ (ccDec I w)[0] ≠ [] :=
+      List.append_ne_nil_of_right_ne_nil _ (ccDec_aux_nonempty_head I w w hz)
+    have h_gt := lexNf_concat_of_indep
+      h_across_indep h_across_lexNf
+      h_across_ne
+      (ccDec_aux_elem_nonempty w w 1 (Nat.lt_of_succ_le h_dec_w_len) hz)
+    have h_eq : ((ccDec_aux I w w)[(ccDec_aux I w w).length - 1] ++ (ccDec_aux I w w)[0])[0]'(List.length_pos_iff.mpr h_across_ne) =
+        ((ccDec_aux I w w)[(ccDec_aux I w w).length - 1])[0]'(ccDec_aux_elem_nonempty_len _ _ _ _ hz) := by
+      rw [List.getElem_append_left]
+    rw [h_eq] at h_gt
+    have h_lt := lexNf_ccDec_order hw hz 1 ((ccDec_aux I w w).length - 1) (Nat.lt_sub_of_add_lt h_dec_w_len2)
+        (Nat.sub_one_lt_of_lt h_dec_w_len)
+    exact LT.lt.asymm h_gt h_lt
 
 lemma connected_of_lexNf_sq' {w : List α}
     (hww : w ++ w ∈ LexNfLanguage I) :
