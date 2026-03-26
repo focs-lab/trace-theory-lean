@@ -1440,15 +1440,34 @@ lemma lexNf_ccDec_order {w : List α} (hw : w ∈ LexNfLanguage I) (hz : w ≠ [
 
 lemma ccDec_aux_across_indep (I : Independence α) (u w : List α) (hi : 1 < (ccDec_aux I u w).length) (hwu : w ⊆ u) :
     Independent I ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _)) (ccDec_aux I u w)[0] ∨
-    (Independent I ((ccDec_aux I w w).getLast (ccDec_aux_nonempty _ _) ++ (ccDec_aux I u w)[0]) (ccDec_aux I u w)[1] ∧
-    2 < (ccDec_aux I u w).length):= by
+    (Independent I ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _) ++ (ccDec_aux I u w)[0]) (ccDec_aux I u w)[1] ∧
+    2 < (ccDec_aux I u w).length) := by
+  by_cases hw : w = []
+  · simp [hw, ccDec_aux]
   by_contra h
   rw [not_or] at h
-  rcases h with ⟨h, h'⟩
-  apply h'
-  clear h'
+  rcases h with ⟨hs, hl⟩
+  apply hl
+  clear hl
 
-  sorry
+  apply And.intro
+  · by_contra hl
+    apply @ccDec_aux_adj_char_indep α I u w 0 (Nat.add_lt_of_lt_sub' hi) hw
+    have hs' : Independent I (ccDec_aux I u w)[0] (ccDec_aux I u w)[1] := ccDec_aux_adj_indep u w 0 _ hwu
+    simp at hl hs ⊢
+    have ⟨a, ha, b, hb, hab⟩ := hl
+    have ⟨c, hc, d, hd, hcd⟩ := hs
+    clear hl hs
+    cases ha with
+    | inl ha => sorry
+    | inr ha => sorry
+  · by_contra hl
+    simp at hl
+    replace hi := Nat.le_antisymm hl hi
+    replace hi : (ccDec_aux I u w).length - 1 = 1 := Eq.symm (Nat.eq_sub_of_add_eq' (Eq.symm hi))
+    have hs' : Independent I (ccDec_aux I u w)[0] (ccDec_aux I u w)[1] := ccDec_aux_adj_indep u w 0 _ hwu
+    rw [List.getLast_eq_getElem, getElem_congr rfl hi _] at hs
+    exact hs (independent_symm hs')
 
 
 lemma connected_of_lexNf_sq {w : List α}
