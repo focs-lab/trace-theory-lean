@@ -1,18 +1,17 @@
-import Mathlib.Computability.Language
-import Mathlib.Data.Fin.Basic
-import Mathlib.Data.Fintype.Basic
-import Mathlib.Logic.Relation
+import Mathlib.Data.Fintype.Sum
+import Mathlib.Order.WellFounded
 import Mathlib.Tactic.FinCases
-import TraceTheory.Basic
 import TraceTheory.DependenceMorphism
 
-open TraceTheory
+open List
+
+namespace TraceTheory
 
 variable {α : Type*} {D : Dependence α}
 
 variable (D) in
 /-- A `DependenceGraph` over `D` is a triple $\gamma=(V,R,\varphi)$ where $V$ is a finite set,
-$R\subseteq V\times V$ and $\varphi:V\to \Sigma$ is a labeling of the vertices.-/
+  $R\subseteq V\times V$ and $\varphi:V\to \Sigma$ is a labeling of the vertices.-/
 structure DependenceGraph where
   /-- The finite set of vertices of the graph. -/
   V : Type
@@ -46,143 +45,13 @@ structure Iso (γ₁ γ₂: DependenceGraph D) where
 instance (γ₁ γ₂ : DependenceGraph D) : CoeFun (γ₁.Iso γ₂) (fun _ => γ₁.V → γ₂.V) where
   coe f := f.toEquiv.toFun
 
-section EdgeSubset
-
-variable {V : Type} [Fintype V]
-
-/-- Subset relation for arcs. -/
-def RelSubset (R₁ R₂ : V → V → Prop) : Prop :=
-  ∀ v₁ v₂, R₁ v₁ v₂ → R₂ v₁ v₂
-
-/-- Notation for subset of arcs. -/
-notation:50 R₁ " ⊆ " R₂ => RelSubset R₁ R₂
-
-/-- An auxiliary relation on `Fin 2` used to construct a counterexample. -/
-def counterexample_D_rel : Fin 2 → Fin 2 → Prop
-  | 0, 0 => True
-  | 0, 1 => True
-  | 1, 0 => True
-  | 1, 1 => True
-
-/-- A specific dependence relation on `Fin 2` (full relation) used for a counterexample. -/
-def D₁ : Dependence (Fin 2) where
-  rel := counterexample_D_rel
-  refl := by
-    intro a
-    fin_cases a <;> simp [counterexample_D_rel]
-  symm := by
-    intro a b h
-    fin_cases a <;> fin_cases b <;> simp [counterexample_D_rel]
-
-/-- A copy of `D₁` used for a counterexample. -/
-def D₂ := D₁
-
-/-- Identity labeling function for the counterexample. -/
-def φ' : Fin 2 → Fin 2 := id
-
-/-- A specific edge relation (0 -> 1) used for the counterexample. -/
-def R₁ : Fin 2 → Fin 2 → Prop
-  | 0, 1 => True
-  | _, _ => False
-
-/-- A specific edge relation (1 -> 0) used for the counterexample. -/
-def R₂ : Fin 2 → Fin 2 → Prop
-  | 1, 0 => True
-  | _, _ => False
-
--- Falsity of Proposition (1.4.2)
-lemma not_edge_subset_of_dep_subset :
-  ¬ (∀ {V α : Type} [Fintype V] (φ : V → α) (R₁ R₂ : V → V → Prop) (D₁ D₂ : Dependence α),
-    (∀ v, ¬ Relation.TransGen R₁ v v) →
-    (∀ v₁ v₂, R₁ v₁ v₂ ∨ R₁ v₂ v₁ ∨ v₁ = v₂ ↔ D₁.rel (φ v₁) (φ v₂)) →
-    (∀ v, ¬ Relation.TransGen R₂ v v) →
-    (∀ v₁ v₂, R₂ v₁ v₂ ∨ R₂ v₂ v₁ ∨ v₁ = v₂ ↔ D₂.rel (φ v₁) (φ v₂)) →
-    (D₁ ⊆ D₂) →
-    (R₁ ⊆ R₂)) := by
-  intro h
-  have hce := h φ' R₁ R₂ D₁ D₂
-  have hR₁ : ∀ u, ¬ Relation.TransGen R₁ 1 u := by
-    intro u hu
-    induction hu with
-    | single h_step =>
-      rename_i u
-      simp [R₁] at h_step
-    | tail h_before h_step ih =>
-      exact ih
-  have hR₂ : ∀ u, ¬ Relation.TransGen R₂ 0 u := by
-    intro u hu
-    induction hu with
-    | single h_step =>
-      rename_i u
-      simp [R₂] at h_step
-    | tail h_before h_step ih =>
-      exact ih
-  have h_acyclic₁ : ∀ v, ¬ Relation.TransGen R₁ v v := by
-    intro v
-    fin_cases v
-    · intro hv
-      cases hv with
-      | single h_step =>
-        simp [R₁] at h_step
-      | tail h_before h_step =>
-        rename_i u
-        fin_cases u <;> simp [R₁] at h_step
-    · intro hv
-      cases hv with
-      | single h_step =>
-        simp [R₁] at h_step
-      | tail h_before h_step =>
-        rename_i u
-        simp at h_before
-        exact hR₁ u h_before
-  have h_dconn₁ : ∀ v₁ v₂, R₁ v₁ v₂ ∨ R₁ v₂ v₁ ∨ v₁ = v₂ ↔ D₁.rel (φ' v₁) (φ' v₂) := by
-    intro v₁ v₂
-    fin_cases v₁ <;> fin_cases v₂
-    all_goals (
-      dsimp [D₁, counterexample_D_rel, φ', R₁]
-      simp
-    )
-  have h_acyclic₂ : ∀ v, ¬ Relation.TransGen R₂ v v := by
-    intro v
-    fin_cases v
-    · intro hv
-      cases hv with
-      | single h_step =>
-        simp [R₂] at h_step
-      | tail h_before h_step =>
-        rename_i u
-        simp at h_before
-        exact hR₂ u h_before
-    · intro hv
-      cases hv with
-      | single h_step =>
-        simp [R₂] at h_step
-      | tail h_before h_step =>
-        rename_i u
-        fin_cases u <;> simp [R₂] at h_step
-  have h_dconn₂ : ∀ v₁ v₂, R₂ v₁ v₂ ∨ R₂ v₂ v₁ ∨ v₁ = v₂ ↔ D₂.rel (φ' v₁) (φ' v₂) := by
-    intro v₁ v₂
-    fin_cases v₁ <;> fin_cases v₂
-    all_goals (
-      dsimp [D₂, D₁, counterexample_D_rel, φ', R₁, R₂]
-      simp
-    )
-  have h_subset : D₁ ⊆ D₂ := by
-    intro a b
-    simp [D₂]
-  replace hce := hce h_acyclic₁ h_dconn₁ h_acyclic₂ h_dconn₂ h_subset
-  replace hce := hce 0 1
-  simp [R₁, R₂] at hce
-
-end EdgeSubset
-
 instance (γ : DependenceGraph D) : Fintype γ.V := γ.fintype
 
 -- Proposition (1.4.4)
 /-- The composition of two dependence graphs `γ₁` and `γ₂` over dependence `D`.
-The vertex set is the disjoint union of `γ₁.V` and `γ₂.V`.
-Arcs are preserved within the original graphs, and new arcs are added from `γ₁` to `γ₂`
-whenever the labels of the vertices are dependent in `D`. -/
+  The vertex set is the disjoint union of `γ₁.V` and `γ₂.V`.
+  Arcs are preserved within the original graphs, and new arcs are added from `γ₁` to `γ₂`
+  whenever the labels of the vertices are dependent in `D`. -/
 def compose (γ₁ γ₂ : DependenceGraph D) : DependenceGraph D :=
   let Vcomp := γ₁.V ⊕ γ₂.V
   let Rcomp := fun u v =>
@@ -331,13 +200,13 @@ theorem isomorphic_trans {γ₁ γ₂ γ₃ : DependenceGraph D} (h₁ : γ₁ �
   }
 
 /-- The setoid structure on graphs defined by the graph isomorphism equivalence relation over `D`.
-This serves as the basis for constructing the quotient type `GraphMonoid`.-/
+  This serves as the basis for constructing the quotient type `DGraph`.-/
 instance isomorphicSetoid (D : Dependence α) : Setoid (DependenceGraph D) where
   r := Isomorphic
   iseqv := ⟨isomorphic_refl, isomorphic_symm, isomorphic_trans⟩
 
 /-- The algebra of dependence graphs modulo isomorphism with composition. -/
-def GraphMonoid (D : Dependence α) := Quotient (isomorphicSetoid D)
+def DGraph (D : Dependence α) := Quotient (isomorphicSetoid D)
 
 /-- The empty dependence graph, acting as the identity element for graph composition. -/
 def emptyGraph (D : Dependence α) : DependenceGraph D where
@@ -348,8 +217,8 @@ def emptyGraph (D : Dependence α) : DependenceGraph D where
   acyclic := by simp
   d_conn := by simp
 
-/-- The identity element of the `GraphMonoid`, represented by the class of the empty graph. -/
-def one (D : Dependence α) : GraphMonoid D :=
+/-- The identity element of the `Graph`, represented by the class of the empty graph. -/
+def one (D : Dependence α) : DGraph D :=
   Quotient.mk (isomorphicSetoid D) (emptyGraph D)
 
 theorem compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
@@ -372,8 +241,8 @@ theorem compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
     · rfl
     . rw [h₂.some.preserves_arcs']
 
-/-- Multiplication in the `GraphMonoid`, induced by the `compose` operation on dependence graphs. -/
-def mul (D : Dependence α) : GraphMonoid D → GraphMonoid D → GraphMonoid D :=
+/-- Multiplication in the `Graph`, induced by the `compose` operation on dependence graphs. -/
+def mul (D : Dependence α) : DGraph D → DGraph D → DGraph D :=
   Quotient.lift₂
     (fun γ₁ γ₂ => ⟦compose γ₁ γ₂⟧)
     (by
@@ -450,8 +319,7 @@ theorem compose_empty_iso (γ : DependenceGraph D) :
     · cases v₁
     · cases v₁
 
--- Theorem (1.4.5)
-instance : Monoid (GraphMonoid D) where
+instance : Monoid (DGraph D) where
   mul := mul D
   one := one D
   mul_assoc := by
@@ -486,9 +354,9 @@ def singletonGraph (a : α) : DependenceGraph D where
 
 variable (D) in
 /-- Constructs the canonical dependence graph corresponding to a word `w`.
-Defined by folding `compose` over the list, starting with the empty graph. -/
+  Defined by folding `compose` over the list, starting with the empty graph. -/
 def fromString (w : List α) : DependenceGraph D :=
-  List.foldl (fun γ a => compose γ (singletonGraph D a)) (emptyGraph D) w
+  w.foldl (fun γ a => compose γ (singletonGraph D a)) (emptyGraph D)
 
 /-- A vertex is a sink if it has no outgoing edges. -/
 def IsSink (γ : DependenceGraph D) (v : γ.V) : Prop :=
@@ -525,7 +393,7 @@ theorem exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty 
   exact hv hw
 
 /-- Removes a vertex `v` from the dependence graph `γ`,
-returning the induced subgraph on $V \setminus \{v\}$. -/
+  returning the induced subgraph on $V \setminus \{v\}$. -/
 noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceGraph D where
   V := {u : γ.V // u ≠ v}
   fintype := Fintype.ofFinite {u : γ.V // u ≠ v}
@@ -553,9 +421,8 @@ theorem fromString_empty : fromString D [] = emptyGraph D := by rfl
 theorem fromString_concat (w : List α) (a : α) :
     fromString D (w ++ [a]) = compose (fromString D w) (singletonGraph D a) := by
   dsimp [fromString]
-  rw [List.foldl_concat]
+  rw [foldl_concat]
 
--- Proposition (1.4.6)
 theorem fromString_surjective :
     ∀ (γ : DependenceGraph D), ∃ (w : List α), fromString D w ≃g γ := by
   intro γ
@@ -635,12 +502,12 @@ theorem fromString_surjective :
 
 theorem fromString_append_iso_compose (w₁ w₂ : List α) :
     fromString D (w₁ ++ w₂) ≃g compose (fromString D w₁) (fromString D w₂) := by
-  induction w₂ using List.reverseRecOn with
+  induction w₂ using reverseRecOn with
   | nil =>
-    simp only [List.append_nil, fromString_empty]
+    simp only [append_nil, fromString_empty]
     exact isomorphic_symm (compose_empty_iso (fromString D w₁))
   | append_singleton w' a ih =>
-    rw [← List.append_assoc, fromString_concat, fromString_concat]
+    rw [← append_assoc, fromString_concat, fromString_concat]
     apply isomorphic_trans (compose_congr ih (isomorphic_refl (singletonGraph D a)))
     exact compose_assoc_iso _ _ _
 
@@ -657,21 +524,21 @@ theorem card_compose_eq_sum (γ₁ γ₂ : DependenceGraph D) :
 
 theorem card_fromString_eq_length (w : List α) :
     Fintype.card (fromString D w).V = w.length := by
-  induction w using List.reverseRecOn with
+  induction w using reverseRecOn with
   | nil =>
     simp [fromString, emptyGraph]
   | append_singleton w' a ih =>
     rw [fromString_concat, card_compose_eq_sum, ih]
     dsimp [singletonGraph]
-    simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
+    simp only [length_append, length_cons, length_nil, zero_add]
 
 theorem fromString_length_eq_of_iso {w₁ w₂ : List α} (h : fromString D w₁ ≃g fromString D w₂) :
     w₁.length = w₂.length := by
   rw [← card_fromString_eq_length, ← card_fromString_eq_length]
   exact card_eq_of_iso h
 
-/-- The canonical homomorphism from the free monoid of strings to the `GraphMonoid`. -/
-def mk' : List α →* GraphMonoid D where
+/-- The canonical homomorphism from the free monoid of strings to the `DGraph` monoid. -/
+def mk' : List α →* DGraph D where
   toFun := fun w => ⟦fromString D w⟧
   map_one' := by rfl
   map_mul' := by
@@ -775,7 +642,7 @@ theorem removeVertex_sink_iso_cancelRight [DecidableEq α]
     (h_sink : IsSink (fromString D w) sink)
     (h_label : (fromString D w).φ sink = a) :
     removeVertex (fromString D w) sink ≃g fromString D (w ÷ a) := by
-  induction w using List.reverseRecOn with
+  induction w using reverseRecOn with
   | nil =>
     dsimp [fromString, emptyGraph] at sink
     contradiction
@@ -826,19 +693,18 @@ theorem removeVertex_sink_iso_cancelRight [DecidableEq α]
       apply isomorphic_trans (removeVertex_compose_inl_iso u)
       exact compose_congr h_iso (isomorphic_refl _)
 
--- Proposition (1.4.7)
 /-- The homomorphism from the free monoid of strings onto the graph monoid defined as
-$\phi(w)=\langle w\rangle$ is a dependence morphism. -/
+  $\phi(w)=\langle w\rangle$ is a dependence morphism. -/
 def dependenceGraphDependenceMorphism [DecidableEq α] :
-    DependenceMorphism (inducedIndependence D) (GraphMonoid D) where
+    DependenceMorphism (inducedIndependence D) (DGraph D) where
   toFun := mk'
   A1 := by
     intro w hw
     replace hw := Quotient.exact hw
     change fromString D w ≈ fromString D [] at hw
     replace hw := fromString_length_eq_of_iso hw
-    rw [List.length_nil] at hw
-    exact List.length_eq_zero_iff.mp hw
+    rw [length_nil] at hw
+    exact length_eq_zero_iff.mp hw
   A2 := by
     intro a b h_indep
     apply Quotient.sound
@@ -930,10 +796,9 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
       dsimp [compose, singletonGraph] at h_label_a
       exact hab (Eq.symm h_label_a)
 
--- Theorem (1.4.8)
-/-- The trace monoid and `GraphMonoid` are isomorphic. -/
-noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
-    Trace (inducedIndependence D) ≃* GraphMonoid D := by
+/-- The trace monoid and `DGraph` are isomorphic. -/
+noncomputable def traceMonoidIsoDGraph [DecidableEq α] :
+    Trace (inducedIndependence D) ≃* DGraph D := by
   apply dependenceMorphismIso
     traceDependenceMorphism
     Quotient.mk_surjective
@@ -950,3 +815,5 @@ noncomputable def traceMonoidIsoGraphMonoid [DecidableEq α] :
     )
 
 end DependenceGraph
+
+end TraceTheory

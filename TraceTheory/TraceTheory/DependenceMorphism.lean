@@ -2,17 +2,18 @@ import TraceTheory.Basic
 
 namespace TraceTheory
 
+open List Trace
+
 variable {α : Type*} {M N : Type*} {I : Independence α} [DecidableEq α] [Monoid M] [Monoid N]
 
 /-- A dependence morphism is any homomophism from the free monoid of strings onto another monoid
-such that:
+  such that:
 
-- $\phi(w)=\phi(\epsilon) \implies w = \epsilon$
-- $(a,b)\in I \implies \phi(ab)=\phi(ba)$
-- $\phi(ua)=\phi(v) \implies \phi(u)=\phi(v\div a)$
-- $\phi(ua)=\phi(vb) \wedge a \neq b \implies (a,b)\in I$
+  - $\phi(w)=\phi(\epsilon) \implies w = \epsilon$
+  - $(a,b)\in I \implies \phi(ab)=\phi(ba)$
+  - $\phi(ua)=\phi(v) \implies \phi(u)=\phi(v\div a)$
+  - $\phi(ua)=\phi(vb) \wedge a \neq b \implies (a,b)\in I$
 -/
-@[ext]
 structure DependenceMorphism (I : Independence α) (M : Type*) [Monoid M] where
   /-- The underlying homomophism from the free monoid of strings to another monoid `M`. -/
   toFun : List α →* M
@@ -33,9 +34,9 @@ theorem DependenceMorphism.map_append {I : Independence α} {M : Type*} [Monoid 
   ϕ.toFun.map_mul u v
 
 /-- The natural homomorphism from the free monoid of strings to the trace monoid
-is a dependence morphism. -/
+  is a dependence morphism. -/
 def traceDependenceMorphism : DependenceMorphism I (Trace I) where
-  toFun := mk'
+  toFun := mk' I
   A1 := by
     intro w hw
     replace hw := Quotient.exact hw
@@ -109,7 +110,7 @@ theorem image_eq_of_image_eq
         rw [ψ.A2 h_indep]
 
 /-- Two monoids `M` and `N` are isomorphic given surjective dependence morphisms w.r.t. the
-same dependency into them. -/
+  same dependency into them. -/
 noncomputable def dependenceMorphismIso
     (ϕ : DependenceMorphism I M) (hϕ_surj : Function.Surjective ϕ.toFun)
     (ψ : DependenceMorphism I N) (hψ_surj : Function.Surjective ψ.toFun) :
