@@ -1438,6 +1438,11 @@ lemma lexNf_ccDec_order {w : List α} (hw : w ∈ LexNfLanguage I) (hz : w ≠ [
     rename_i j
     exact lt_trans (ih (Nat.lt_of_succ_lt hj)) (lexNf_ccDec_adj_order hw hz j hj)
 
+instance {I : Independence α} {u : List α} :
+    Trans (dependencyTransClosureInL I u) (dependencyTransClosureInL I u) (dependencyTransClosureInL I u) where
+  trans := Relation.TransGen.trans
+
+omit [Fintype α] [LinearOrder α] in
 lemma ccDec_aux_across_indep (I : Independence α) (u w : List α) (hi : 1 < (ccDec_aux I u w).length) (hwu : w ⊆ u) :
     Independent I ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _)) (ccDec_aux I u w)[0] ∨
     (Independent I ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _) ++ (ccDec_aux I u w)[0]) (ccDec_aux I u w)[1] ∧
@@ -1453,14 +1458,46 @@ lemma ccDec_aux_across_indep (I : Independence α) (u w : List α) (hi : 1 < (cc
   apply And.intro
   · by_contra hl
     apply @ccDec_aux_adj_char_indep α I u w 0 (Nat.add_lt_of_lt_sub' hi) hw
-    have hs' : Independent I (ccDec_aux I u w)[0] (ccDec_aux I u w)[1] := ccDec_aux_adj_indep u w 0 _ hwu
     simp at hl hs ⊢
     have ⟨a, ha, b, hb, hab⟩ := hl
     have ⟨c, hc, d, hd, hcd⟩ := hs
     clear hl hs
     cases ha with
-    | inl ha => sorry
-    | inr ha => sorry
+    | inl ha =>
+      calc
+        dependencyTransClosureInL I u ((ccDec_aux I u w)[0].getLast (ccDec_aux_nonempty_head I u w hw)) d :=
+          ccDec_aux_elem_conn u w hwu _ _ _ _ (List.getLast_mem _) hd
+        dependencyTransClosureInL I u d c := by
+          apply Relation.TransGen.single
+          use fun h => hcd (I.symm _ _ h)
+          apply And.intro
+          · exact hwu (List.IsInfix.subset (ccDec_aux_infix _ _ _ _ _) hd)
+          · rw [List.getLast_eq_getElem _] at hc
+            exact hwu (List.IsInfix.subset (ccDec_aux_infix _ _ _ _ _) hc)
+        dependencyTransClosureInL I u c a := by
+          rw [List.getLast_eq_getElem _] at ha hc
+          exact ccDec_aux_elem_conn u w hwu _ _ _ _ hc ha
+        dependencyTransClosureInL I u a b := by
+          apply Relation.TransGen.single
+          use hab
+          apply And.intro
+          · rw [List.getLast_eq_getElem _] at ha
+            exact hwu (List.IsInfix.subset (ccDec_aux_infix _ _ _ _ _) ha)
+          · exact hwu (List.IsInfix.subset (ccDec_aux_infix _ _ _ _ _) hb)
+        dependencyTransClosureInL I u b ((ccDec_aux I u w)[1][0]'(ccDec_aux_elem_nonempty_len u w 1 hi hw)) :=
+          ccDec_aux_elem_conn u w hwu _ _ _ _ hb (List.getElem_mem _)
+    | inr ha =>
+      calc
+        dependencyTransClosureInL I u ((ccDec_aux I u w)[0].getLast (ccDec_aux_nonempty_head I u w hw)) a :=
+          ccDec_aux_elem_conn u w hwu _ _ _ _ (List.getLast_mem _) ha
+        dependencyTransClosureInL I u a b := by
+          apply Relation.TransGen.single
+          use hab
+          apply And.intro
+          · exact hwu (List.IsInfix.subset (ccDec_aux_infix _ _ _ _ _) ha)
+          · exact hwu (List.IsInfix.subset (ccDec_aux_infix _ _ _ _ _) hb)
+        dependencyTransClosureInL I u b ((ccDec_aux I u w)[1][0]'(ccDec_aux_elem_nonempty_len u w 1 hi hw)) :=
+          ccDec_aux_elem_conn u w hwu _ _ _ _ hb (List.getElem_mem _)
   · by_contra hl
     simp at hl
     replace hi := Nat.le_antisymm hl hi
