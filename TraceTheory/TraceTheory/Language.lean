@@ -13,13 +13,13 @@ section LexNf
 variable {α : Type*} [LinearOrder α]
 
 /-- Lexicographic Normal Form.
-A word x is in normal form if it is minimal among all words equivalent to it. -/
+  A word x is in normal form if it is minimal among all words equivalent to it. -/
 def IsLexNf (I : Independence α) (x : List α) : Prop :=
   ∀ w, TraceEqv I x w → x ≤ w
 
 /-- The condition to be in Lexicographic Normal Form.
-For all factorizations x = ybuaz, where (a, b) ∈ I, and a < b,
-there exists a letter of u which does not commute with a. -/
+  For all factorizations x = ybuaz, where (a, b) ∈ I, and a < b,
+  there exists a letter of u which does not commute with a. -/
 def SatisfiesFactorCondition (I : Independence α) (x : List α) : Prop :=
   ∀ (y u z : List α) (a b : α),
     x = y ++ [b] ++ u ++ [a] ++ z →
