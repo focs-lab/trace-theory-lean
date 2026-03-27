@@ -289,6 +289,11 @@ theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
     rcases h y u z a b hx h_indep hlt with ⟨c, hc_mem, hc_not_indep⟩
     exact hc_not_indep (h_all_indep c hc_mem)
 
+theorem isLexNf_iff_mem_lexNfLanguage {x : List α} :
+    IsLexNf I x ↔ x ∈ LexNfLanguage I := by
+  rw [mem_lexNfLanguage_iff_factorCondition]
+  apply isLexNf_iff_factorCondition
+
 omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
 lemma perm_of_traceEqv {w x : List α} (h : TraceEqv I w x) : w.Perm x := by
   induction h with
