@@ -5,7 +5,7 @@ open List
 
 variable {α : Type*} [DecidableEq α]
 
-namespace TraceTheory
+namespace List
 
 /-- The projection of a string onto an alpabet. Removes all symbols not in the Finset.-/
 def proj (S : Finset α) (w : List α) : List α := w.filter (· ∈ S)
@@ -115,4 +115,4 @@ theorem exists_decomp_of_lt_of_len_eq {w x : List α} [LinearOrder α]
         use a :: p', a', b', w'', x''
         simp [hw', hx', hlt']
 
-end TraceTheory
+end List

@@ -1,4 +1,5 @@
 import TraceTheory.Defs
+import TraceTheory.List
 
 open List
 
@@ -36,7 +37,7 @@ theorem reverse_eqv_of_eqv {u v : List α} (h : TraceEqv I u v) :
 
 /-- The projection rule. -/
 theorem proj_eqv_of_eqv {u v : List α} {S : Finset α} [DecidableEq α] (h : TraceEqv I u v) :
-    TraceEqv I (proj S u) (proj S v) := by
+    TraceEqv I (u.proj S) (v.proj S) := by
   induction h with
   | swap a b h_indep =>
     by_cases ha : a ∈ S <;> by_cases hb : b ∈ S <;> simp [proj, ha, hb]
@@ -53,7 +54,7 @@ theorem proj_eqv_of_eqv {u v : List α} {S : Finset α} [DecidableEq α] (h : Tr
 theorem proj_eq_of_eqv {u v : List α} [DecidableEq α]
     (D : Dependence α) (h : TraceEqv (inducedIndependence D) u v)
     (a b : α) (h_dep : D.rel a b) :
-    proj {a, b} u = proj {a, b} v := by
+    u.proj {a, b} = v.proj {a, b} := by
   induction h with
   | swap a' b' h_indep =>
     dsimp [proj]
@@ -327,6 +328,21 @@ theorem indep_of_indep_append_right {u v w: List α} (h : Independent I w (u ++ 
     right
     exact hb
 
+theorem comm_append_of_indep {w₁ w₂ : List α} (h : Independent I w₁ w₂) :
+    TraceEqv I (w₁ ++ w₂) (w₂ ++ w₁) := by
+  induction w₁ using reverseRecOn with
+  | nil =>
+    rw [nil_append, append_nil]
+    exact TraceEqv.refl _
+  | append_singleton w' a ih =>
+    replace h := indep_of_indep_append_right (independent_symm h)
+    have ha := comm_singleton_of_indep (independent_symm h.right)
+    have hw'a := ((TraceEqv.refl w').compat ha).symm
+    rw [← append_assoc, ← append_assoc] at hw'a
+    apply hw'a.trans
+    rw [← append_assoc]
+    exact (ih (independent_symm h.left)).compat (TraceEqv.refl [a])
+
 theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v) (x ++ y)) :
     ∃ z₁ z₂ z₃ z₄, Independent I z₂ z₃
     ∧ TraceEqv I u (z₁ ++ z₂) ∧ TraceEqv I v (z₃ ++ z₄)
@@ -391,7 +407,7 @@ theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v)
 
 theorem projection_lemma {u v : List α} [DecidableEq α] (D : Dependence α) :
     TraceEqv (inducedIndependence D) u v ↔
-    ∀ a b, D.rel a b → proj {a, b} u = proj {a, b} v := by
+    ∀ a b, D.rel a b → u.proj {a, b} = v.proj {a, b} := by
   constructor
   · apply proj_eq_of_eqv
   · intro h
@@ -486,10 +502,12 @@ theorem projection_lemma {u v : List α} [DecidableEq α] (D : Dependence α) :
         simp
         exact h_proj
 
+namespace Trace
+
 theorem exists_gcp {u v w : List α} [DecidableEq α]
-    (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
-    ∃ g, isPrefix I ⟦g⟧ ⟦u⟧ ∧ isPrefix I ⟦g⟧ ⟦v⟧
-    ∧ (∀ g', isPrefix I ⟦g'⟧ ⟦u⟧ → isPrefix I ⟦g'⟧ ⟦v⟧ → isPrefix I ⟦g'⟧ ⟦g⟧) := by
+    (hu : IsPrefix I ⟦u⟧ ⟦w⟧) (hv : IsPrefix I ⟦v⟧ ⟦w⟧) :
+    ∃ g, IsPrefix I ⟦g⟧ ⟦u⟧ ∧ IsPrefix I ⟦g⟧ ⟦v⟧
+    ∧ (∀ g', IsPrefix I ⟦g'⟧ ⟦u⟧ → IsPrefix I ⟦g'⟧ ⟦v⟧ → IsPrefix I ⟦g'⟧ ⟦g⟧) := by
   have ⟨u', hu'⟩ := hu
   have ⟨v', hv'⟩ := hv
   simp at hu' hv'
@@ -536,25 +554,10 @@ theorem exists_gcp {u v w : List α} [DecidableEq α]
     apply Quotient.sound
     exact (hy_g'.compat (TraceEqv.refl y₃)).trans hy_z₁.symm
 
-theorem comm_append_of_indep {w₁ w₂ : List α} (h : Independent I w₁ w₂) :
-    TraceEqv I (w₁ ++ w₂) (w₂ ++ w₁) := by
-  induction w₁ using reverseRecOn with
-  | nil =>
-    rw [nil_append, append_nil]
-    exact TraceEqv.refl _
-  | append_singleton w' a ih =>
-    replace h := indep_of_indep_append_right (independent_symm h)
-    have ha := comm_singleton_of_indep (independent_symm h.right)
-    have hw'a := ((TraceEqv.refl w').compat ha).symm
-    rw [← append_assoc, ← append_assoc] at hw'a
-    apply hw'a.trans
-    rw [← append_assoc]
-    exact (ih (independent_symm h.left)).compat (TraceEqv.refl [a])
-
 theorem exists_lcd {u v w : List α} [DecidableEq α]
-    (hu : isPrefix I ⟦u⟧ ⟦w⟧) (hv : isPrefix I ⟦v⟧ ⟦w⟧) :
-    ∃ d, isPrefix I ⟦u⟧ ⟦d⟧ ∧ isPrefix I ⟦v⟧ ⟦d⟧
-    ∧ (∀ d', isPrefix I ⟦u⟧ ⟦d'⟧ → isPrefix I ⟦v⟧ ⟦d'⟧ → isPrefix I ⟦d⟧ ⟦d'⟧) := by
+    (hu : IsPrefix I ⟦u⟧ ⟦w⟧) (hv : IsPrefix I ⟦v⟧ ⟦w⟧) :
+    ∃ d, IsPrefix I ⟦u⟧ ⟦d⟧ ∧ IsPrefix I ⟦v⟧ ⟦d⟧
+    ∧ (∀ d', IsPrefix I ⟦u⟧ ⟦d'⟧ → IsPrefix I ⟦v⟧ ⟦d'⟧ → IsPrefix I ⟦d⟧ ⟦d'⟧) := by
   have ⟨u', hu'⟩ := hu
   have ⟨v', hv'⟩ := hv
   simp at hu' hv'
@@ -606,5 +609,7 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
     use y₄
     apply Quotient.sound
     exact hd'.symm
+
+end Trace
 
 end TraceTheory
