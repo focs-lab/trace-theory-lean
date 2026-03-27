@@ -343,6 +343,30 @@ theorem comm_append_of_indep {w₁ w₂ : List α} (h : Independent I w₁ w₂)
     rw [← append_assoc]
     exact (ih (independent_symm h.left)).compat (TraceEqv.refl [a])
 
+lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α} [DecidableEq α]
+    (I : Independence α) (h : TraceEqv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
+    I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ Independent I [a] u := by
+  have h_rev := reverse_eqv_of_eqv h
+  simp at h_rev
+  have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_exists_of_eqv_of_tail_ne h_rev hne
+  constructor
+  · exact h_indep
+  · have ha := (mem_iff_mem a hx_rev).mpr
+    simp at ha
+    have ⟨u, v, hx⟩ := leftmost_occurrence ha
+    use u, v
+    constructor
+    · exact hx.left
+    · rw [hx.left] at hx_rev
+      simp only [reverse_append, reverse_cons, reverse_nil, nil_append] at hx_rev
+      rw [← List.append_assoc] at hx_rev
+      have h_mem_rev : a ∉ u.reverse := by
+        rw [mem_reverse]
+        exact hx.right
+      have h_indep_rev := indep_of_comm_singleton hx_rev h_mem_rev
+      simp [mem_reverse] at h_indep_rev ⊢
+      exact h_indep_rev
+
 theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v) (x ++ y)) :
     ∃ z₁ z₂ z₃ z₄, Independent I z₂ z₃
     ∧ TraceEqv I u (z₁ ++ z₂) ∧ TraceEqv I v (z₃ ++ z₄)

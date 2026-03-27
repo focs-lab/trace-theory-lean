@@ -1,10 +1,11 @@
 import Mathlib.Data.Finset.Prod
 import TraceTheory.DependenceGraph
 
+open List
 
 namespace TraceTheory
 
-variable {α : Type} [DecidableEq α]
+variable {α : Type*} [DecidableEq α]
 
 lemma count_proj (S : Finset α) (w : List α) (a : α) :
     (proj S w).count a = if a ∈ S then w.count a else 0 := by
@@ -20,22 +21,15 @@ lemma count_proj (S : Finset α) (w : List α) (a : α) :
       · by_cases hb : b ∈ S
         all_goals simp [proj, hb, List.count_cons_of_ne hab, <- ih]
 
-end TraceTheory
-
-
 namespace DependenceGraph
 
-open TraceTheory
-variable {α : Type} {D : Dependence α} [DecidableEq α]
+variable {D : Dependence α}
 
 def count (γ : DependenceGraph D) (a : α) := (Finset.filter (γ.φ · == a) Finset.univ).card
 
 end DependenceGraph
 
-
 namespace Occurrence
-
-variable {α : Type} [DecidableEq α]
 
 def occ (w : List α) : Finset (α × ℕ) :=
   match w with
@@ -45,13 +39,13 @@ def occ (w : List α) : Finset (α × ℕ) :=
 def projOcc (A : Finset α) (R : Finset (α × ℕ)) : Finset (α × ℕ) :=
   R.filter (fun (a, _) => a ∈ A)
 
-lemma occ_proj_commute {w : List α} {A : Finset α} : projOcc A (occ w) = occ (TraceTheory.proj A w) := by
+lemma occ_proj_commute {w : List α} {A : Finset α} : projOcc A (occ w) = occ (w.proj A) := by
   induction w with
-  | nil => simp [occ, projOcc, TraceTheory.proj]
+  | nil => simp [occ, projOcc, proj]
   | cons a u ih =>
     by_cases ha : a ∈ A
-    · simp [occ, projOcc, TraceTheory.proj, ha] at ih ⊢
-      simp [<- ih]
+    · simp [occ, projOcc, proj, ha] at ih ⊢
+      rw [← ih]
       apply Finset.ext_iff.mpr
       intro p
       apply Iff.intro
@@ -71,9 +65,9 @@ lemma occ_proj_commute {w : List α} {A : Finset α} : projOcc A (occ w) = occ (
           apply Finset.mem_filter.mp at hp
           apply Finset.mem_filter.mpr
           exact And.intro (Finset.mem_insert_of_mem hp.left) hp.right
-    · simp [occ, projOcc, TraceTheory.proj, ha] at ih ⊢
+    · simp [occ, projOcc, proj, ha] at ih ⊢
       rw [Finset.filter_insert]
-      simp [<- ih, ha]
+      simp [← ih, ha]
 
 def ord_rev (w : List α) : Finset ((α × ℕ) × (α × ℕ)) :=
   match w with
@@ -83,38 +77,40 @@ def ord_rev (w : List α) : Finset ((α × ℕ) × (α × ℕ)) :=
 def ord (w : List α) : Finset ((α × ℕ) × (α × ℕ)) :=
   ord_rev w.reverse
 
-variable {I : TraceTheory.Independence α}
+variable {I : Independence α}
 
 def trace_intersect (I : TraceTheory.Independence α) (w : List α) : (α × ℕ) × α × ℕ → Prop :=
   (∀ v : List α, TraceTheory.TraceEqv I v w → · ∈ (ord v))
 
-noncomputable instance trace_intersect_decidable (w : List α) : DecidablePred (trace_intersect I w) := by
+noncomputable instance trace_intersect_decidable (w : List α) :
+    DecidablePred (trace_intersect I w) := by
   exact Classical.decPred (trace_intersect I w)
 
-noncomputable def ord_trace (T : TraceTheory.Trace I) : Finset ((α × ℕ) × (α × ℕ)) :=
-  Quotient.lift (fun w => (ord w).filter (trace_intersect I w)) (by
-    intro a b hab
-    simp
-    apply Finset.ext_iff.mpr
-    intro p
-    apply Iff.intro
-    · intro hp
-      replace hp := (Finset.mem_filter.mp hp).right
-      apply Finset.mem_filter.mpr
-      apply And.intro
-      · exact (hp b) hab.symm
-      · intro v vb
-        exact hp v (TraceTheory.TraceEqv.trans vb hab.symm)
-    · intro hp
-      replace hp := (Finset.mem_filter.mp hp).right
-      apply Finset.mem_filter.mpr
-      apply And.intro
-      · exact (hp a) hab
-      · intro v va
-        exact hp v (TraceTheory.TraceEqv.trans va hab)
-  ) T
-
+noncomputable def ord_trace (t : Trace I) : Finset ((α × ℕ) × (α × ℕ)) :=
+  Quotient.lift
+    (fun w => (ord w).filter (trace_intersect I w))
+    (by
+      intro a b hab
+      simp
+      apply Finset.ext_iff.mpr
+      intro p
+      apply Iff.intro
+      · intro hp
+        replace hp := (Finset.mem_filter.mp hp).right
+        apply Finset.mem_filter.mpr
+        apply And.intro
+        · exact (hp b) hab.symm
+        · intro v vb
+          exact hp v (TraceTheory.TraceEqv.trans vb hab.symm)
+      · intro hp
+        replace hp := (Finset.mem_filter.mp hp).right
+        apply Finset.mem_filter.mpr
+        apply And.intro
+        · exact (hp a) hab
+        · intro v va
+          exact hp v (TraceTheory.TraceEqv.trans va hab)
+    ) t
 
 end Occurrence
 
---#lint
+end TraceTheory

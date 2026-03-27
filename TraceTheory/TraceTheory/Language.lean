@@ -6,28 +6,30 @@ import Mathlib.Data.Set.Finite.Basic
 import TraceTheory.Basic
 import TraceTheory.Computability
 
+open Computability List
+
 namespace TraceTheory
 
 section LexNf
 
-variable {α : Type*} [LinearOrder α]
+variable {α : Type*} [LinearOrder α] (I : Independence α)
 
 /-- Lexicographic Normal Form.
   A word x is in normal form if it is minimal among all words equivalent to it. -/
-def IsLexNf (I : Independence α) (x : List α) : Prop :=
+def IsLexNf (x : List α) : Prop :=
   ∀ w, TraceEqv I x w → x ≤ w
 
 /-- The condition to be in Lexicographic Normal Form.
   For all factorizations x = ybuaz, where (a, b) ∈ I, and a < b,
   there exists a letter of u which does not commute with a. -/
-def SatisfiesFactorCondition (I : Independence α) (x : List α) : Prop :=
+def SatisfiesFactorCondition (x : List α) : Prop :=
   ∀ (y u z : List α) (a b : α),
     x = y ++ [b] ++ u ++ [a] ++ z →
     I.rel a b →
     a < b →
     ∃ c ∈ u, ¬ I.rel a c
 
-lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf I x) :
+lemma factorCondition_of_lexNf (x : List α) (h : IsLexNf I x) :
     SatisfiesFactorCondition I x := by
   intro y u z a b hx h_indep hlt
   contrapose! h
@@ -43,57 +45,30 @@ lemma factorCondition_of_lexNf (I : Independence α) (x : List α) (h : IsLexNf 
       rw [hc]
       exact h
     apply TraceEqv.compat _ (TraceEqv.refl z)
-    simp only [List.append_assoc]
+    simp only [append_assoc]
     apply TraceEqv.compat (TraceEqv.refl y)
     apply TraceEqv.trans (TraceEqv.compat (TraceEqv.refl [b]) (TraceEqv.symm h_comm_au))
-    simp only [← List.append_assoc]
+    simp only [← append_assoc]
     exact TraceEqv.compat (TraceEqv.swap b a (I.symm a b h_indep)) (TraceEqv.refl u)
   · simp
-    apply List.append_left_lt
-    apply List.cons_lt_cons_iff.mpr
+    apply append_left_lt
+    apply cons_lt_cons_iff.mpr
     left
     exact hlt
 
--- TODO: Move somewhere else?
-lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α}
-    (I : Independence α) (h : TraceEqv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
-    I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ Independent I [a] u := by
-  have h_rev := reverse_eqv_of_eqv h
-  simp at h_rev
-  have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_exists_of_eqv_of_tail_ne h_rev hne
-  constructor
-  · exact h_indep
-  · have ha := (mem_iff_mem a hx_rev).mpr
-    simp at ha
-    have ⟨u, v, hx⟩ := leftmost_occurrence ha
-    use u, v
-    constructor
-    · exact hx.left
-    · rw [hx.left] at hx_rev
-      simp only [List.reverse_append, List.reverse_cons] at hx_rev
-      simp only [List.reverse_nil, List.nil_append] at hx_rev
-      rw [← List.append_assoc] at hx_rev
-      have h_mem_rev : a ∉ u.reverse := by
-        rw [List.mem_reverse]
-        exact hx.right
-      have h_indep_rev := indep_of_comm_singleton hx_rev h_mem_rev
-      simp [List.mem_reverse] at h_indep_rev ⊢
-      exact h_indep_rev
-
-lemma lexNf_of_factorCondition
-    (I : Independence α) (x : List α) (h : SatisfiesFactorCondition I x) :
+lemma lexNf_of_factorCondition (x : List α) (h : SatisfiesFactorCondition I x) :
     IsLexNf I x := by
   unfold IsLexNf
   contrapose! h
   have ⟨w, h_equiv, hlt⟩ := h
   have ⟨p, a, b, w', x', hw, hx, hlt'⟩ :=
     exists_decomp_of_lt_of_len_eq hlt (length_eq_of_eqv h_equiv).symm
-  rw [hw, hx, List.append_assoc, List.append_assoc] at h_equiv
+  rw [hw, hx, append_assoc, append_assoc] at h_equiv
   replace h_equiv := (append_cancel_left h_equiv).symm
   have ⟨h_indep, u, v, hx', hu⟩ := indep_and_exists_of_equiv_of_head_ne I h_equiv (ne_of_lt hlt')
   unfold SatisfiesFactorCondition
   push_neg
-  simp only [hx', ← List.append_assoc] at hx
+  simp only [hx', ← append_assoc] at hx
   use p, u, v, a, b
   apply And.intro hx
   apply And.intro h_indep
@@ -102,15 +77,13 @@ lemma lexNf_of_factorCondition
   exact hu
 
 /-- The characterization of strings in Lexicographic Normal Form. -/
-theorem isLexNf_iff_factorCondition (I : Independence α) (x : List α) :
+theorem isLexNf_iff_factorCondition (x : List α) :
     IsLexNf I x ↔ SatisfiesFactorCondition I x := by
   constructor
   · apply factorCondition_of_lexNf
   · apply lexNf_of_factorCondition
 
-open Computability
-
-variable (I : Independence α) [Fintype α] [DecidableRel I.rel]
+variable [Fintype α] [DecidableRel I.rel]
 
 /-- A single symbol. -/
 def Letter (a : α) : Language α :=
@@ -177,8 +150,8 @@ omit [LinearOrder α] [Fintype α] in
 lemma mem_sigma (x : List α) : x ∈ (Sigma : Language α)∗ := by
   rw [Language.mem_kstar]
   use [x]
-  simp only [List.flatten_cons, List.flatten_nil, List.append_nil, List.mem_cons,
-    List.not_mem_nil, or_false, Sigma, forall_eq, true_and]
+  simp only [flatten_cons, flatten_nil, append_nil, mem_cons,
+    not_mem_nil, or_false, Sigma, forall_eq, true_and]
   apply Set.mem_univ
 
 omit [Fintype α] [LinearOrder α] in
@@ -220,7 +193,7 @@ lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
       rw [Language.mem_kstar] at hb2
       rcases hb2 with ⟨L, rfl, hL⟩
       unfold Letter at hL
-      simp only [List.mem_flatten] at hc
+      simp only [mem_flatten] at hc
       rcases hc with ⟨y, hy, hcy⟩
       have hy_indep := hL y hy
       rw [mem_sum_language] at hy_indep
@@ -228,7 +201,7 @@ lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
       rcases hy_indep with ⟨c', hc'_rel, hc'_eq⟩
       rw [Set.mem_singleton_iff] at hc'_eq
       subst hc'_eq
-      simp only [List.mem_singleton] at hcy
+      simp only [mem_singleton] at hcy
       subst hcy
       exact hc'_rel
   · intro h
@@ -245,12 +218,12 @@ lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
       · induction u with
         | nil => rfl
         | cons hd tl ih =>
-          simp only [List.map_cons, List.flatten_cons, List.cons_append, List.nil_append,
-            List.cons.injEq, true_and]
-          simp only [List.mem_cons, forall_eq_or_imp] at h_indep
+          simp only [map_cons, flatten_cons, cons_append, nil_append,
+            cons.injEq, true_and]
+          simp only [mem_cons, forall_eq_or_imp] at h_indep
           rw [← ih h_indep.right]
       · intro y hy
-        simp only [List.mem_map] at hy
+        simp only [mem_map] at hy
         rcases hy with ⟨c, hc, rfl⟩
         rw [mem_sum_language]
         simp only [Finset.mem_filter, Finset.mem_univ, true_and]
@@ -297,18 +270,18 @@ theorem isLexNf_iff_mem_lexNfLanguage {x : List α} :
 omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
 lemma perm_of_traceEqv {w x : List α} (h : TraceEqv I w x) : w.Perm x := by
   induction h with
-  | swap _ _ _ => apply List.Perm.swap
-  | refl _ => apply List.Perm.refl
-  | symm _ ih => exact List.Perm.symm ih
+  | swap _ _ _ => apply Perm.swap
+  | refl _ => apply Perm.refl
+  | symm _ ih => exact Perm.symm ih
   | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
-  | compat _ _ ih₁ ih₂ => exact List.Perm.append ih₁ ih₂
+  | compat _ _ ih₁ ih₂ => exact Perm.append ih₁ ih₂
 
 omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
 lemma finite_traceEqv_class (w : List α) : {x : List α | TraceEqv I w x}.Finite := by
   have h_sub : {x : List α | TraceEqv I w x} ⊆ {x : List α | x ∈ w.permutations} := by
     intro x hx
     rw [Set.mem_setOf] at hx ⊢
-    rw [List.mem_permutations, List.perm_comm]
+    rw [mem_permutations, perm_comm]
     exact perm_of_traceEqv I hx
   exact Set.Finite.subset w.permutations.finite_toSet h_sub
 
@@ -373,7 +346,7 @@ theorem traceClosure.idem {X : Language α} :
 def IsValidFactorization
     (I : Independence α) (X : Language α) (x y : List α) (xs ys : List (List α)) : Prop :=
   xs.length = ys.length ∧
-  (List.zipWith (· ++ ·) xs ys).flatten ∈ traceClosure I X ∧
+  (zipWith (· ++ ·) xs ys).flatten ∈ traceClosure I X ∧
   TraceEqv I x xs.flatten ∧
   TraceEqv I y ys.flatten ∧
   ∀ i j (hi : i < ys.length) (hj : j < xs.length), i < j →
@@ -407,8 +380,7 @@ theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h
   and_intros
   · simp
   · simp
-  · simp only [List.zipWith_cons_cons, List.zipWith_self, List.map_nil, List.flatten_cons,
-      List.flatten_nil, List.append_nil]
+  · simp only [zipWith_cons_cons, zipWith_self, map_nil, flatten_cons,flatten_nil, append_nil]
     replace h₁ := h₁ (z₁ ++ z₃)
     replace h₂ := h₂ (z₂ ++ z₄)
     rw [Set.mem_setOf] at h₁ h₂
@@ -420,14 +392,14 @@ theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h
   · simpa
   · simpa
   · intro i j
-    simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Independent]
+    simp only [length_cons, length_nil, zero_add, Nat.reduceAdd, Independent]
     intro hi hj hlt
     cases i with
     | zero =>
       cases j with
       | zero => contradiction
       | succ j' =>
-        simp only [List.getElem_cons_zero, List.getElem_cons_succ, List.getElem_singleton]
+        simp only [getElem_cons_zero, getElem_cons_succ, getElem_singleton]
         exact independent_symm h_indep
     | succ i' => omega
 
