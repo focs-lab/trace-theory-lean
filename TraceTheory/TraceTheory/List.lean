@@ -1,8 +1,6 @@
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.List.Lex
 
-open List
-
 variable {α : Type*} [DecidableEq α]
 
 namespace List

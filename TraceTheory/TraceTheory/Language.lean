@@ -262,6 +262,7 @@ theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
     rcases h y u z a b hx h_indep hlt with ⟨c, hc_mem, hc_not_indep⟩
     exact hc_not_indep (h_all_indep c hc_mem)
 
+/-- Words in LexNF are exactly the members of `LexNfLanguage`. -/
 theorem isLexNf_iff_mem_lexNfLanguage {x : List α} :
     IsLexNf I x ↔ x ∈ LexNfLanguage I := by
   rw [mem_lexNfLanguage_iff_factorCondition]

@@ -1,9 +1,9 @@
 import TraceTheory.Defs
 import TraceTheory.List
 
-open List
-
 namespace TraceTheory
+
+open Dependence List
 
 variable {α : Type*} {I : Independence α}
 
@@ -52,7 +52,7 @@ theorem proj_eqv_of_eqv {u v : List α} {S : Finset α} [DecidableEq α] (h : Tr
   | compat _ _ ih₁ ih₂ => simp [ih₁.compat ih₂]
 
 theorem proj_eq_of_eqv {u v : List α} [DecidableEq α]
-    (D : Dependence α) (h : TraceEqv (inducedIndependence D) u v)
+    (D : Dependence α) (h : TraceEqv D.inducedIndependence u v)
     (a b : α) (h_dep : D.rel a b) :
     u.proj {a, b} = v.proj {a, b} := by
   induction h with
@@ -66,7 +66,6 @@ theorem proj_eq_of_eqv {u v : List α} [DecidableEq α]
         · exact h_dep
         · exact D.symm b' a' h_dep
         · apply D.refl
-      dsimp [inducedIndependence] at h_indep
       contradiction
     · simp [filter, ha', hb']
     · simp [filter, ha', hb']
@@ -145,6 +144,16 @@ instance [DecidableEq α] : CancelMonoid (Trace I) where
     apply Quotient.sound
     simp only at heq
     exact append_cancel_right (Quotient.exact heq)
+
+instance : Membership α (Trace I) where
+  mem t a := Quotient.lift
+    (fun (s : List α) => a ∈ s)
+    (by
+      intro u v h
+      simp only [eq_iff_iff]
+      exact mem_iff_mem a h
+    )
+    t
 
 lemma eqv_length_eq_two {a b : α} {w : List α} (h : TraceEqv I [a, b] w) :
     w = [a, b] ∨ w = [b, a] := by
@@ -259,14 +268,14 @@ theorem indep_and_exists_of_eqv_of_tail_ne {u v : List α} {a b : α} [Decidable
   have h_ab_ba := append_cancel_left h_tail
   exact ⟨indep_of_comm_eqv_of_ne h_ab_ba hne, u ÷ b, h_cancel_b_concat_b, h_cancel_b⟩
 
-theorem independent_symm {u v : List α} (h : Independent I u v) :
-    Independent I v u := by
+theorem independent_symm {u v : List α} (h : I.Independent u v) :
+    I.Independent v u := by
   intro a ha b hb
   exact I.symm b a (h b hb a ha)
 
 theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
     (h : TraceEqv I (u ++ [a] ++ v) (w ++ [a])) (h_mem : a ∉ v) :
-    Independent I [a] v := by
+    I.Independent [a] v := by
   induction v using reverseRecOn generalizing w with
   | nil => simp
   | append_singleton x b ih =>
@@ -285,13 +294,13 @@ theorem indep_of_comm_singleton {u v w : List α} {a : α} [DecidableEq α]
     · subst h₂
       exact I.symm b' a' hr
 
-theorem comm_singleton_of_indep {w : List α} {a : α} (h : Independent I [a] w) :
+theorem comm_singleton_of_indep {w : List α} {a : α} (h : I.Independent [a] w) :
     TraceEqv I (w ++ [a]) ([a] ++ w) := by
   induction w using reverseRecOn with
   | nil => apply TraceEqv.refl
   | append_singleton w' b ih =>
     simp at h
-    have haw' : Independent I [a] w' := by
+    have haw' : I.Independent [a] w' := by
       intro a' ha' b' hb'
       simp at ha'
       subst ha'
@@ -305,15 +314,15 @@ theorem comm_singleton_of_indep {w : List α} {a : α} (h : Independent I [a] w)
     exact hab.trans hb
 
 theorem indep_of_indep_of_eqv {u v w: List α}
-    (h : Independent I u v) (ht : TraceEqv I v w) :
-    Independent I u w := by
+    (h : I.Independent u v) (ht : TraceEqv I v w) :
+    I.Independent u w := by
   intro a ha b hb
   have h_alph := mem_iff_mem b ht
   have h_mem := h_alph.mpr hb
   exact h a ha b h_mem
 
-theorem indep_of_indep_append_right {u v w: List α} (h : Independent I w (u ++ v)) :
-    Independent I w u ∧ Independent I w v := by
+theorem indep_of_indep_append_right {u v w: List α} (h : I.Independent w (u ++ v)) :
+    I.Independent w u ∧ I.Independent w v := by
   constructor
   · intro a ha b hb
     apply h
@@ -328,7 +337,7 @@ theorem indep_of_indep_append_right {u v w: List α} (h : Independent I w (u ++ 
     right
     exact hb
 
-theorem comm_append_of_indep {w₁ w₂ : List α} (h : Independent I w₁ w₂) :
+theorem comm_append_of_indep {w₁ w₂ : List α} (h : I.Independent w₁ w₂) :
     TraceEqv I (w₁ ++ w₂) (w₂ ++ w₁) := by
   induction w₁ using reverseRecOn with
   | nil =>
@@ -345,7 +354,7 @@ theorem comm_append_of_indep {w₁ w₂ : List α} (h : Independent I w₁ w₂)
 
 lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α} [DecidableEq α]
     (I : Independence α) (h : TraceEqv I ([a] ++ w) ([b] ++ x)) (hne : a ≠ b) :
-    I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ Independent I [a] u := by
+    I.rel a b ∧ ∃ u v, x = u ++ [a] ++ v ∧ I.Independent [a] u := by
   have h_rev := reverse_eqv_of_eqv h
   simp at h_rev
   have ⟨h_indep, w_rev', _, hx_rev⟩ := indep_and_exists_of_eqv_of_tail_ne h_rev hne
@@ -368,7 +377,7 @@ lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α} [Decidable
       exact h_indep_rev
 
 theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v) (x ++ y)) :
-    ∃ z₁ z₂ z₃ z₄, Independent I z₂ z₃
+    ∃ z₁ z₂ z₃ z₄, I.Independent z₂ z₃
     ∧ TraceEqv I u (z₁ ++ z₂) ∧ TraceEqv I v (z₃ ++ z₄)
     ∧ TraceEqv I x (z₁ ++ z₃) ∧ TraceEqv I y (z₂ ++ z₄) := by
   induction y using reverseRecOn generalizing u v with
@@ -403,10 +412,10 @@ theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v)
       simp [hev, hu''] at h_cancel
       rw [← append_assoc] at h_cancel
       have ⟨z₁', z₂', z₃', z₄', h_indep, ht₁, ht₂, ht₃, ht₄⟩ := ih h_cancel
-      have h_indep' : Independent I [e] (u'' ++ v) := by
+      have h_indep' : I.Independent [e] (u'' ++ v) := by
         rw [← append_assoc, append_assoc] at h
         exact indep_of_comm_singleton h (not_mem_append hu'' hev)
-      replace h_indep : Independent I (z₂' ++ [e]) z₃' := by
+      replace h_indep : I.Independent (z₂' ++ [e]) z₃' := by
         intro a ha b hb
         simp at ha
         rcases ha with h₁ | h₂
@@ -430,7 +439,7 @@ theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v)
       exact ⟨ht₁, ht₂, ht₃, ht₄⟩
 
 theorem projection_lemma {u v : List α} [DecidableEq α] (D : Dependence α) :
-    TraceEqv (inducedIndependence D) u v ↔
+    TraceEqv D.inducedIndependence u v ↔
     ∀ a b, D.rel a b → u.proj {a, b} = v.proj {a, b} := by
   constructor
   · apply proj_eq_of_eqv
@@ -456,7 +465,7 @@ theorem projection_lemma {u v : List α} [DecidableEq α] (D : Dependence α) :
         rw [← hc]
         simp
       have ⟨v', v'', heq, hc⟩ := rightmost_occurrence hv
-      have h_indep : Independent (inducedIndependence D) [c] v'' := by
+      have h_indep : D.inducedIndependence.Independent [c] v'' := by
         intro c hc b hb
         simp at hc
         subst hc
@@ -613,7 +622,7 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
       exact append_cancel_left huvzw
     have ⟨y₁, y₂, y₃, y₄, _, hy_z₂, hy_w₁, hy_z₃, _⟩ := levi_lemma hzw
     have h_y₁_empty : y₁ = [] := by
-      have h_indep_yy : Independent I (y₁ ++ y₂) (y₁ ++ y₃) := by
+      have h_indep_yy : I.Independent (y₁ ++ y₂) (y₁ ++ y₃) := by
         intro a ha b hb
         exact h_indep a ((mem_iff_mem a hy_z₂).mpr ha) b ((mem_iff_mem b hy_z₃).mpr hb)
       by_cases he : y₁ = []
@@ -633,6 +642,15 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
     use y₄
     apply Quotient.sound
     exact hd'.symm
+
+lemma not_mem_one (a : α) : a ∉ (1 : Trace I) := by
+  intro h
+  rcases h
+
+lemma exists_mem_of_ne_one (t : Trace I) (h : t ≠ 1) : ∃ a, a ∈ t := by
+  rcases t with ⟨_ | ⟨a, w⟩⟩
+  · exact (h rfl).elim
+  · exact ⟨a, List.mem_cons_self⟩
 
 end Trace
 

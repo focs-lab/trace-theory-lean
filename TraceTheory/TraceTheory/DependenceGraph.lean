@@ -1,11 +1,10 @@
 import Mathlib.Data.Fintype.Sum
 import Mathlib.Order.WellFounded
-import Mathlib.Tactic.FinCases
 import TraceTheory.DependenceMorphism
 
-open List
-
 namespace TraceTheory
+
+open Dependence List
 
 variable {α : Type*} {D : Dependence α}
 
@@ -696,7 +695,7 @@ theorem removeVertex_sink_iso_cancelRight [DecidableEq α]
 /-- The homomorphism from the free monoid of strings onto the graph monoid defined as
   $\phi(w)=\langle w\rangle$ is a dependence morphism. -/
 def dependenceGraphDependenceMorphism [DecidableEq α] :
-    DependenceMorphism (inducedIndependence D) (DGraph D) where
+    DependenceMorphism D.inducedIndependence (DGraph D) where
   toFun := mk'
   A1 := by
     intro w hw
@@ -797,8 +796,8 @@ def dependenceGraphDependenceMorphism [DecidableEq α] :
       exact hab (Eq.symm h_label_a)
 
 /-- The trace monoid and `DGraph` are isomorphic. -/
-noncomputable def traceMonoidIsoDGraph [DecidableEq α] :
-    Trace (inducedIndependence D) ≃* DGraph D := by
+noncomputable def traceIsoDGraph [DecidableEq α] :
+    Trace D.inducedIndependence ≃* DGraph D := by
   apply dependenceMorphismIso
     traceDependenceMorphism
     Quotient.mk_surjective

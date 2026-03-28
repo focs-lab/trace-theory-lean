@@ -4,6 +4,13 @@ namespace TraceTheory
 
 variable {α : Type*}
 
+/-- An independence is a finite, irreflexive, and symmetric relation. -/
+structure Independence (α : Type*) where
+  /-- The independence relation. -/
+  rel : α → α → Prop
+  irrefl : ∀ a, ¬ rel a a
+  symm : ∀ a b, rel a b → rel b a
+
 /-- A dependence is a finite, reflexive, and symmetric relation. -/
 structure Dependence (α : Type*) where
   /-- The dependence relation. -/
@@ -11,12 +18,7 @@ structure Dependence (α : Type*) where
   refl : ∀ a, rel a a
   symm: ∀ a b, rel a b → rel b a
 
-/-- An independence is a finite, irreflexive, and symmetric relation. -/
-structure Independence (α : Type*) where
-  /-- The independence relation. -/
-  rel : α → α → Prop
-  irrefl : ∀ a, ¬ rel a a
-  symm : ∀ a b, rel a b → rel b a
+namespace Independence
 
 /-- The Dependence relation induced by an Independence `I`. -/
 def inducedDependence {α : Type*} (I : Independence α) : Dependence α where
@@ -28,6 +30,19 @@ def inducedDependence {α : Type*} (I : Independence α) : Dependence α where
     intro a b hab hba
     exact hab (I.symm b a hba)
 
+/-- Strings $u,v$ are independent if every symbol in $u$ is independent of every symbol in $v$. -/
+@[simp]
+def Independent (I : Independence α) (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
+
+/-- The binary relation $~$ such that $u~v$ if and only if there exists strings $x,y$ and symbols
+  $a,b$ such that $aIb$, $u=xaby$ and $v=xbay$. -/
+inductive SwapOnce (I : Independence α) : List α → List α → Prop
+  | swap (a b : α) : I.rel a b → SwapOnce I [a, b] [b, a]
+
+end Independence
+
+namespace Dependence
+
 /-- The Independence relation induced by a Dependence `D`. -/
 def inducedIndependence {α : Type*} (D : Dependence α) : Independence α where
   rel := fun a b => ¬D.rel a b
@@ -38,14 +53,7 @@ def inducedIndependence {α : Type*} (D : Dependence α) : Independence α where
     intro a b hab hba
     exact hab (D.symm b a hba)
 
-/-- Strings $u,v$ are independent if every symbol in $u$ is independent of every symbol in $v$. -/
-@[simp]
-def Independent (I : Independence α) (u v : List α) := ∀ a ∈ u, ∀ b ∈ v, I.rel a b
-
-/-- The binary relation $~$ such that $u~v$ if and only if there exists strings $x,y$ and symbols
-  $a,b$ such that $aIb$, $u=xaby$ and $v=xbay$. -/
-inductive SwapOnce (I : Independence α) : List α → List α → Prop
-  | swap (a b : α) : I.rel a b → SwapOnce I [a, b] [b, a]
+end Dependence
 
 /-- The trace equivalence relation is the least congruence $\equiv$ such that for all symbols
   $a$ and $b$, $(a,b) \in I \leftrightarrow ab \equiv ba$.

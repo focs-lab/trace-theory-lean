@@ -1,6 +1,7 @@
+import Mathlib.Tactic.FinCases
 import TraceTheory.DependenceGraph
 
-namespace TraceTheory
+open TraceTheory
 
 variable {V : Type} [Fintype V]
 

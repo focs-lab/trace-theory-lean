@@ -2,9 +2,9 @@ import Mathlib.Algebra.Group.Submonoid.Basic
 import Mathlib.Algebra.Group.Pi.Basic
 import TraceTheory.DependenceMorphism
 
-open List
-
 namespace TraceTheory
+
+open Dependence List
 
 namespace History
 
@@ -138,7 +138,7 @@ theorem proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (w : List α) (a 
 /-- Distribution is a dependence morphism. -/
 def historyDependenceMorphism (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ S i) :
     DependenceMorphism
-      (inducedIndependence (SigmaDependence S h_cover))
+      (SigmaDependence S h_cover).inducedIndependence
       (History S) where
   toFun := distribution' S
   A1 := by
@@ -189,10 +189,10 @@ def historyDependenceMorphism (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i,
     have ⟨_, h_absurd⟩ := hi
     contradiction
 
-/-- The trace monoid and `HistoryMonoid` are isomorphic. -/
-noncomputable def traceMonoidIsoHistoryMonoid
+/-- The trace monoid and `History` are isomorphic. -/
+noncomputable def traceIsoHistory
     (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ S i) :
-    Trace (inducedIndependence (SigmaDependence S h_cover)) ≃* History S := by
+    Trace (SigmaDependence S h_cover).inducedIndependence ≃* History S := by
   apply dependenceMorphismIso
     traceDependenceMorphism
     Quotient.mk_surjective

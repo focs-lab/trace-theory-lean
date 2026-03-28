@@ -6,18 +6,6 @@ namespace TraceTheory
 
 variable {α : Type*} {I : Independence α}
 
-def alph_mem (a : α) (t : Trace I) :=
-  Quotient.lift
-    (fun (s : List α) => a ∈ s)
-    (by
-      intro u v h
-      simp
-      exact mem_iff_mem a h)
-    t
-
-instance : Membership α (Trace I) where
-  mem l a := alph_mem a l
-
 lemma eps_is_empty (a : α) : a ∉ (1 : Trace I) := by
   intro h
   rcases h
@@ -32,7 +20,7 @@ lemma mem_append {a : α} {s t : Trace I} : a ∈ s * t ↔ a ∈ s ∨ a ∈ t 
   rcases t
   exact List.mem_append
 
-lemma mems_lift (w : List α) : {a : α // a ∈ w} = {a : α // a ∈ mk' (I := I) w} :=
+lemma mems_lift (w : List α) : {a : α // a ∈ w} = {a : α // a ∈ Trace.mk' I w} :=
   rfl
 
 def dependencyIn (t : Trace I) (a b : α) :=
@@ -47,7 +35,7 @@ def IsConnected (I : Independence α) (t : Trace I) :=
 def IsIterativeFactor (X : Language α) (t : List α) :=
   ∃ u v, ∀ n : ℕ, u ++ t ^ n ++ v ∈ X
 
-def toTrace (I : Independence α) (X : Language α) : Set (Trace I) := mk' '' X
+def toTrace (I : Independence α) (X : Language α) : Set (Trace I) := Trace.mk' I '' X
 
 def kstar (T : Set (Trace I)) :=
   {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ T) ∧ r = ts.prod}
