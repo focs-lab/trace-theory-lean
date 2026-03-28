@@ -1,18 +1,18 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Computability.DFA
-import Mathlib.Computability.Language
 import Mathlib.Data.List.Permutation
 import Mathlib.Data.Set.Finite.Basic
 import TraceTheory.Basic
 import TraceTheory.Computability
 
-open Computability List
-
 namespace TraceTheory
+
+open Computability List Trace
+
+variable {α : Type*} {I : Independence α}
 
 section LexNf
 
-variable {α : Type*} [LinearOrder α] (I : Independence α)
+variable [LinearOrder α] (I : Independence α)
 
 /-- Lexicographic Normal Form.
   A word x is in normal form if it is minimal among all words equivalent to it. -/
@@ -146,7 +146,7 @@ theorem isRegular_lexNf : Language.IsRegular (LexNfLanguage I) := by
   apply Language.IsRegular.compl
   apply isRegular_allForbiddenPatterns
 
-omit [LinearOrder α] [Fintype α] in
+omit [Fintype α] [LinearOrder α] in
 lemma mem_sigma (x : List α) : x ∈ (Sigma : Language α)∗ := by
   rw [Language.mem_kstar]
   use [x]
@@ -312,9 +312,16 @@ theorem exists_lexNf_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ 
 
 end LexNf
 
-section rank
+section Language
 
-variable {α : Type} {I : Independence α}
+/-- A string $t$ is an iterative factor of word language $X$ if there exists left and right
+  extends $u$ and $v$ such that $ut^*v$ is a subset of X. -/
+def IsIterativeFactor (X : Language α) (t : List α) :=
+  ∃ u v, ∀ n : ℕ, u ++ t ^ n ++ v ∈ X
+
+/-- Maps a word language to a trace language. -/
+def toTrace (I : Independence α) (X : Language α) : Set (Trace I) :=
+  Trace.mk' I '' X
 
 /-- The `Language` of all strings trace equivalent to strings in language `X`. -/
 def traceClosure (I : Independence α) (X : Language α) : Language α :=
@@ -343,6 +350,21 @@ theorem traceClosure.idem {X : Language α} :
   · apply mono
     apply le_closure
 
+theorem kstar_diff_one (L : Language α) : (L \ {[]})∗ = L∗ := by
+  ext w
+  constructor
+  · intro ⟨ls, hw, hls⟩
+    use ls
+    simp [hw]
+    exact fun y hy => Set.diff_subset (hls y hy)
+  · intro ⟨ls, hls, ht⟩
+    use ls.filter (!·.isEmpty)
+    simp
+    apply And.intro
+    · simp [hls, List.flatten_filter_not_isEmpty]
+    · intro y hy hyz
+      exact Set.mem_diff_singleton.mpr ⟨ht y hy, hyz⟩
+
 /-- Helper to define rank. -/
 def IsValidFactorization
     (I : Independence α) (X : Language α) (x y : List α) (xs ys : List (List α)) : Prop :=
@@ -351,7 +373,7 @@ def IsValidFactorization
   TraceEqv I x xs.flatten ∧
   TraceEqv I y ys.flatten ∧
   ∀ i j (hi : i < ys.length) (hj : j < xs.length), i < j →
-    Independent I ys[i] xs[j]
+    I.Independent ys[i] xs[j]
 
 /-- Predicate for language `X` having rank at most `k`. -/
 def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
@@ -364,9 +386,8 @@ def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
 def HasFiniteRank (I : Independence α) (X : Language α) : Prop :=
   ∃ k : ℕ, HasRankAtMost I X k
 
-variable [DecidableEq α]
-
-theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h₂ : IsClosed I X₂) :
+theorem concat_closed_rank [DecidableEq α]
+    (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h₂ : IsClosed I X₂) :
     HasRankAtMost I (X₁ * X₂) 1 := by
   intro x y hxy
   rcases hxy with ⟨w, hw, heqv⟩
@@ -393,7 +414,7 @@ theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h
   · simpa
   · simpa
   · intro i j
-    simp only [length_cons, length_nil, zero_add, Nat.reduceAdd, Independent]
+    simp only [length_cons, length_nil, zero_add, Nat.reduceAdd]
     intro hi hj hlt
     cases i with
     | zero =>
@@ -404,6 +425,90 @@ theorem concat_closed_rank (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h
         exact independent_symm h_indep
     | succ i' => omega
 
-end rank
+end Language
+
+section TraceLanguage
+
+/-- Kleene closure on trace languages. -/
+def kstar (T : Set (Trace I)) :=
+  {r | ∃ ts : List (Trace I), (∀ t' ∈ ts, t' ∈ T) ∧ r = ts.prod}
+
+instance : KStar (Set (Trace I)) where
+  kstar := kstar
+
+/-- The connected components operator.
+  Returns the language of connected components of a trace language `T`. -/
+def connectedComponents (T : Set (Trace I)) : Set (Trace I) :=
+  {u | Trace.IsConnected I u ∧ u ≠ 1 ∧ ∃ v, u * v ∈ T ∧ Trace.Independent u v}
+
+theorem toTrace_kstar_comm (L : Language α) :
+    toTrace I (L∗) = (toTrace I L)∗ := by
+  simp [Language.kstar_def, Set.image, toTrace]
+  ext t
+  constructor
+  · intro ⟨ws, hws, ht⟩
+    induction ws generalizing t with
+    | nil => exact ⟨[], by simp_all⟩
+    | cons w ws' ih =>
+      rw [forall_apply_eq_imp_iff] at ih
+      simp only [List.mem_cons, forall_eq_or_imp] at hws
+      rcases ih hws.right with ⟨ts, hts, hws'⟩
+      use ⟦w⟧ :: ts
+      constructor
+      · rw [List.forall_mem_cons]
+        exact ⟨⟨w, hws.left, rfl⟩, hts⟩
+      · rw [← ht, List.prod_cons, ← hws']
+        rfl
+  · intro ⟨ts, hts, ht⟩
+    induction ts generalizing t with
+    | nil => exact ⟨[], by simp_all⟩
+    | cons s ts' ih =>
+      rw [forall_eq_apply_imp_iff] at ih
+      simp only [List.mem_cons, forall_eq_or_imp] at hts
+      rcases ih hts.right with ⟨ws, hws, hws'⟩
+      rcases hts.left with ⟨w, hw⟩
+      use [w] ++ ws
+      constructor
+      · simp only [List.cons_append, List.nil_append, List.mem_cons, forall_eq_or_imp]
+        exact ⟨hw.left, hws⟩
+      · rw [ht, List.prod_cons, ← hws', ← hw.right]
+        rfl
+
+theorem connectedComponents_eq_diff_one (T : Set (Trace I)) (h : ∀ t ∈ T, t.IsConnected I) :
+    connectedComponents T = T \ {1} := by
+  apply Set.ext
+  intro t
+  apply Iff.intro
+  · intro ⟨ht, htz, v, htv, htv_id⟩
+    simp [htz]
+    replace h := h (t * v) htv
+    have hvz : v = 1 := by
+      by_contra hvz
+      exact not_isConnected_mul_of_indep htv_id htz hvz h
+    rw [hvz, mul_one] at htv
+    exact htv
+  · intro ⟨ht, htz⟩
+    use (h t ht), htz, 1
+    rw [mul_one]
+    use ht
+    unfold Independent
+    simp [not_mem_one]
+
+theorem kstar_diff_one' (T : Set (Trace I)) : (T \ {1})∗ = T∗ := by
+  ext t
+  constructor
+  · intro ⟨ls, hls, ht⟩
+    use ls
+    simp [ht]
+    exact fun y hy => Set.diff_subset (hls y hy)
+  · intro ⟨ls, hls, ht⟩
+    use ls.filter (!Trace.isEmpty ·)
+    simp
+    constructor
+    · intro y hy hyz
+      exact ⟨hls y hy, isEmpty_iff.ne.mp (ne_true_of_eq_false hyz)⟩
+    · simp [prod_filter_not_isEmpty, ht]
+
+end TraceLanguage
 
 end TraceTheory

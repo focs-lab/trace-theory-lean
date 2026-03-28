@@ -7,76 +7,10 @@ import Mathlib.Data.Fintype.Pi
 namespace TraceTheory
 
 variable {α : Type*} {I : Independence α}
-
-lemma indep_of_flatten {u : List α} {vs : List (List α)}
-    (i : ℕ) (hi : i < vs.length) (h : Independent I u vs.flatten) :
-    Independent I u (vs[i]'(hi)) := by
-  induction vs generalizing i with
-  | nil => contradiction
-  | cons v vs' ih =>
-    simp [-Independent] at h ⊢
-    cases i with
-    | zero => exact (indep_of_indep_append_right h).left
-    | succ i' =>
-      simp only [List.length_cons, add_lt_add_iff_right] at hi
-      exact ih i' hi (indep_of_indep_append_right h).right
-
-/-- (i) → (ii) of Corollary (2.3) in `Partial Commutation and Traces`.
-  Note that t₁, t₂, …, tₙ is expressed as a list [ts], and (t₁ ++ t₂ ++ … ++ tₙ) via [ts.flatten].
-  Similarly, p₁, …, pₙ is [ps] and q₁, …, qₙ is [qs]. -/
-theorem levi_lemma_gen {u v : List α} {ts : List (List α)} [DecidableEq α]
-    (h : TraceEqv I (u ++ v) ts.flatten) :
-    ∃ ps qs : List (List α),
-      ps.length = ts.length ∧
-      qs.length = ts.length ∧
-      TraceEqv I u ps.flatten ∧
-      TraceEqv I v qs.flatten ∧
-      (∀ i (ht : i < ts.length) (hp : i < ps.length) (hq : i < qs.length),
-        TraceEqv I ts[i] (ps[i] ++ qs[i])) ∧
-      (∀ i j (hi : i < qs.length) (hj : j < ps.length), i < j →
-        Independent I qs[i] ps[j]) := by
-  induction ts generalizing u v with
-  | nil =>
-    simp only [List.flatten_nil] at h
-    have h_len := length_eq_of_eqv h
-    simp only [List.length_append, List.length_nil] at h_len
-    have hu : u = [] := List.length_eq_zero_iff.mp (by omega)
-    have hv : v = [] := List.length_eq_zero_iff.mp (by omega)
-    subst hu hv
-    use [], []
-    simp [TraceEqv.refl]
-  | cons t tsuf ih =>
-    rcases levi_lemma h with ⟨p, psuf, q, qsuf, h_ind, h_up, h_vq, h_tpq, h_tpq_suf⟩
-    rcases ih h_tpq_suf.symm with ⟨ps_i, qs_i, ih_p_len, ih_q_len, ih_p, ih_q, ih_tpq, ih_ind⟩
-    use p :: ps_i, q :: qs_i
-    and_intros
-    · simp [ih_p_len]
-    · simp [ih_q_len]
-    · apply TraceEqv.trans h_up
-      simp only [List.flatten_cons]
-      exact TraceEqv.compat (TraceEqv.refl p) ih_p
-    · apply TraceEqv.trans h_vq
-      simp only [List.flatten_cons]
-      exact TraceEqv.compat (TraceEqv.refl q) ih_q
-    · intro i ht hp hq
-      cases i with
-      | zero => exact h_tpq
-      | succ i' => apply ih_tpq i'
-    · intro i j hi hj hij
-      cases j with
-      | zero => contradiction
-      | succ j' =>
-        cases i with
-        | zero =>
-          simp only [List.length_cons, add_lt_add_iff_right] at hj
-          exact indep_of_flatten j' hj (indep_of_indep_of_eqv (independent_symm h_ind) ih_p)
-        | succ i' =>
-          apply ih_ind i' j'
-          exact Nat.succ_lt_succ_iff.mp hij
-
 variable {M : Type} {σ : Type} [Monoid M] [Monoid α]
 
--- We need [DecidableEq N] to match the definition of `IsRecognizableDFMA`; see the latter.
+/-- A recognizable set of a monoid `M` is a subset that can be distinguished by some homomorphism
+  onto a finite monoid. -/
 def IsRecognizable (T : Set M) : Prop :=
   ∃ (N : Type) (_ : Monoid N) (_ : Fintype N) (_ : DecidableEq N) (φ : M →* N), T = φ⁻¹' (φ '' T)
 
@@ -87,15 +21,13 @@ structure DFMA extends DFA α σ where
   idempotent (q : σ) : step q 1 = q
   composition (q : σ) (u v : α) : step (step q u) v = step q (u * v)
 
-namespace DFMA
+/-- Evaluate `A` on `x`. -/
+def DFMA.eval {A : DFMA α σ} (x : α) : σ := A.step A.start x
 
-def eval {A : DFMA α σ} (x : α) : σ := A.step A.start x
+/-- The set of elements of `α` accepted by `A`. -/
+def DFMA.accepts {A : DFMA α σ} : Set α := {x | A.eval x ∈ A.accept}
 
-def accepts {A : DFMA α σ} : Set α := {x | A.eval x ∈ A.accept}
-
-end DFMA
-
--- We need [DecidableEq σ] to derive the finiteness of (σ → σ) through `Finset.pi`.
+/-- There exists some M-automaton that accepts exactly `S`. -/
 def IsRecognizableDFMA (S : Set M) : Prop :=
   ∃ (σ : Type) (_ : Fintype σ) (_ : DecidableEq σ) (A : DFMA M σ), S = A.accepts
 
@@ -174,18 +106,23 @@ theorem recognizableDFMA_is_recognizable (S : Set M) :
 
 variable {T : Set M}
 
-def syntacticCongr (T : Set M) (x y : M) := ∀ u v : M, u * x * v ∈ T ↔ u * y * v ∈ T
+/-- `x` is syntatically congruent to `y` in `T` if `u * x * v` is in `T` if and only if
+  `u * y * v` is in `T`. -/
+def SyntacticCongr (T : Set M) (x y : M) :=
+  ∀ u v, u * x * v ∈ T ↔ u * y * v ∈ T
 
-def syntacticSetoid (T : Set M) : Setoid (M) where
-  r := syntacticCongr T
+/-- The setoid strcuture of the syntatic congruence in `T`. -/
+def SyntacticSetoid (T : Set M) : Setoid (M) where
+  r := SyntacticCongr T
   iseqv := Equivalence.mk
     (fun _ _ _ => Set.MapsTo.mem_iff (fun ⦃_⦄ a => a) fun ⦃_⦄ a => a)
     (fun {_ _} a u v => (fun {_ _} => iff_comm.mp) (a u v))
-    (fun {_ _ _} a a_1 u v => Iff.trans (a u v) (a_1 u v))
+    (fun {_ _ _} a b u v => Iff.trans (a u v) (b u v))
 
-def syntacticMonoid (T : Set M) := Quotient (syntacticSetoid T)
+/-- The quotient of `T` by the syntatic congruence. -/
+def SyntacticMonoid (T : Set M) := Quotient (SyntacticSetoid T)
 
-instance : Monoid (syntacticMonoid T) where
+instance : Monoid (SyntacticMonoid T) where
   mul := Quotient.lift₂
     (fun w₁ w₂ => ⟦w₁ * w₂⟧)
     (by
@@ -202,7 +139,7 @@ instance : Monoid (syntacticMonoid T) where
         _ ↔ u * a₂ * b₂ * v ∈ T := hT₂
         _ ↔ u * (a₂ * b₂) * v ∈ T := by simp only [hM.mul_assoc]
     )
-  one := Quotient.mk (syntacticSetoid T) 1
+  one := Quotient.mk (SyntacticSetoid T) 1
   mul_assoc := by
     intro t₁ t₂ t₃
     refine Quotient.inductionOn₃ t₁ t₂ t₃ (fun w₁ w₂ w₃ => ?_)
@@ -230,9 +167,9 @@ instance : Monoid (syntacticMonoid T) where
 
 /-- Prop 4.1 (ii) => (i) -/
 theorem finSyntacticIndex_is_recognizable :
-    Finite (syntacticMonoid T) → IsRecognizable T := by
+    Finite (SyntacticMonoid T) → IsRecognizable T := by
   intro h
-  use syntacticMonoid T, by infer_instance, Fintype.ofFinite _, Classical.typeDecidableEq (syntacticMonoid T)
+  use SyntacticMonoid T, inferInstance, Fintype.ofFinite _, Classical.typeDecidableEq (SyntacticMonoid T)
   use {
     toFun := fun m => ⟦m⟧
     map_one' := by rfl
@@ -253,14 +190,14 @@ theorem finSyntacticIndex_is_recognizable :
 
 /-- Prop 4.1 (i) => (ii) -/
 theorem recognizable_is_finSyntacticIndex :
-    IsRecognizable T → Finite (syntacticMonoid T) := by
+    IsRecognizable T → Finite (SyntacticMonoid T) := by
   unfold IsRecognizable
   intro ⟨N, N_mon, N_fin, N_dec, φ, h⟩
-  have h_img_syn : ∀ a b, φ a = φ b → syntacticCongr T a b := by
+  have h_img_syn : ∀ a b, φ a = φ b → SyntacticCongr T a b := by
     intro a b hab u v
     rw [h]
     simp [hab]
-  let f : φ '' Set.univ → syntacticMonoid T := fun ⟨n, hn⟩ => ⟦Classical.choose hn⟧
+  let f : φ '' Set.univ → SyntacticMonoid T := fun ⟨n, hn⟩ => ⟦Classical.choose hn⟧
   have f_surj : Function.Surjective f := by
     intro q
     have ⟨m, hm⟩ := Quotient.exists_rep q
@@ -305,9 +242,11 @@ theorem recognizable_has_recognizablePreImage (L : Type) [Monoid L] (φ : L →*
     rw [Set.mem_preimage]
     exact this
 
+/-- The syntatic monoid of the preimage of `T` under a surjective homomorphism
+  is isomorphic to the syntatic monoid of `T`. -/
 noncomputable def preImage_syntacticMonoid_iso (L : Type) [Monoid L]
     (φ : L →* M) (hφ : Function.Surjective φ) :
-    syntacticMonoid (φ ⁻¹' T) ≃* syntacticMonoid T := by
+    SyntacticMonoid (φ ⁻¹' T) ≃* SyntacticMonoid T := by
   refine ⟨?_, ?_⟩
   · refine ⟨?_, ?_, ?_, ?_⟩
     · exact Quotient.lift (fun l => ⟦φ l⟧) (by

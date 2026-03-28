@@ -79,12 +79,12 @@ variable [DecidablePred (· ∈ M₁.accept)]
 @[simps]
 def concat (M₁ : εNFA α σ₁) (M₂ : εNFA α σ₂) [DecidablePred (· ∈ M₁.accept)] :
     εNFA α (σ₁ ⊕ σ₂) where
-  step q oa := match q, oa with
-    | Sum.inl q₁, some _ => (M₁.step q₁ oa).image Sum.inl
+  step
+    | Sum.inl q₁, some a => (M₁.step q₁ (some a)).image Sum.inl
     | Sum.inl q₁, none   =>
       (M₁.step q₁ none).image Sum.inl ∪
       (if q₁ ∈ M₁.accept then (M₂.start.image Sum.inr) else ∅)
-    | Sum.inr q₂, _      => (M₂.step q₂ oa).image Sum.inr
+    | Sum.inr q₂, oa      => (M₂.step q₂ oa).image Sum.inr
   start := M₁.start.image Sum.inl
   accept := M₂.accept.image Sum.inr
 
@@ -214,7 +214,7 @@ variable [DecidablePred (· ∈ M.accept)]
 /-- DFA which accepts the Kleene star of the language of `M`. -/
 @[simps]
 def kstar (M : εNFA α σ) [DecidablePred (· ∈ M.accept)] : εNFA α (Option σ) where
-  step oq oa := match oq, oa with
+  step
     | none,   some _ => ∅
     | none,   none   => M.start.image some
     | some q, some a => (M.step q (some a)).image some
@@ -488,23 +488,16 @@ theorem IsRegular.matches' (P : RegularExpression α) : Language.IsRegular (P.ma
   | comp _ _ ih₁ ih₂ => simp [Language.IsRegular.mul ih₁ ih₂]
   | star _ ih        => simp [Language.IsRegular.kstar ih]
 
-theorem matches'_foldl_acc {α : Type*}
-    (L : List α) (f : α → RegularExpression α) (acc : RegularExpression α) :
-    (L.foldl (fun acc a => acc + f a) acc).matches' =
-    acc.matches' + ⨆ x ∈ L, (f x).matches' := by
-  induction L generalizing acc with
-  | nil => simp
+theorem matches'_sum_map {α : Type*} (L : List α) (f : α → RegularExpression α) :
+    (L.map f).sum.matches' = ⋃ x ∈ L, (f x).matches' := by
+  induction L with
+  | nil => simp [Language.zero_def]
   | cons b L' ih =>
-    simp only [List.foldl_cons, ih, matches', add_eq_sup, List.mem_cons, iSup_or]
-    rw [iSup_sup_eq, iSup_iSup_eq_left, ← sup_assoc]
+    simp only [List.map_cons, List.sum_cons, matches', add_eq_sup, List.mem_cons,
+      iUnion_iUnion_eq_or_left, ih]
+    rfl
 
-theorem matches'_foldl_sum {α : Type*} (L : List α) (f : α → RegularExpression α) :
-    (L.foldl (fun acc a => acc + f a) 0).matches' =
-    ⋃ x ∈ L, (f x).matches' := by
-  simp only [matches'_foldl_acc, matches', add_eq_sup, zero_le, sup_of_le_right]
-  rfl
-
-theorem mem_matches_mul_star_mul {R_to R_loop R_from : RegularExpression α} {w : List α} :
+theorem mem_matches'_mul_star_mul {R_to R_loop R_from : RegularExpression α} {w : List α} :
     w ∈ (R_to * R_loop.star * R_from).matches' ↔
     ∃ w₁ w₂ w₃, w = w₁ ++ w₂ ++ w₃ ∧
                 w₁ ∈ R_to.matches' ∧
@@ -517,7 +510,7 @@ theorem mem_matches_mul_star_mul {R_to R_loop R_from : RegularExpression α} {w 
   · rintro ⟨w₁, w₂, w₃, rfl, hw₁, hw₂, hw₃⟩
     exact ⟨w₁ ++ w₂, ⟨w₁, hw₁, w₂, hw₂, rfl⟩, w₃, hw₃, rfl⟩
 
-theorem mem_matches_star_concat {R : RegularExpression α} {w₁ w₂ : List α}
+theorem mem_matches'_star_concat {R : RegularExpression α} {w₁ w₂ : List α}
     (h₁ : w₁ ∈ R.star.matches') (h₂ : w₂ ∈ R.star.matches') :
     w₁ ++ w₂ ∈ R.star.matches' := by
   rw [matches'_star, Language.mem_kstar] at *
@@ -525,7 +518,7 @@ theorem mem_matches_star_concat {R : RegularExpression α} {w₁ w₂ : List α}
   rcases h₂ with ⟨L₂, rfl, hL₂⟩
   exact ⟨L₁ ++ L₂, by simp, List.forall_mem_append.mpr ⟨hL₁, hL₂⟩⟩
 
-theorem mem_matches_star_singleton {R : RegularExpression α} {w : List α}
+theorem mem_matches'_star {R : RegularExpression α} {w : List α}
     (h : w ∈ R.matches') : w ∈ R.star.matches' := by
   rw [matches'_star, Language.mem_kstar]
   exact ⟨[w], by simpa⟩
@@ -552,7 +545,7 @@ variable (M) in
 /-- Transform any `εNFA` into an `εNFA` with a single start state and accept state. -/
 @[simps]
 def toSingleεNFA : εNFA α (ExtendedState σ) where
-  step q oa := match q, oa with
+  step
     | .start, some _   => ∅
     | .start, none     => (M.start).image .state
     | .accept, _       => ∅
@@ -679,9 +672,9 @@ state indexed `i` to a state indexed `j` and the empty string if there also exis
 transition. -/
 def directRegex (i j : Fin n) : RegularExpression α :=
   let char_transitions : RegularExpression α :=
-    Finset.univ.sort.foldl (fun acc a =>
-      acc + (if (e.symm j) ∈ M.step (e.symm i) (some a) then char a else 0)
-    ) 0
+    (Finset.univ.sort.map (fun a =>
+      if (e.symm j) ∈ M.step (e.symm i) (some a) then char a else 0
+    )).sum
   let epsilon_transitions : RegularExpression α :=
     if (e.symm j) ∈ M.step (e.symm i) none ∨ i = j then 1 else 0
   char_transitions + epsilon_transitions
@@ -690,7 +683,7 @@ theorem mem_matches'_directRegex {i j : Fin n} {x : List α} :
     x ∈ (M.directRegex i j).matches' ↔
     (∃ a, x = [a] ∧ e.symm j ∈ M.step (e.symm i) (some a)) ∨
     (x = [] ∧ ((e.symm j ∈ M.step (e.symm i) none) ∨ i = j)) := by
-  simp only [directRegex, matches'_add, Language.mem_add, matches'_foldl_sum, Finset.mem_sort,
+  simp only [directRegex, matches'_add, Language.mem_add, matches'_sum_map, Finset.mem_sort,
     Finset.mem_univ, iUnion_true]
   constructor
   · rintro (⟨s, ⟨a, ha⟩, hx⟩ | hε)
@@ -717,6 +710,7 @@ theorem mem_matches'_directRegex {i j : Fin n} {x : List α} :
       rfl
     · right
       simp [h_step]
+
 
 variable (M) in
 /-- The regex matching all words that result in a path from a state indexed `i` to a state indexed
@@ -759,16 +753,16 @@ theorem pathRegex_trans {k : ℕ} {i j m : Fin n} (hm : m.val < k)
   | succ k' ih =>
     simp only [pathRegex] at *
     split_ifs at * with hk'
-    · rw [matches'_add, Language.mem_add, mem_matches_mul_star_mul] at *
+    · rw [matches'_add, Language.mem_add, mem_matches'_mul_star_mul] at *
       rcases lt_or_eq_of_le (Nat.le_of_lt_succ hm) with hm | rfl
       <;> rcases h₁ with ⟨y₁, y₂, y₃, rfl, hy₁, hy₂, hy₃⟩ | h_old₁
       <;> rcases h₂ with ⟨z₁, z₂, z₃, rfl, hz₁, hz₂, hz₃⟩ | h_old₂
       · left
         refine ⟨y₁, y₂ ++ y₃ ++ z₁ ++ z₂, z₃, by simp, hy₁, ?_, hz₃⟩
         have h₁ := ih hm hy₃ hz₁
-        have h₂ := mem_matches_star_concat hy₂ (mem_matches_star_singleton h₁)
+        have h₂ := mem_matches'_star_concat hy₂ (mem_matches'_star h₁)
         rw [← List.append_assoc] at h₂
-        exact mem_matches_star_concat h₂ hz₂
+        exact mem_matches'_star_concat h₂ hz₂
       · left
         exact ⟨y₁, y₂, y₃ ++ x₂, by simp, hy₁, hy₂, ih hm hy₃ h_old₂⟩
       · left
@@ -777,15 +771,15 @@ theorem pathRegex_trans {k : ℕ} {i j m : Fin n} (hm : m.val < k)
         exact ih hm h_old₁ h_old₂
       · left
         refine ⟨y₁, y₂ ++ y₃ ++ z₁ ++ z₂, z₃, by simp, hy₁, ?_, hz₃⟩
-        have h₁ := mem_matches_star_concat hy₂ (mem_matches_star_singleton hy₃)
-        have h₂ := mem_matches_star_concat h₁ (mem_matches_star_singleton hz₁)
-        exact mem_matches_star_concat h₂ hz₂
+        have h₁ := mem_matches'_star_concat hy₂ (mem_matches'_star hy₃)
+        have h₂ := mem_matches'_star_concat h₁ (mem_matches'_star hz₁)
+        exact mem_matches'_star_concat h₂ hz₂
       · left
         refine ⟨y₁, y₂ ++ y₃, x₂, by simp, hy₁, ?_, h_old₂⟩
-        exact mem_matches_star_concat hy₂ (mem_matches_star_singleton hy₃)
+        exact mem_matches'_star_concat hy₂ (mem_matches'_star hy₃)
       · left
         refine ⟨x₁, z₁ ++ z₂, z₃, by simp, h_old₁, ?_, hz₃⟩
-        exact mem_matches_star_concat (mem_matches_star_singleton hz₁) hz₂
+        exact mem_matches'_star_concat (mem_matches'_star hz₁) hz₂
       · left
         exact ⟨x₁, [], x₂, by simp, h_old₁, ⟨[], rfl, by simp⟩, h_old₂⟩
     · rcases lt_or_eq_of_le (Nat.le_of_lt_succ hm) with hm | rfl
@@ -924,7 +918,7 @@ lemma isRestrictedMatch_of_mem_pathRegex {k : ℕ} {i j : Fin n} {w : List α}
   | succ k' ih =>
     simp only [pathRegex] at h
     split_ifs at h with hlt
-    · rw [matches'_add, Language.mem_add, mem_matches_mul_star_mul] at h
+    · rw [matches'_add, Language.mem_add, mem_matches'_mul_star_mul] at h
       rcases h with ⟨w₁, w₂, w₃, rfl, hw₁, hw₂, hw₃⟩ | h_old
       · apply IsRestrictedMatch.trans (m := ⟨k', hlt⟩)
         · apply IsRestrictedMatch.trans (m := ⟨k', hlt⟩)

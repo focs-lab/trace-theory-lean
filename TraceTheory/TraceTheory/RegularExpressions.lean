@@ -1,75 +1,66 @@
-import TraceTheory.Lemmas
 import Mathlib.Algebra.Group.Pointwise.Set.Basic
-import Mathlib.Computability.RegularExpressions
+import TraceTheory.Language
 
 open scoped Pointwise
 
-open TraceTheory
+open Computability TraceTheory
 
 namespace RegularExpression
 
 variable {α : Type*} {I : Independence α}
 
 def IsStarConnected (I : Independence α) : RegularExpression α → Prop
-  | 0 => True
-  | 1 => True
+  | zero => True
+  | epsilon => True
   | char _ => True
   | plus P Q => IsStarConnected I P ∧ IsStarConnected I Q
   | comp P Q => IsStarConnected I P ∧ IsStarConnected I Q
-  | star P => IsStarConnected I P ∧ (∀ s ∈ P.matches', IsConnected I ⟦s⟧)
+  | star P => IsStarConnected I P ∧ (∀ s ∈ P.matches', Trace.IsConnected I ⟦s⟧)
 
--- Interpretation of this RegularExpression as operating on trace languages.
-def matches_trace (I : Independence α) : RegularExpression α → Set (Trace I)
-  | 0 => ∅
-  | 1 => { 1 }
+/-- Interpretation of this RegularExpression on trace languages. -/
+def traceMatches (I : Independence α) : RegularExpression α → Set (Trace I)
+  | zero => ∅
+  | epsilon => { 1 }
   | char a => { ⟦[a]⟧ }
-  | plus P Q => matches_trace I P ∪ matches_trace I Q
-  | comp P Q => matches_trace I P * matches_trace I Q
-  | star P => kstar (matches_trace I P)
+  | plus P Q => traceMatches I P ∪ traceMatches I Q
+  | comp P Q => traceMatches I P * traceMatches I Q
+  | star P => (traceMatches I P)∗
 
-def IsStarConnected_trace (I : Independence α) : RegularExpression α → Prop
-  | 0 => True
-  | 1 => True
-  | char _ => True
-  | plus P Q => IsStarConnected I P ∧ IsStarConnected I Q
-  | comp P Q => IsStarConnected I P ∧ IsStarConnected I Q
-  | star P => IsStarConnected I P ∧ (∀ t ∈ matches_trace I P, IsConnected I t)
-
--- Interpretation of this RegularExpression as a c-rational expression operating on trace languages.
-def matches_cstar_trace (I : Independence α) : RegularExpression α → Set (Trace I)
-  | 0 => ∅
-  | 1 => { 1 }
+/--- Interpretation of this RegularExpression as a c-rational expression on trace languages. --/
+def cRatMatches (I : Independence α) : RegularExpression α → Set (Trace I)
+  | zero => ∅
+  | epsilon => { 1 }
   | char a => { ⟦[a]⟧ }
-  | P + Q => matches_cstar_trace I P ∪ matches_cstar_trace I Q
-  | P * Q => matches_cstar_trace I P * matches_cstar_trace I Q
-  | star P => kstar (connectedComponents (matches_cstar_trace I P))
+  | plus P Q => cRatMatches I P ∪ cRatMatches I Q
+  | comp P Q => cRatMatches I P * cRatMatches I Q
+  | star P => (connectedComponents (cRatMatches I P))∗
 
-/-- Interpreting this RegularExpression as operating on Trace Languages gives the same matching set
-  as interpreting (as usual) on String Languages and then projecting to Traces.
--/
-theorem matches_toTrace (P : RegularExpression α) : matches_trace I P = toTrace I P.matches' := by
+/-- Interpreting this RegularExpression as operating on trace languages gives the same matching set
+  as projecting the language it matches to traces. -/
+theorem traceMatches_toTrace (P : RegularExpression α) :
+    traceMatches I P = toTrace I P.matches' := by
   induction P with
-  | zero => simp [toTrace, matches_trace, Language.zero_def]
-  | epsilon => simp [toTrace, matches_trace, Language.one_def]
+  | zero => simp [toTrace, traceMatches, Language.zero_def]
+  | epsilon => simp [toTrace, traceMatches, Language.one_def]
   | char a =>
-    unfold matches_trace matches' toTrace
+    unfold traceMatches matches' toTrace
     rw [Set.image_singleton]
     rfl
   | plus P Q ihP ihQ =>
-    unfold matches_trace matches' toTrace
+    unfold traceMatches matches' toTrace
     rw [ihP, ihQ, Language.add_def, Set.image_union]
     rfl
   | comp P Q ihP ihQ =>
-    unfold matches_trace matches' toTrace
+    unfold traceMatches matches' toTrace
     rw [ihP, ihQ, Set.image_mul]
     rfl
   | star P ih =>
-    unfold matches_trace matches'
-    rw [kstar_toTrace_comm, ih]
+    unfold traceMatches matches'
+    rw [toTrace_kstar_comm, ih]
 
-@[simp]
-lemma matches_toTrace_dist (P Q : RegularExpression α) :
-    toTrace I (P.matches' + Q.matches') = toTrace I P.matches' ∪ toTrace I Q.matches' := by
-  apply Set.image_union
+-- @[simp]
+-- theorem traceMatches_toTrace_dist (P Q : RegularExpression α) :
+--     toTrace I (P.matches' + Q.matches') = toTrace I P.matches' ∪ toTrace I Q.matches' := by
+--   apply Set.image_union
 
 end RegularExpression

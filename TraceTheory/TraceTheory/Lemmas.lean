@@ -4,6 +4,8 @@ import TraceTheory.Basic
 
 namespace TraceTheory
 
+open Independence
+
 variable {α : Type*} {I : Independence α}
 
 lemma eps_is_empty (a : α) : a ∉ (1 : Trace I) := by
@@ -24,7 +26,7 @@ lemma mems_lift (w : List α) : {a : α // a ∈ w} = {a : α // a ∈ Trace.mk'
   rfl
 
 def dependencyIn (t : Trace I) (a b : α) :=
-  (inducedDependence I).rel a b ∧ a ∈ t ∧ b ∈ t
+  I.inducedDependence.rel a b ∧ a ∈ t ∧ b ∈ t
 
 def dependencyTransClosureIn (t : Trace I) (a b : α) :=
   Relation.TransGen (dependencyIn t) a b

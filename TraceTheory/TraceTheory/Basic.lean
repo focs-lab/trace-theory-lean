@@ -3,7 +3,7 @@ import TraceTheory.List
 
 namespace TraceTheory
 
-open Dependence List
+open Dependence Independence List
 
 variable {α : Type*} {I : Independence α}
 
@@ -376,6 +376,19 @@ lemma indep_and_exists_of_equiv_of_head_ne {a b : α} {w x : List α} [Decidable
       simp [mem_reverse] at h_indep_rev ⊢
       exact h_indep_rev
 
+lemma indep_of_indep_flatten_right {u : List α} {vs : List (List α)}
+    (i : ℕ) (hi : i < vs.length) (h : Independent I u vs.flatten) :
+    Independent I u (vs[i]) := by
+  induction vs generalizing i with
+  | nil => contradiction
+  | cons v vs' ih =>
+    simp [-Independent] at h ⊢
+    cases i with
+    | zero => exact (indep_of_indep_append_right h).left
+    | succ i' =>
+      simp only [length_cons, Nat.add_lt_add_iff_right] at hi
+      exact ih i' hi (indep_of_indep_append_right h).right
+
 theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v) (x ++ y)) :
     ∃ z₁ z₂ z₃ z₄, I.Independent z₂ z₃
     ∧ TraceEqv I u (z₁ ++ z₂) ∧ TraceEqv I v (z₃ ++ z₄)
@@ -437,6 +450,57 @@ theorem levi_lemma {u v x y : List α} [DecidableEq α] (h : TraceEqv I (u ++ v)
       simp only [← append_assoc] at hz₂'e ⊢
       replace ht₄ := (ht₄.compat (TraceEqv.refl [e])).trans hz₂'e
       exact ⟨ht₁, ht₂, ht₃, ht₄⟩
+
+theorem levi_lemma_gen {u v : List α} {ts : List (List α)} [DecidableEq α]
+    (h : TraceEqv I (u ++ v) ts.flatten) :
+    ∃ ps qs : List (List α),
+      ps.length = ts.length ∧
+      qs.length = ts.length ∧
+      TraceEqv I u ps.flatten ∧
+      TraceEqv I v qs.flatten ∧
+      (∀ i (ht : i < ts.length) (hp : i < ps.length) (hq : i < qs.length),
+        TraceEqv I ts[i] (ps[i] ++ qs[i])) ∧
+      (∀ i j (hi : i < qs.length) (hj : j < ps.length), i < j →
+        Independent I qs[i] ps[j]) := by
+  induction ts generalizing u v with
+  | nil =>
+    simp only [List.flatten_nil] at h
+    have h_len := length_eq_of_eqv h
+    simp only [List.length_append, List.length_nil] at h_len
+    have hu : u = [] := List.length_eq_zero_iff.mp (by omega)
+    have hv : v = [] := List.length_eq_zero_iff.mp (by omega)
+    subst hu hv
+    use [], []
+    simp [TraceEqv.refl]
+  | cons t tsuf ih =>
+    rcases levi_lemma h with ⟨p, psuf, q, qsuf, h_ind, h_up, h_vq, h_tpq, h_tpq_suf⟩
+    rcases ih h_tpq_suf.symm with ⟨ps_i, qs_i, ih_p_len, ih_q_len, ih_p, ih_q, ih_tpq, ih_ind⟩
+    use p :: ps_i, q :: qs_i
+    and_intros
+    · simp [ih_p_len]
+    · simp [ih_q_len]
+    · apply TraceEqv.trans h_up
+      simp only [List.flatten_cons]
+      exact TraceEqv.compat (TraceEqv.refl p) ih_p
+    · apply TraceEqv.trans h_vq
+      simp only [List.flatten_cons]
+      exact TraceEqv.compat (TraceEqv.refl q) ih_q
+    · intro i ht hp hq
+      cases i with
+      | zero => exact h_tpq
+      | succ i' => apply ih_tpq i'
+    · intro i j hi hj hij
+      cases j with
+      | zero => contradiction
+      | succ j' =>
+        cases i with
+        | zero =>
+          simp only [List.length_cons, Nat.add_lt_add_iff_right] at hj
+          exact indep_of_indep_flatten_right j' hj
+            (indep_of_indep_of_eqv (independent_symm h_ind) ih_p)
+        | succ i' =>
+          apply ih_ind i' j'
+          exact Nat.succ_lt_succ_iff.mp hij
 
 theorem projection_lemma {u v : List α} [DecidableEq α] (D : Dependence α) :
     TraceEqv D.inducedIndependence u v ↔
@@ -643,14 +707,107 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
     apply Quotient.sound
     exact hd'.symm
 
-lemma not_mem_one (a : α) : a ∉ (1 : Trace I) := by
+theorem not_mem_one (a : α) : a ∉ (1 : Trace I) := by
   intro h
   rcases h
 
-lemma exists_mem_of_ne_one (t : Trace I) (h : t ≠ 1) : ∃ a, a ∈ t := by
+theorem exists_mem_of_ne_one (t : Trace I) (h : t ≠ 1) : ∃ a, a ∈ t := by
   rcases t with ⟨_ | ⟨a, w⟩⟩
   · exact (h rfl).elim
   · exact ⟨a, List.mem_cons_self⟩
+
+theorem mem_mul_iff {a : α} {s t : Trace I} : a ∈ s * t ↔ a ∈ s ∨ a ∈ t := by
+  rcases s
+  rcases t
+  exact List.mem_append
+
+/-- Predicate for dependence of symbols `a` and `b` in trace `t`. -/
+def DepEdge (t : Trace I) (a b : α) :=
+  I.inducedDependence.rel a b ∧ a ∈ t ∧ b ∈ t
+
+/-- Predicate for transitive dependence of symbols `a` and `b` in trace `t`. -/
+def DepPath (t : Trace I) (a b : α) :=
+  Relation.TransGen t.DepEdge a b
+
+/-- A trace `t` is connected if all its symbols are transitively dependent. -/
+def IsConnected (I : Independence α) (t : Trace I) :=
+  ∀ a ∈ t, ∀ b ∈ t, t.DepPath a b
+
+/-- Traces `u` and `v` are independent if every symbol in `u` is independent of
+  every symbol in `v`. -/
+def Independent (u v : Trace I) :=
+  ∀ a ∈ u, ∀ b ∈ v, I.rel a b
+
+theorem not_depPath_mul_of_indep {a b : α} {u v : Trace I}
+    (huv : u.Independent v) (ha : a ∈ u) (hb : b ∈ v) :
+    ¬ (u * v).DepPath a b := by
+  intro h
+  induction h with
+  | single h =>
+    rename_i b
+    exact h.1 (huv a ha b hb)
+  | tail h h_tail ih =>
+    rename_i b c
+    simp only [imp_false] at ih
+    have hbu : b ∈ u := by
+      have hmul := mem_mul_iff.mp h_tail.2.1
+      simp_all only [or_false]
+    simp [DepEdge, inducedDependence] at h_tail
+    exact h_tail.1 (huv b hbu c hb)
+
+theorem not_isConnected_mul_of_indep {u v : Trace I}
+    (h : u.Independent v) (hu : u ≠ 1) (hv : v ≠ 1) :
+    ¬ (u * v).IsConnected I := by
+  by_contra h_con
+  have ⟨a, ha⟩ := exists_mem_of_ne_one u hu
+  have ⟨b, hb⟩ := exists_mem_of_ne_one v hv
+  have h_ab_con := h_con a (mem_mul_iff.mpr (Or.inl ha)) b (mem_mul_iff.mpr (Or.inr hb))
+  have h_ab_dis := not_depPath_mul_of_indep h ha hb
+  exact h_ab_dis h_ab_con
+
+theorem mk'_eq_one_iff {w : List α} : ⟦w⟧ = (1 : Trace I) ↔ w = [] := by
+  cases w with
+  | nil =>
+    simp only [iff_true]
+    rfl
+  | cons a u =>
+    constructor
+    · intro h
+      have h_au := length_eq_of_eqv (Quotient.exact h)
+      simp at h_au
+    · simp
+
+def isEmpty : Trace I → Bool :=
+  Quotient.lift List.isEmpty
+    (by
+      intro u v huv
+      cases u with
+      | nil => rw [mk'_eq_one_iff.mp (Eq.symm (Quotient.sound huv))]
+      | cons a u =>
+        cases v with
+        | nil => rw [mk'_eq_one_iff.mp (Quotient.sound huv)]
+        | cons b v => rfl
+    )
+
+@[simp]
+theorem isEmpty_iff {t : Trace I} : t.isEmpty = true ↔ t = 1:= by
+  constructor
+  · intro h
+    rcases t with ⟨s⟩
+    rw [List.isEmpty_iff.mp h]
+    rfl
+  · intro h
+    rw [h]
+    rfl
+
+theorem prod_filter_not_isEmpty (L : List (Trace I)) :
+    (L.filter (fun x => !x.isEmpty)).prod = L.prod := by
+  induction L with
+  | nil => rfl
+  | cons t L ih =>
+    by_cases ht : t.isEmpty = true
+    · simp [isEmpty_iff.mp ht, ih]
+    · simp [ht, ih]
 
 end Trace
 
