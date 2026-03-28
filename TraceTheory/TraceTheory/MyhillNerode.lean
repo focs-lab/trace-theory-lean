@@ -168,8 +168,9 @@ instance : Monoid (SyntacticMonoid T) where
 /-- Prop 4.1 (ii) => (i) -/
 theorem finSyntacticIndex_is_recognizable :
     Finite (SyntacticMonoid T) → IsRecognizable T := by
+  classical
   intro h
-  use SyntacticMonoid T, inferInstance, Fintype.ofFinite _, Classical.typeDecidableEq (SyntacticMonoid T)
+  use SyntacticMonoid T, inferInstance, Fintype.ofFinite _, inferInstance
   use {
     toFun := fun m => ⟦m⟧
     map_one' := by rfl
@@ -211,7 +212,7 @@ theorem recognizable_is_finSyntacticIndex :
   exact Finite.of_surjective f f_surj
 
 /-- Prop 4.1 (i) => (iv) -/
-theorem recognizable_has_recognizablePreImage (L : Type) [Monoid L] (φ : L →* M) :
+theorem recognizable_has_recognizablePreImage {L : Type} [Monoid L] (φ : L →* M) :
     IsRecognizable T → IsRecognizable (φ ⁻¹' T) := by
   intro h
   unfold IsRecognizable at h ⊢
@@ -244,7 +245,7 @@ theorem recognizable_has_recognizablePreImage (L : Type) [Monoid L] (φ : L →*
 
 /-- The syntatic monoid of the preimage of `T` under a surjective homomorphism
   is isomorphic to the syntatic monoid of `T`. -/
-noncomputable def preImage_syntacticMonoid_iso (L : Type) [Monoid L]
+noncomputable def preImage_syntacticMonoid_iso {L : Type} [Monoid L]
     (φ : L →* M) (hφ : Function.Surjective φ) :
     SyntacticMonoid (φ ⁻¹' T) ≃* SyntacticMonoid T := by
   refine ⟨?_, ?_⟩
@@ -294,7 +295,8 @@ noncomputable def preImage_syntacticMonoid_iso (L : Type) [Monoid L]
     rw [MonoidHom.map_mul φ l₁ l₂]
 
 /-- Prop 4.1 (iv) => (i) -/
-theorem recognizablePreImage_is_recognizable (L : Type) [Monoid L] (φ : L →* M) (hφ : Function.Surjective φ) :
+theorem recognizablePreImage_is_recognizable {L : Type} [Monoid L]
+    (φ : L →* M) (hφ : Function.Surjective φ) :
     IsRecognizable (φ ⁻¹' T) → IsRecognizable T := by
   intro h
   apply recognizable_is_finSyntacticIndex at h

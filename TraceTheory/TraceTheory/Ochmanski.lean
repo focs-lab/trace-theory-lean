@@ -1,14 +1,12 @@
 import Mathlib.Algebra.Group.PUnit
-import TraceTheory.Language
-import TraceTheory.Lemmas
-import TraceTheory.MyhillNerode
+import TraceTheory.Hashiguchi
 import TraceTheory.RegularExpressions
 
 namespace TraceTheory
 
 open scoped Pointwise
 
-open RegularExpression Computability
+open Computability Dependence RegularExpression Trace Independence
 
 variable {α : Type} {I : Independence α}
 
@@ -23,19 +21,19 @@ variable {α : Type} {I : Independence α}
 
   Note that P · ∅ or ∅ · P are the only cases where this patch is needed.
 -/
-lemma exists_starConnected_of_connectedIterativeFactors'
+lemma exists_starConnected_of_connectedIterativeFactors_aux
     (X : RegularExpression α)
-    (hconn : ∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) :
+    (hconn : ∀ s, IsIterativeFactor X.matches' s → Trace.IsConnected I ⟦s⟧) :
     ∃ Y, IsStarConnected I Y ∧ X.matches' = Y.matches' := by
   induction X with
   | zero => use zero, trivial
   | epsilon => use epsilon, trivial
   | char a => use char a, trivial
   | plus P Q ihP ihQ =>
-    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
+    have condP : ∀ s, IsIterativeFactor P.matches' s → Trace.IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
       exact hconn s ⟨u, v, fun n => Or.inl (h n)⟩
-    have condQ : ∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧ := by
+    have condQ : ∀ s, IsIterativeFactor Q.matches' s → Trace.IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
       exact hconn s ⟨u, v, fun n => Or.inr (h n)⟩
     rcases ihP condP with ⟨P', hP'⟩
@@ -53,12 +51,12 @@ lemma exists_starConnected_of_connectedIterativeFactors'
       simp only [IsStarConnected, matches', hq_emp, true_and]
       rw [Set.mul_empty]
       rfl
-    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
+    have condP : ∀ s, IsIterativeFactor P.matches' s → Trace.IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
       exact hconn s ⟨u, v ++ q, fun n => by
         simp only [matches', Language.mem_mul]
         exact ⟨u ++ s ^ n ++ v, h n, q, hq, by simp [← List.append_assoc]⟩⟩
-    have condQ : ∀ s, IsIterativeFactor Q.matches' s → IsConnected I ⟦s⟧ := by
+    have condQ : ∀ s, IsIterativeFactor Q.matches' s → Trace.IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
       exact hconn s ⟨p ++ u, v, fun n => by
         simp only [matches', Language.mem_mul]
@@ -68,7 +66,7 @@ lemma exists_starConnected_of_connectedIterativeFactors'
     use P' * Q'
     simp [IsStarConnected, hP', hQ']
   | star P ih =>
-    have condP : ∀ s, IsIterativeFactor P.matches' s → IsConnected I ⟦s⟧ := by
+    have condP : ∀ s, IsIterativeFactor P.matches' s → Trace.IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
       exact hconn s ⟨u, v, fun n => by
         simp only [matches', Language.mem_kstar]
@@ -95,40 +93,34 @@ lemma exists_starConnected_of_connectedIterativeFactors'
 theorem exists_starConnected_of_connectedIterativeFactors
     (T : Set (Trace I)) (X : RegularExpression α)
     (himg : T = toTrace I X.matches')
-    (hconn : ∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) :
-    ∃ P, IsStarConnected I P ∧ T = (matches_trace I P) := by
-  simp [matches_toTrace]
-  rcases exists_starConnected_of_connectedIterativeFactors' X hconn with ⟨P, hP⟩
+    (hconn : ∀ s, IsIterativeFactor X.matches' s → Trace.IsConnected I ⟦s⟧) :
+    ∃ P, IsStarConnected I P ∧ T = P.traceMatches I := by
+  simp only [traceMatches_toTrace]
+  rcases exists_starConnected_of_connectedIterativeFactors_aux X hconn with ⟨P, hP⟩
   use P
   simp [hP, himg]
 
 /-- Theorem 4.1 (iii) => (iv) -/
 theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConnected I X) :
-    matches_trace I X = matches_cstar_trace I X := by
+    X.traceMatches I = X.cRatMatches I := by
   induction X with
-  | zero => simp [matches_trace, matches_cstar_trace]
-  | epsilon => simp [matches_trace, matches_cstar_trace]
-  | char _ => simp [matches_trace, matches_cstar_trace]
-  | plus P Q ihP ihQ => simp [matches_trace, matches_cstar_trace, ihP h.1, ihQ h.2]
-  | comp P Q ihP ihQ => simp [matches_trace, matches_cstar_trace, ihP h.1, ihQ h.2]
+  | zero => simp [traceMatches, cRatMatches]
+  | epsilon => simp [traceMatches, cRatMatches]
+  | char _ => simp [traceMatches, cRatMatches]
+  | plus P Q ihP ihQ => simp [traceMatches, cRatMatches, ihP h.1, ihQ h.2]
+  | comp P Q ihP ihQ => simp [traceMatches, cRatMatches, ihP h.1, ihQ h.2]
   | star P ih =>
-    unfold matches_trace matches_cstar_trace
+    unfold traceMatches cRatMatches
     unfold IsStarConnected at h
     rw [<- ih h.left]
-    have hP_conn : ∀ t ∈ matches_trace I P, IsConnected I t := by
+    have hP_conn : ∀ t ∈ traceMatches I P, t.IsConnected I := by
       intro t ht
-      rw [matches_toTrace] at ht
+      rw [traceMatches_toTrace] at ht
       simp only [toTrace, Set.mem_image] at ht
       rcases ht with ⟨s, hs, rfl⟩
       exact h.right s hs
-    rw [connectedComponents_of_connected _ hP_conn]
-    rw [kstar_eq_minusEps_trace]
-
-theorem recognizable_image_of_regular_finite_rank {X : Language α}
-    (hX_reg : X.IsRegular)
-    (hX_rank : HasFiniteRank I X) :
-    IsRecognizable (⇑(mk' (I := I)) '' X) := by
-  sorry
+    rw [connectedComponents_eq_diff_one _ hP_conn]
+    rw [kstar_diff_one']
 
 lemma recognizable_zero : IsRecognizable (∅ : Set (Trace I)) :=
   ⟨PUnit, inferInstance, inferInstance, inferInstance, 1, by simp⟩
@@ -323,17 +315,17 @@ lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
 
 lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
-  let L_P : Language α := ⇑(mk' (I := I)) ⁻¹' P
-  let L_Q : Language α := ⇑(mk' (I := I)) ⁻¹' Q
+  let L_P : Language α := Trace.mk' I ⁻¹' P
+  let L_Q : Language α := Trace.mk' I ⁻¹' Q
   have hL_P_reg : L_P.IsRegular :=
-    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hP)
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ hP)
   have hL_Q_reg : L_Q.IsRegular :=
-    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hQ)
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ hQ)
   have hL_P_closed : IsClosed I L_P := by
     apply le_antisymm
     · rintro x ⟨y, hy, heqv⟩
       simp only [L_P, Set.mem_preimage] at hy ⊢
-      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      have heq : Trace.mk' I y = Trace.mk' I x := Quotient.sound heqv
       rw [← heq]
       exact hy
     · exact traceClosure.le_closure
@@ -341,7 +333,7 @@ lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
     apply le_antisymm
     · rintro x ⟨y, hy, heqv⟩
       simp only [L_Q, Set.mem_preimage] at hy ⊢
-      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      have heq : Trace.mk' I y = Trace.mk' I x := Quotient.sound heqv
       rw [← heq]
       exact hy
     · exact traceClosure.le_closure
@@ -349,11 +341,11 @@ lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
   have h_rank : HasFiniteRank I (L_P * L_Q) :=
     ⟨1, concat_closed_rank L_P L_Q hL_P_closed hL_Q_closed⟩
   have h_hash := recognizable_image_of_regular_finite_rank h_mul_reg h_rank
-  have h_image_eq : mk' (I := I) '' (L_P * L_Q) = P * Q := by
+  have h_image_eq : Trace.mk' I '' (L_P * L_Q) = P * Q := by
     ext t
     constructor
     · rintro ⟨w, ⟨u, hu, v, hv, rfl⟩, rfl⟩
-      exact ⟨mk' u, hu, mk' v, hv, rfl⟩
+      exact ⟨⟦u⟧, hu, ⟦v⟧, hv, rfl⟩
     · rintro ⟨⟨u⟩, ht₁, ⟨v⟩, ht₂, rfl⟩
       exact ⟨u ++ v, ⟨u, ht₁, v, ht₂, rfl⟩, rfl⟩
   rw [← h_image_eq]
@@ -391,7 +383,7 @@ def alph_map [DecidableEq α] : Trace I →* AlphMonoid α where
     exact alph_map_aux_append x y
 
 lemma alph_map_eq_iff_mems_eq [DecidableEq α] {t t' : Trace I} :
-    alph_map (I := I) t = alph_map (I := I) t' ↔ ∀ a, a ∈ t ↔ a ∈ t' := by
+    alph_map t = alph_map t' ↔ ∀ a, a ∈ t ↔ a ∈ t' := by
   rcases t with ⟨w⟩
   rcases t' with ⟨w'⟩
   change w.toFinset = w'.toFinset ↔ _
@@ -399,8 +391,8 @@ lemma alph_map_eq_iff_mems_eq [DecidableEq α] {t t' : Trace I} :
   rfl
 
 lemma lift_dependency_path [DecidableEq α] {t t' : Trace I} (h_mem_eq : ∀ a, a ∈ t' ↔ a ∈ t)
-    (x y : α) (h_path : dependencyTransClosureIn t' x y) :
-    dependencyTransClosureIn t x y := by
+    (x y : α) (h_path : t'.DepPath x y) :
+    t.DepPath x y := by
   induction h_path with
   | single h_dep =>
     apply Relation.TransGen.single
@@ -426,19 +418,18 @@ lemma recognizable_connectedComponents {P : Set (Trace I)} [DecidableEq α] [Fin
       intro a
       have h_alph := alph_map_eq_iff_mems_eq.mp h_alph_eq
       exact h_alph a
-    have h_conn : IsConnected I t := by
-      intro a b
-      let a' : {x // x ∈ t'} := ⟨a.1, (h_mem_eq a.1).mpr a.2⟩
-      let b' : {x // x ∈ t'} := ⟨b.1, (h_mem_eq b.1).mpr b.2⟩
-      have h_path := ht'.1 a' b'
-      exact lift_dependency_path h_mem_eq a' b' h_path
+    have h_conn : t.IsConnected I := by
+      intro a ha b hb
+      apply lift_dependency_path h_mem_eq
+      rw [← h_mem_eq] at ha hb
+      exact ht'.1 a ha b hb
     have h_neq_1 : t ≠ 1 := by
       intro ht_eq_1
       subst ht_eq_1
       have ht'_eq_1 : t' = 1 := by
         by_contra ht'_neq_1
-        rcases empty_is_eps t' ht'_neq_1 with ⟨a, ha⟩
-        exact eps_is_empty a ((h_mem_eq a).mp ha)
+        rcases t'.exists_mem_of_ne_one ht'_neq_1 with ⟨a, ha⟩
+        exact not_mem_one a ((h_mem_eq a).mp ha)
       exact ht'.2.1 ht'_eq_1
     rcases ht'.2.2 with ⟨v, hv_in_P, h_indep_t'_v⟩
     have hv_in_P_t : t * v ∈ P := by
@@ -447,9 +438,9 @@ lemma recognizable_connectedComponents {P : Set (Trace I)} [DecidableEq α] [Fin
       rw [hP_eq, Set.mem_preimage] at hv_in_P ⊢
       rw [← h_f_mul] at hv_in_P
       exact hv_in_P
-    have h_indep_t_v : IndependentT t v := by
-      intro a b ha hb
-      exact h_indep_t'_v a b ((h_mem_eq a).mpr ha) hb
+    have h_indep_t_v : t.Independent v := by
+      intro a ha b hb
+      exact h_indep_t'_v a ((h_mem_eq a).mpr ha) b hb
     exact ⟨h_conn, h_neq_1, v, hv_in_P_t, h_indep_t_v⟩
 
 lemma dependent_letters_of_connected [DecidableEq α] {u v : List α}
@@ -458,19 +449,17 @@ lemma dependent_letters_of_connected [DecidableEq α] {u v : List α}
     ∃ a ∈ u, ∃ b ∈ v, ¬ I.rel a b := by
   by_contra h_all_indep
   push_neg at h_all_indep
-  have h_indep_trace : IndependentT (I := I) ⟦u⟧ ⟦v⟧ := by
-    intro a b ha hb
-    change a ∈ u at ha
-    change b ∈ v at hb
+  have h_indep_trace : Independent (I := I) ⟦u⟧ ⟦v⟧ := by
+    intro a ha b hb
     exact h_all_indep a ha b hb
-  have hu_trace : ⟦u⟧ ≠ (1 : Trace I) := by simpa [empty_iff]
-  have hv_trace : ⟦v⟧ ≠ (1 : Trace I) := by simpa [empty_iff]
-  exact append_indep_is_disconnected ⟦u⟧ ⟦v⟧ h_indep_trace hu_trace hv_trace h_conn
+  have hu_trace : ⟦u⟧ ≠ (1 : Trace I) := by simpa [mk'_eq_one_iff]
+  have hv_trace : ⟦v⟧ ≠ (1 : Trace I) := by simpa [mk'_eq_one_iff]
+  exact not_isConnected_mul_of_indep h_indep_trace hu_trace hv_trace h_conn
 
 lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List (List α)}
     (hps_len : ps.length = n) (hqs_len : qs.length = n)
     (hpq_conn : ∀ i (hi : i < n), IsConnected I ⟦ps[i] ++ qs[i]⟧)
-    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → Independent I qs[i] ps[j]) :
+    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → I.Independent qs[i] ps[j]) :
     (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card ≤
     Fintype.card α := by
   let S := Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])
@@ -513,7 +502,7 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
     (ps qs : List (List α))
     (hps_len : ps.length = n) (hqs_len : qs.length = n)
     (hpq_in_X : ∀ i (hi : i < n), ps[i] ++ qs[i] ∈ X)
-    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → Independent I qs[i] ps[j]) :
+    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → I.Independent qs[i] ps[j]) :
     ∃ xs ys : List (List α),
       xs.length = ys.length ∧
       xs.length ≤
@@ -522,7 +511,7 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
       TraceEqv I ps.flatten xs.flatten ∧
       TraceEqv I qs.flatten ys.flatten ∧
       ∀ (i j : ℕ) (hi : i < ys.length) (hj : j < xs.length), i < j →
-        Independent I ys[i] xs[j] := by
+        I.Independent ys[i] xs[j] := by
   induction n generalizing ps qs with
   | zero =>
     have hps : ps = [] := List.length_eq_zero_iff.mp hps_len
@@ -541,7 +530,7 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
       have hpq_in_X' : ∀ i (hi : i < n'), ps'[i] ++ qs'[i] ∈ X := by
         intro i hi
         simpa using hpq_in_X (i + 1) (by omega)
-      have h_indep' : ∀ i j (hi : i < n') (hj : j < n'), i < j → Independent I qs'[i] ps'[j] := by
+      have h_indep' : ∀ i j (hi : i < n') (hj : j < n'), i < j → I.Independent qs'[i] ps'[j] := by
         intro i j hi hj hlt
         simpa using h_indep (i + 1) (j + 1) (by omega) (by omega) (by omega)
       have ⟨xs', ys', h_len_eq, h_bound, h_zip_in, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
@@ -608,15 +597,15 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
             | zero => contradiction
             | succ j' =>
               simp only [List.getElem_cons_zero, List.getElem_cons_succ]
-              have hq_ps_flat : Independent I q ps'.flatten := by
+              have hq_ps_flat : I.Independent q ps'.flatten := by
                 intro a ha b hb
                 simp only [List.mem_flatten] at hb
                 rcases hb with ⟨p_k, hp_k_in, hb_in⟩
                 rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
                 exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a ha b hb_in
-              have hq_xs_flat : Independent I q xs'.flatten :=
+              have hq_xs_flat : I.Independent q xs'.flatten :=
                 indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
-              exact indep_of_flatten j' (by simpa using hj) hq_xs_flat
+              exact indep_of_indep_flatten_right j' (by simpa using hj) hq_xs_flat
           | succ i' =>
             cases j with
             | zero => contradiction
@@ -699,14 +688,14 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
             use [p ++ q] ++ L
             simp [hL, hpq_append_in_X]
             exact hLX
-          · have hq_ps_flat : Independent I q ps'.flatten := by
+          · have hq_ps_flat : I.Independent q ps'.flatten := by
               intro a ha b hb
               simp only [List.mem_flatten] at hb
               rcases hb with ⟨p_k, hp_k_in, hb_in⟩
               rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
               exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a ha b hb_in
             have hq_xs_flat := indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
-            have hq_xhead : Independent I q x_head := by
+            have hq_xhead : I.Independent q x_head := by
               intro a ha b hb
               have hb_flat : b ∈ (x_head :: xs_tail).flatten := by
                 simp only [List.flatten_cons, List.mem_append]
@@ -743,15 +732,15 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
               intro a ha b hb
               simp only [List.mem_append] at ha
               rcases ha with ha | ha
-              · have hq_ps_flat : Independent I q ps'.flatten := by
+              · have hq_ps_flat : I.Independent q ps'.flatten := by
                   intro a' ha' b' hb'
                   simp only [List.mem_flatten] at hb'
                   rcases hb' with ⟨p_k, hp_k_in, hb_in⟩
                   rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
                   exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a' ha' b' hb_in
-                have hq_xs_flat : Independent I q (x_head :: xs_tail).flatten :=
+                have hq_xs_flat : I.Independent q (x_head :: xs_tail).flatten :=
                   indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
-                have hq_xstail := indep_of_flatten (j' + 1) (by simpa using hj) hq_xs_flat
+                have hq_xstail := indep_of_indep_flatten_right (j' + 1) (by simpa using hj) hq_xs_flat
                 exact hq_xstail a ha b hb
               · have hy_indep := h_xs_indep 0 (j' + 1) (by simp) (by simpa using hj) (by omega)
                 exact hy_indep a ha b hb
@@ -768,7 +757,7 @@ lemma group_split_factors
     (hx_eqv : TraceEqv I x ps.flatten)
     (hy_eqv : TraceEqv I y qs.flatten)
     (hpq_in_X : ∀ i (hi : i < n), ps[i] ++ qs[i] ∈ X)
-    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → Independent I qs[i] ps[j])
+    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → I.Independent qs[i] ps[j])
     (h_bound : (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card ≤
       Fintype.card α) :
     ∃ xs ys : List (List α),
@@ -813,7 +802,7 @@ theorem star_connected_closed_rank {X : Language α} [Fintype α] [DecidableEq �
     rw [← h_trace_eq]
     exact h_t_conn
   have h_indep_adapted : ∀ i j (hi : i < ts.length) (hj : j < ts.length), i < j →
-      Independent I qs[i] ps[j] := by
+      I.Independent qs[i] ps[j] := by
     intro i j hi hj hij
     exact h_indep i j (by omega) (by omega) hij
   have h_bound := split_indices_bound hps_len hqs_len hpq_conn h_indep_adapted
@@ -822,17 +811,17 @@ theorem star_connected_closed_rank {X : Language α} [Fintype α] [DecidableEq �
   use xs, ys
 
 lemma recognizable_cstar {P : Set (Trace I)} [DecidableEq α] [Fintype α]
-    (hP : IsRecognizable P) : IsRecognizable (kstar (connectedComponents P)) := by
+    (hP : IsRecognizable P) : IsRecognizable (connectedComponents P)∗ := by
   let C := connectedComponents P
-  let L_C : Language α := ⇑(mk' (I := I)) ⁻¹' C
+  let L_C : Language α := Trace.mk' I ⁻¹' C
   have hC_recog : IsRecognizable C := recognizable_connectedComponents hP
   have hL_C_reg : L_C.IsRegular :=
-    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ _ hC_recog)
+    isRegular_of_recognizable (recognizable_has_recognizablePreImage _ hC_recog)
   have hL_C_closed : IsClosed I L_C := by
     apply le_antisymm
     · rintro x ⟨y, hy, heqv⟩
       simp only [L_C, Set.mem_preimage] at hy ⊢
-      have heq : mk' (I := I) y = mk' (I := I) x := Quotient.sound heqv
+      have heq : Trace.mk' I y = Trace.mk' I x := Quotient.sound heqv
       rw [← heq]
       exact hy
     · exact traceClosure.le_closure
@@ -844,9 +833,9 @@ lemma recognizable_cstar {P : Set (Trace I)} [DecidableEq α] [Fintype α]
   have h_star_reg : (L_C∗).IsRegular := Language.IsRegular.kstar hL_C_reg
   have h_rank : HasFiniteRank I (L_C∗) := star_connected_closed_rank hL_C_closed hL_C_conn
   have h_hash := recognizable_image_of_regular_finite_rank h_star_reg h_rank
-  have h_image_eq : mk' (I := I) '' ((L_C∗) : Language α) = kstar C := by
-    change toTrace I (L_C∗) = kstar C
-    rw [kstar_toTrace_comm]
+  have h_image_eq : Trace.mk' I '' ((L_C∗) : Language α) = C∗ := by
+    change toTrace I (L_C∗) = C∗
+    rw [toTrace_kstar_comm]
     have h_surj : toTrace I L_C = C := by
       ext t
       constructor
@@ -861,7 +850,7 @@ lemma recognizable_cstar {P : Set (Trace I)} [DecidableEq α] [Fintype α]
 
 /-- Theorem 4.1 (iv) => (i) -/
 theorem recognizable_of_cRational [DecidableEq α] [Fintype α] (X : RegularExpression α) :
-    IsRecognizable (matches_cstar_trace I X) := by
+    IsRecognizable (cRatMatches I X) := by
   induction X with
   | zero => exact recognizable_zero
   | epsilon => exact recognizable_epsilon
@@ -870,18 +859,16 @@ theorem recognizable_of_cRational [DecidableEq α] [Fintype α] (X : RegularExpr
   | comp P Q ihP ihQ => exact recognizable_mul ihP ihQ
   | star P ih => exact recognizable_cstar ih
 
-
-
 -----
 
 def dependencyInL (I : Independence α) (w : List α) (a b : α) :=
-  (inducedDependence I).rel a b ∧ a ∈ w ∧ b ∈ w
+  I.inducedDependence.rel a b ∧ a ∈ w ∧ b ∈ w
 
 def dependencyTransClosureInL (I : Independence α) (w : List α) (a b : α) :=
   Relation.TransGen (dependencyInL I w) a b
 
 def IsConnectedL (I : Independence α) (w : List α) :=
-  ∀ a b : {a : α // a ∈ w}, dependencyTransClosureInL I w a b
+  ∀ a ∈ w, ∀ b ∈ w, dependencyTransClosureInL I w a b
 
 lemma IsConnected_eq (I : Independence α) (w : List α) : IsConnectedL I w = IsConnected I ⟦w⟧ := rfl
 
@@ -916,9 +903,6 @@ lemma depTrClIn_sub {u w : List α} {a b : α} (huw : u ⊆ w) :
   | single hab => exact Relation.TransGen.single (depIn_sub huw hab)
   | tail hac hcb ih => exact Relation.TransGen.tail ih (depIn_sub huw hcb)
 
---- variable [DecidableRel I.rel]
-
----
 noncomputable instance : ∀ w x y, Decidable (dependencyTransClosureInL I w x y) :=
   fun w x y => Classical.propDecidable (dependencyTransClosureInL I w x y)
 
@@ -991,8 +975,6 @@ lemma ccDec_aux_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ [
         by_cases hab : dependencyTransClosureInL I u a b
         all_goals simp [hab]
 
---#check List.reverseRecOn
---todo: make this work?
 theorem ccDec_cases {motive : List (List α) → Prop} (u w : List α)
     (nil : motive [[]])
     (char : ∀ (a : α), motive [[a]])
@@ -1239,7 +1221,6 @@ lemma List.flatten_suffix (L : List (List α)) (h : L ≠ []) :
       simp at ih ⊢
       exact List.suffix_append_of_suffix ih
 
-
 lemma ccDec_aux_prefix (I : Independence α) (u w : List α) :
     List.IsPrefix ((ccDec_aux I u w)[0]'(ccDec_aux_zero_idx)) w := by
   nth_rw 3 [<- ccDec_aux_flatten I u w]
@@ -1401,7 +1382,7 @@ lemma ccDec_aux_adj_char_indep (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_au
         exact ih _ _ hw
 
 lemma ccDec_aux_adj_indep (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) (hwu : w ⊆ u) :
-    Independent I (ccDec_aux I u w)[i] (ccDec_aux I u w)[i + 1] := by
+    I.Independent (ccDec_aux I u w)[i] (ccDec_aux I u w)[i + 1] := by
   by_cases hw : w = []
   · simp [hw, ccDec_aux] at hi
   intro p hp q hq
@@ -1461,21 +1442,21 @@ lemma lexNf_infix_is_lexNf {s t : List α} (hst : List.IsInfix s t) (ht : IsLexN
   exact ht
 
 omit [Fintype α] [LinearOrder α] [DecidableRel I.rel] in
-lemma connected_dep_concat {u v : List α} (hu : IsConnectedL I u) (hv : IsConnectedL I v) (huv : ¬Independent I u v) :
+lemma connected_dep_concat {u v : List α} (hu : IsConnectedL I u) (hv : IsConnectedL I v) (huv : ¬I.Independent u v) :
     IsConnectedL I (u ++ v) := by
-  intro ⟨a, ha⟩ ⟨b, hb⟩
+  intro a ha b hb
   simp at ha hb
   cases ha with
   | inl ha =>
     cases hb with
-    | inl hb => exact depTrClIn_sub (List.subset_append_of_subset_left v (by simp)) (hu ⟨a, ha⟩ ⟨b, hb⟩)
+    | inl hb => exact depTrClIn_sub (List.subset_append_of_subset_left v (by simp)) (hu a ha b hb)
     | inr hb =>
       simp at huv
       have ⟨a', ha', b', hb', hab⟩ := huv
       have haa' : dependencyTransClosureInL I (u ++ v) a a' :=
-        depTrClIn_sub (List.subset_append_of_subset_left v (by simp)) (hu ⟨a, ha⟩ ⟨a', ha'⟩)
+        depTrClIn_sub (List.subset_append_of_subset_left v (by simp)) (hu a ha a' ha')
       have hb'b : dependencyTransClosureInL I (u ++ v) b' b :=
-        depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv ⟨b', hb'⟩ ⟨b, hb⟩)
+        depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv b' hb' b hb)
       have ha'b' : dependencyTransClosureInL I (u ++ v) a' b' := by
         apply Relation.TransGen.single
         simp [dependencyInL, inducedDependence]
@@ -1487,28 +1468,15 @@ lemma connected_dep_concat {u v : List α} (hu : IsConnectedL I u) (hv : IsConne
       simp at huv
       have ⟨b', hb', a', ha', hab⟩ := huv
       have haa' : dependencyTransClosureInL I (u ++ v) a a' :=
-        depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv ⟨a, ha⟩ ⟨a', ha'⟩)
+        depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv a ha a' ha')
       have hb'b : dependencyTransClosureInL I (u ++ v) b' b :=
-        depTrClIn_sub (List.subset_append_of_subset_left v (by simp)) (hu ⟨b', hb'⟩ ⟨b, hb⟩)
+        depTrClIn_sub (List.subset_append_of_subset_left v (by simp)) (hu b' hb' b hb)
       have ha'b' : dependencyTransClosureInL I (u ++ v) a' b' := by
         apply Relation.TransGen.single
         simp [dependencyInL, inducedDependence]
         exact ⟨fun h => hab (I.symm _ _ h), Or.inr ha', Or.inl hb'⟩
       exact Relation.TransGen.trans haa' (Relation.TransGen.trans ha'b' hb'b)
-    | inr hb => exact depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv ⟨a, ha⟩ ⟨b, hb⟩)
-
-/- omit [Fintype α] [LinearOrder α] [DecidableRel I.rel] in
-lemma connected_dup_is_connected {w : List α} (hw : IsConnectedL I w) :
-    IsConnectedL I (w ++ w) := by
-  cases w with
-  | nil => simp [hw]
-  | cons a w =>
-    have h_dep : ¬Independent I (a :: w) (a :: w) := by
-      simp
-      intro ha
-      exfalso
-      exact I.irrefl a ha
-    exact connected_dep_concat hw hw h_dep -/
+    | inr hb => exact depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv a ha b hb)
 
 lemma lexNf_sq_is_lexNf {w : List α} (h : w ++ w ∈ LexNfLanguage I) :
     w ∈ LexNfLanguage I := by
@@ -1523,7 +1491,7 @@ lemma lexNf_sq_is_lexNf {w : List α} (h : w ++ w ∈ LexNfLanguage I) :
   exact ⟨TraceEqv.compat (TraceEqv.refl w) h.1, List.append_left_lt h.right⟩
 
 omit [Fintype α] [DecidableRel I.rel] in
-lemma lexNf_concat_of_indep {u v : List α} (h_indep : Independent I u v) (huv : IsLexNf I (u ++ v))
+lemma lexNf_concat_of_indep {u v : List α} (h_indep : I.Independent u v) (huv : IsLexNf I (u ++ v))
     (hu : u ≠ []) (hv : v ≠ []) :
     (u[0]'(List.length_pos_iff.mpr hu) < v[0]'(List.length_pos_iff.mpr hv)) := by
   apply (isLexNf_iff_factorCondition _ _).mp at huv
@@ -1580,8 +1548,8 @@ instance {I : Independence α} {u : List α} :
 
 omit [Fintype α] [LinearOrder α] in
 lemma ccDec_aux_across_indep (I : Independence α) (u w : List α) (hi : 1 < (ccDec_aux I u w).length) (hwu : w ⊆ u) :
-    Independent I ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _)) (ccDec_aux I u w)[0] ∨
-    (Independent I ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _) ++ (ccDec_aux I u w)[0]) (ccDec_aux I u w)[1] ∧
+    I.Independent ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _)) (ccDec_aux I u w)[0] ∨
+    (I.Independent ((ccDec_aux I u w).getLast (ccDec_aux_nonempty _ _) ++ (ccDec_aux I u w)[0]) (ccDec_aux I u w)[1] ∧
     2 < (ccDec_aux I u w).length) := by
   by_cases hw : w = []
   · simp [hw, ccDec_aux]
@@ -1638,18 +1606,15 @@ lemma ccDec_aux_across_indep (I : Independence α) (u w : List α) (hi : 1 < (cc
     simp at hl
     replace hi := Nat.le_antisymm hl hi
     replace hi : (ccDec_aux I u w).length - 1 = 1 := Eq.symm (Nat.eq_sub_of_add_eq' (Eq.symm hi))
-    have hs' : Independent I (ccDec_aux I u w)[0] (ccDec_aux I u w)[1] := ccDec_aux_adj_indep u w 0 _ hwu
+    have hs' : I.Independent (ccDec_aux I u w)[0] (ccDec_aux I u w)[1] := ccDec_aux_adj_indep u w 0 _ hwu
     rw [List.getLast_eq_getElem, getElem_congr rfl hi _] at hs
     exact hs (independent_symm hs')
-
 
 lemma connected_of_lexNf_sq {w : List α}
     (hw : w ∈ LexNfLanguage I)
     (hww : w ++ w ∈ LexNfLanguage I) :
     IsConnected I ⟦w⟧ := by
-  rw [<- IsConnected_eq]
-  -- apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hw
-  -- apply (isLexNf_iff_factorCondition _ _).mpr at hw
+  rw [← IsConnected_eq]
   apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hww
   apply (isLexNf_iff_factorCondition _ _).mpr at hww
 
@@ -1658,8 +1623,8 @@ lemma connected_of_lexNf_sq {w : List α}
   by_contra h_con
   have h_con_ww : ¬IsConnectedL I (w ++ w) := by
     contrapose h_con
-    intro ⟨a, ha⟩ ⟨b, hb⟩
-    replace h_con := h_con ⟨a, List.mem_append_left w ha⟩ ⟨b, List.mem_append_left w hb⟩
+    intro a ha b hb
+    replace h_con := h_con a (List.mem_append_left w ha) b (List.mem_append_left w hb)
     exact depTrClIn_sub (List.append_subset_of_subset_of_subset (by simp) (by simp)) h_con
   have h_dec_w_len := @ccDec_disconnected_len α I w h_con
   have h_dec_ww_len := @ccDec_disconnected_len α I (w ++ w) h_con_ww
@@ -1771,7 +1736,7 @@ theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
     ∃ X : RegularExpression α,
       (∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) ∧
       toTrace I X.matches' = T := by
-  let L : Language α := (mk' (I := I) ⁻¹' T) ⊓ LexNfLanguage I
+  let L : Language α := (Trace.mk' I ⁻¹' T) ⊓ LexNfLanguage I
   have hL_reg : L.IsRegular := by
     apply Language.IsRegular.inf
     · apply isRegular_of_recognizable
@@ -1800,7 +1765,7 @@ theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
       rcases exists_lexNf_rep I t with ⟨s, hs_eq, hs_lex⟩
       refine ⟨s, ?_, hs_eq⟩
       unfold L
-      change s ∈ ⇑mk' ⁻¹' T ∩ LexNfLanguage I
+      change s ∈ Trace.mk' I ⁻¹' T ∩ LexNfLanguage I
       constructor
       · rw [Set.mem_preimage]
         subst hs_eq
