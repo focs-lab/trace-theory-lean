@@ -155,6 +155,61 @@ instance : Membership α (Trace I) where
     )
     t
 
+theorem append_left_right {I : Independence α} {u v : List α}
+    (l r : List α) (h : TraceEqv I u v) :
+    TraceEqv I (l ++ u ++ r) (l ++ v ++ r) :=
+  TraceEqv.compat (TraceEqv.compat (TraceEqv.refl l) h) (TraceEqv.refl r)
+
+lemma eqvGen_append_right {u v w : List α}
+    (h : Relation.EqvGen (SwapOnce I) u v) :
+    Relation.EqvGen (SwapOnce I) (u ++ w) (v ++ w) := by
+  induction h with
+  | rel x y h_swap =>
+    apply Relation.EqvGen.rel
+    rcases h_swap with ⟨x', y', a, b, h_indep⟩
+    simpa using SwapOnce.swap x' (y' ++ w) a b h_indep
+  | refl _ => apply Relation.EqvGen.refl
+  | symm _ _ _ ih => apply Relation.EqvGen.symm _ _ ih
+  | trans _ _ _ _ _ ih₁ ih₂ => apply Relation.EqvGen.trans _ _ _ ih₁ ih₂
+
+lemma eqvGen_append_left {u v w : List α}
+    (h : Relation.EqvGen (SwapOnce I) u v) :
+    Relation.EqvGen (SwapOnce I) (w ++ u) (w ++ v) := by
+  induction h with
+  | rel x y h_swap =>
+    apply Relation.EqvGen.rel
+    rcases h_swap with ⟨x', y', a, b, h_indep⟩
+    simpa using SwapOnce.swap (w ++ x') y' a b h_indep
+  | refl _ => apply Relation.EqvGen.refl
+  | symm _ _ _ ih => apply Relation.EqvGen.symm _ _ ih
+  | trans _ _ _ _ _ ih₁ ih₂ => apply Relation.EqvGen.trans _ _ _ ih₁ ih₂
+
+theorem eqv_iff_eqvGen_swapOnce {u v : List α} :
+    TraceEqv I u v ↔ Relation.EqvGen (SwapOnce I) u v := by
+  constructor
+  · intro h
+    induction h with
+    | swap a b h_indep =>
+      apply Relation.EqvGen.rel
+      simpa using SwapOnce.swap [] [] a b h_indep
+    | refl _ => apply Relation.EqvGen.refl
+    | symm _ ih => apply Relation.EqvGen.symm _ _ ih
+    | trans _ _ ih₁ ih₂ => apply Relation.EqvGen.trans _ _ _ ih₁ ih₂
+    | compat _ _ ih₁ ih₂ =>
+      expose_names
+      apply Relation.EqvGen.trans (w₁ ++ w₃) (w₂ ++ w₃) (w₂ ++ w₄)
+      · apply eqvGen_append_right ih₁
+      · apply eqvGen_append_left ih₂
+  · intro h
+    induction h with
+    | rel x y h_comm =>
+      rcases h_comm with ⟨x', y', a, b, h_indep⟩
+      apply append_left_right
+      exact TraceEqv.swap a b h_indep
+    | refl _ => apply TraceEqv.refl
+    | symm _ _ _ ih => apply TraceEqv.symm ih
+    | trans _ _ _ _ _ ih1 ih2 => apply TraceEqv.trans ih1 ih2
+
 lemma eqv_length_eq_two {a b : α} {w : List α} (h : TraceEqv I [a, b] w) :
     w = [a, b] ∨ w = [b, a] := by
   rcases length_eq_two.mp (length_eq_of_eqv h).symm with ⟨c, d, rfl⟩

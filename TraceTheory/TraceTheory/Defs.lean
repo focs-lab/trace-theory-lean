@@ -37,7 +37,7 @@ def Independent (I : Independence α) (u v : List α) := ∀ a ∈ u, ∀ b ∈ 
 /-- The binary relation $~$ such that $u~v$ if and only if there exists strings $x,y$ and symbols
   $a,b$ such that $aIb$, $u=xaby$ and $v=xbay$. -/
 inductive SwapOnce (I : Independence α) : List α → List α → Prop
-  | swap (a b : α) : I.rel a b → SwapOnce I [a, b] [b, a]
+  | swap (x y : List α) (a b : α) : I.rel a b → SwapOnce I (x ++ [a, b] ++ y) (x ++ [b, a] ++ y)
 
 end Independence
 
