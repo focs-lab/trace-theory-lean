@@ -112,7 +112,7 @@ theorem cRational_of_isStarConnected (X : RegularExpression α) (h : IsStarConne
   | star P ih =>
     unfold traceMatches cRatMatches
     unfold IsStarConnected at h
-    rw [<- ih h.left]
+    rw [← ih h.left]
     have hP_conn : ∀ t ∈ traceMatches I P, t.IsConnected I := by
       intro t ht
       rw [traceMatches_toTrace] at ht
@@ -1046,7 +1046,7 @@ lemma ccDec_aux_len_D' {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a ::
 
 lemma ccDec_aux_tail_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w))
     (i : ℕ) (hi : i < (ccDec_aux I u (a :: w)).length) (hiz : i > 0) :
-    (ccDec_aux I u (a :: w))[i] = (ccDec_aux I u w)[i]'(by rw [<- ccDec_aux_len_C h]; exact hi) := by
+    (ccDec_aux I u (a :: w))[i] = (ccDec_aux I u w)[i]'(by rw [← ccDec_aux_len_C h]; exact hi) := by
   by_cases hw : w = []
   · simp [hw, ccDec_aux] at hi
     simp [hi] at hiz
@@ -1081,7 +1081,7 @@ lemma ccDec_aux_tail_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w)
 
 lemma ccDec_aux_tail_D {u w : List α} {a : α} (h : ¬ ccDec_aux_conn I u (a :: w))
     (i : ℕ) (hi : i + 1 < (ccDec_aux I u (a :: w)).length) :
-    (ccDec_aux I u (a :: w))[i + 1] = (ccDec_aux I u w)[i]'(by rw [<- ccDec_aux_len_D' h]; exact Nat.lt_sub_of_add_lt hi) := by
+    (ccDec_aux I u (a :: w))[i + 1] = (ccDec_aux I u w)[i]'(by rw [← ccDec_aux_len_D' h]; exact Nat.lt_sub_of_add_lt hi) := by
   by_cases hw : w = []
   · simp [hw, ccDec_aux_conn, ccDec_aux] at h
   simp [ccDec_aux_conn] at h
@@ -1204,7 +1204,7 @@ lemma List.flatten_adj_infix (L : List (List α)) (i : ℕ) (hi : i + 1 < L.leng
       cases L with
       | nil => simp at hi
       | cons v L =>
-        simp [<- List.append_assoc]
+        simp [← List.append_assoc]
         exact List.infix_append_left
     | succ i =>
       simp
@@ -1223,27 +1223,27 @@ lemma List.flatten_suffix (L : List (List α)) (h : L ≠ []) :
 
 lemma ccDec_aux_prefix (I : Independence α) (u w : List α) :
     List.IsPrefix ((ccDec_aux I u w)[0]'(ccDec_aux_zero_idx)) w := by
-  nth_rw 3 [<- ccDec_aux_flatten I u w]
+  nth_rw 3 [← ccDec_aux_flatten I u w]
   exact List.flatten_prefix _ (ccDec_aux_nonempty u w)
 
 lemma ccDec_aux_infix (I : Independence α) (u w : List α) (i : ℕ) (hi : i < (ccDec_aux I u w).length) :
     List.IsInfix (ccDec_aux I u w)[i] w := by
-  nth_rw 2 [<- ccDec_aux_flatten I u w]
+  nth_rw 2 [← ccDec_aux_flatten I u w]
   exact List.flatten_infix (ccDec_aux I u w) i hi
 
 lemma ccDec_aux_adj_infix (I : Independence α) (u w : List α) (i : ℕ) (hi : i + 1 < (ccDec_aux I u w).length) :
     List.IsInfix ((ccDec_aux I u w)[i] ++ (ccDec_aux I u w)[i + 1]) w := by
-  nth_rw 7 [<- ccDec_aux_flatten I u w]
+  nth_rw 7 [← ccDec_aux_flatten I u w]
   exact List.flatten_adj_infix (ccDec_aux I u w) i hi
 
 lemma ccDec_aux_prefix2 (I : Independence α) (u w : List α) (h : 1 < (ccDec_aux I u w).length) :
     List.IsPrefix ((ccDec_aux I u w)[0] ++ (ccDec_aux I u w)[1]) w := by
-  nth_rw 7 [<- ccDec_aux_flatten I u w]
+  nth_rw 7 [← ccDec_aux_flatten I u w]
   exact ccDec_flatten_prefix2 (ccDec_aux I u w) h
 
 lemma ccDec_aux_suffix (I : Independence α) (u w : List α) :
     List.IsSuffix ((ccDec_aux I u w).getLast (ccDec_aux_nonempty u w)) w := by
-  nth_rw 3 [<- ccDec_aux_flatten I u w]
+  nth_rw 3 [← ccDec_aux_flatten I u w]
   exact List.flatten_suffix (ccDec_aux I u w) (ccDec_aux_nonempty u w)
 
 lemma ccDec_across_infix (I : Independence α) (w : List α) (h : 1 < (ccDec I w).length) :
@@ -1256,7 +1256,7 @@ lemma ccDec_across_infix (I : Independence α) (w : List α) (h : 1 < (ccDec I w
   use s, t
   simp only [List.append_assoc] at ht ⊢
   simp [ht]
-  simp only [<- List.append_assoc]
+  simp only [← List.append_assoc]
   rw [hs]
 
 lemma ccDec_aux_head_conn (u w : List α) (hwu : w ⊆ u) :
@@ -1423,7 +1423,7 @@ lemma ccDec_disconnected_len (w : List α) (h : ¬ IsConnectedL I w) :
     simp [IsConnectedL] at h
     replace ⟨m, hm, n, hn, h⟩ := h
     replace h_conn := (h_conn m n hm hn)
-    rw [<- ht] at h
+    rw [← ht] at h
     exact h h_conn
 
 -----
@@ -1438,7 +1438,7 @@ lemma lexNf_infix_is_lexNf {s t : List α} (hst : List.IsInfix s t) (ht : IsLexN
   replace ⟨s', s'', hst⟩ := hst
   intro y u z a b hs
   replace ht := ht (s' ++ y) u (z ++ s'') a b
-  simp [<- hst, hs] at ht
+  simp [← hst, hs] at ht
   exact ht
 
 omit [Fintype α] [LinearOrder α] [DecidableRel I.rel] in
@@ -1641,7 +1641,7 @@ lemma connected_of_lexNf_sq {w : List α}
       unfold ccDec at h_across_infix
       replace ⟨s, t, h_across_infix⟩ := h_across_infix
       use s, (ccDec_aux I w w)[1] ++ t
-      simp only [<- List.append_assoc] at h_across_infix ⊢
+      simp only [← List.append_assoc] at h_across_infix ⊢
       exact h_across_infix
     have h_across_lexNf := lexNf_infix_is_lexNf h_across_infix hww
     have h_last_ne : (ccDec_aux I w w).getLast (ccDec_aux_nonempty _ _) ≠ [] := by
