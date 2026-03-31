@@ -1431,10 +1431,10 @@ lemma ccDec_disconnected_len (w : List α) (h : ¬ IsConnectedL I w) :
 variable [Fintype α] [LinearOrder α] [DecidableRel I.rel]
 
 omit [Fintype α] [DecidableRel I.rel] in
-lemma lexNf_infix_is_lexNf {s t : List α} (hst : List.IsInfix s t) (ht : IsLexNf I t) :
-    IsLexNf I s := by
-  apply (isLexNf_iff_factorCondition _ _).mp at ht
-  apply (isLexNf_iff_factorCondition _ _).mpr
+lemma lexNF_infix_is_lexNF {s t : List α} (hst : List.IsInfix s t) (ht : IsLexNF I t) :
+    IsLexNF I s := by
+  apply (isLexNF_iff_factorCondition _ _).mp at ht
+  apply (isLexNF_iff_factorCondition _ _).mpr
   replace ⟨s', s'', hst⟩ := hst
   intro y u z a b hs
   replace ht := ht (s' ++ y) u (z ++ s'') a b
@@ -1478,23 +1478,23 @@ lemma connected_dep_concat {u v : List α} (hu : IsConnectedL I u) (hv : IsConne
       exact Relation.TransGen.trans haa' (Relation.TransGen.trans ha'b' hb'b)
     | inr hb => exact depTrClIn_sub (List.subset_append_of_subset_right u (by simp)) (hv a ha b hb)
 
-lemma lexNf_sq_is_lexNf {w : List α} (h : w ++ w ∈ LexNfLanguage I) :
-    w ∈ LexNfLanguage I := by
-  apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at h
-  apply (isLexNf_iff_factorCondition _ _).mpr at h
-  apply (TraceTheory.mem_lexNfLanguage_iff_factorCondition _ _).mpr
-  apply (isLexNf_iff_factorCondition _ _).mp
+lemma lexNF_sq_is_lexNF {w : List α} (h : w ++ w ∈ lexNFLanguage I) :
+    w ∈ lexNFLanguage I := by
+  apply (mem_lexNFLanguage_iff_factorCondition _ _).mp at h
+  apply (isLexNF_iff_factorCondition _ _).mpr at h
+  apply (mem_lexNFLanguage_iff_factorCondition _ _).mpr
+  apply (isLexNF_iff_factorCondition _ _).mp
   contrapose h
-  simp [IsLexNf] at h ⊢
+  simp [IsLexNF] at h ⊢
   rcases h with ⟨u, h⟩
   use w ++ u
   exact ⟨TraceEqv.compat (TraceEqv.refl w) h.1, List.append_left_lt h.right⟩
 
 omit [Fintype α] [DecidableRel I.rel] in
-lemma lexNf_concat_of_indep {u v : List α} (h_indep : I.Independent u v) (huv : IsLexNf I (u ++ v))
+lemma lexNF_concat_of_indep {u v : List α} (h_indep : I.Independent u v) (huv : IsLexNF I (u ++ v))
     (hu : u ≠ []) (hv : v ≠ []) :
     (u[0]'(List.length_pos_iff.mpr hu) < v[0]'(List.length_pos_iff.mpr hv)) := by
-  apply (isLexNf_iff_factorCondition _ _).mp at huv
+  apply (isLexNF_iff_factorCondition _ _).mp at huv
 
   rcases u
   · simp at hu
@@ -1519,28 +1519,28 @@ lemma lexNf_concat_of_indep {u v : List α} (h_indep : I.Independent u v) (huv :
   have ⟨c, hcs, hac⟩ := huv (I.symm _ _ h_indep.1.1) h_gt
   exact hac (I.symm _ _ (h_indep.2 c hcs).1)
 
-lemma lexNf_ccDec_adj_order {w : List α} (hw : w ∈ LexNfLanguage I) (hz : w ≠ []) (i : ℕ)
+lemma lexNF_ccDec_adj_order {w : List α} (hw : w ∈ lexNFLanguage I) (hz : w ≠ []) (i : ℕ)
     (hi : i + 1 < (ccDec_aux I w w).length) :
     (ccDec_aux I w w)[i][0]'(ccDec_aux_elem_nonempty_len _ _ _ _ hz) <
     (ccDec_aux I w w)[i + 1][0]'(ccDec_aux_elem_nonempty_len _ _ _ _ hz) := by
-  apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hw
-  apply (isLexNf_iff_factorCondition _ _).mpr at hw
-  have h_infix := lexNf_infix_is_lexNf (ccDec_aux_adj_infix I w w i hi) hw
+  apply (mem_lexNFLanguage_iff_factorCondition _ _).mp at hw
+  apply (isLexNF_iff_factorCondition _ _).mpr at hw
+  have h_infix := lexNF_infix_is_lexNF (ccDec_aux_adj_infix I w w i hi) hw
 
-  apply lexNf_concat_of_indep (ccDec_aux_adj_indep w w i hi (by simp)) h_infix
+  apply lexNF_concat_of_indep (ccDec_aux_adj_indep w w i hi (by simp)) h_infix
   use (ccDec_aux_elem_nonempty w w i (Nat.lt_of_succ_lt hi) hz)
   exact ccDec_aux_elem_nonempty w w (i + 1) hi hz
 
-lemma lexNf_ccDec_order {w : List α} (hw : w ∈ LexNfLanguage I) (hz : w ≠ []) (i j : ℕ)
+lemma lexNF_ccDec_order {w : List α} (hw : w ∈ lexNFLanguage I) (hz : w ≠ []) (i j : ℕ)
     (hij : i < j) (hj : j < (ccDec_aux I w w).length) :
     (ccDec_aux I w w)[i][0]'(ccDec_aux_elem_nonempty_len _ _ _ _ hz) <
     (ccDec_aux I w w)[j][0]'(ccDec_aux_elem_nonempty_len _ _ _ _ hz) := by
   induction hij with
-  | refl => exact lexNf_ccDec_adj_order hw hz i hj
+  | refl => exact lexNF_ccDec_adj_order hw hz i hj
   | step hij ih =>
     clear j
     rename_i j
-    exact lt_trans (ih (Nat.lt_of_succ_lt hj)) (lexNf_ccDec_adj_order hw hz j hj)
+    exact lt_trans (ih (Nat.lt_of_succ_lt hj)) (lexNF_ccDec_adj_order hw hz j hj)
 
 instance {I : Independence α} {u : List α} :
     Trans (dependencyTransClosureInL I u) (dependencyTransClosureInL I u) (dependencyTransClosureInL I u) where
@@ -1610,13 +1610,13 @@ lemma ccDec_aux_across_indep (I : Independence α) (u w : List α) (hi : 1 < (cc
     rw [List.getLast_eq_getElem, getElem_congr rfl hi _] at hs
     exact hs (independent_symm hs')
 
-lemma connected_of_lexNf_sq {w : List α}
-    (hw : w ∈ LexNfLanguage I)
-    (hww : w ++ w ∈ LexNfLanguage I) :
+lemma connected_of_lexNF_sq {w : List α}
+    (hw : w ∈ lexNFLanguage I)
+    (hww : w ++ w ∈ lexNFLanguage I) :
     IsConnected I ⟦w⟧ := by
   rw [← IsConnected_eq]
-  apply (mem_lexNfLanguage_iff_factorCondition _ _).mp at hww
-  apply (isLexNf_iff_factorCondition _ _).mpr at hww
+  apply (mem_lexNFLanguage_iff_factorCondition _ _).mp at hww
+  apply (isLexNF_iff_factorCondition _ _).mpr at hww
 
   by_cases hz : w = []
   · simp [hz, IsConnectedL]
@@ -1643,45 +1643,45 @@ lemma connected_of_lexNf_sq {w : List α}
       use s, (ccDec_aux I w w)[1] ++ t
       simp only [← List.append_assoc] at h_across_infix ⊢
       exact h_across_infix
-    have h_across_lexNf := lexNf_infix_is_lexNf h_across_infix hww
+    have h_across_lexNF := lexNF_infix_is_lexNF h_across_infix hww
     have h_last_ne : (ccDec_aux I w w).getLast (ccDec_aux_nonempty _ _) ≠ [] := by
       rw [List.getLast_eq_getElem]
       exact ccDec_aux_elem_nonempty w w _ _ hz
-    rw [List.getLast_eq_getElem] at h_across_indep h_across_lexNf
-    have h_gt := lexNf_concat_of_indep h_across_indep h_across_lexNf
+    rw [List.getLast_eq_getElem] at h_across_indep h_across_lexNF
+    have h_gt := lexNF_concat_of_indep h_across_indep h_across_lexNF
         (ccDec_aux_elem_nonempty w w _ _ hz) (ccDec_aux_nonempty_head I w w hz)
-    have h_lt := lexNf_ccDec_order hw hz 0 ((ccDec_aux I w w).length - 1) (Nat.zero_lt_sub_of_lt h_dec_w_len)
+    have h_lt := lexNF_ccDec_order hw hz 0 ((ccDec_aux I w w).length - 1) (Nat.zero_lt_sub_of_lt h_dec_w_len)
         (Nat.sub_one_lt_of_lt h_dec_w_len)
     exact LT.lt.asymm h_gt h_lt
   | inr h_across_indep =>
     replace ⟨h_across_indep, h_dec_w_len2⟩ := h_across_indep
     have h_across_infix := ccDec_across_infix I w (Nat.lt_of_succ_le h_dec_w_len)
-    have h_across_lexNf := lexNf_infix_is_lexNf h_across_infix hww
-    rw [List.getLast_eq_getElem] at h_across_indep h_across_lexNf
+    have h_across_lexNF := lexNF_infix_is_lexNF h_across_infix hww
+    rw [List.getLast_eq_getElem] at h_across_indep h_across_lexNF
     have h_across_ne : (ccDec I w)[(ccDec I w).length - 1] ++ (ccDec I w)[0] ≠ [] :=
       List.append_ne_nil_of_right_ne_nil _ (ccDec_aux_nonempty_head I w w hz)
-    have h_gt := lexNf_concat_of_indep
-      h_across_indep h_across_lexNf
+    have h_gt := lexNF_concat_of_indep
+      h_across_indep h_across_lexNF
       h_across_ne
       (ccDec_aux_elem_nonempty w w 1 (Nat.lt_of_succ_le h_dec_w_len) hz)
     have h_eq : ((ccDec_aux I w w)[(ccDec_aux I w w).length - 1] ++ (ccDec_aux I w w)[0])[0]'(List.length_pos_iff.mpr h_across_ne) =
         ((ccDec_aux I w w)[(ccDec_aux I w w).length - 1])[0]'(ccDec_aux_elem_nonempty_len _ _ _ _ hz) := by
       rw [List.getElem_append_left]
     rw [h_eq] at h_gt
-    have h_lt := lexNf_ccDec_order hw hz 1 ((ccDec_aux I w w).length - 1) (Nat.lt_sub_of_add_lt h_dec_w_len2)
+    have h_lt := lexNF_ccDec_order hw hz 1 ((ccDec_aux I w w).length - 1) (Nat.lt_sub_of_add_lt h_dec_w_len2)
         (Nat.sub_one_lt_of_lt h_dec_w_len)
     exact LT.lt.asymm h_gt h_lt
 
-lemma connected_of_lexNf_sq' {w : List α}
-    (hww : w ++ w ∈ LexNfLanguage I) :
+lemma connected_of_lexNF_sq' {w : List α}
+    (hww : w ++ w ∈ lexNFLanguage I) :
     IsConnected I ⟦w⟧ :=
-  connected_of_lexNf_sq (lexNf_sq_is_lexNf hww) hww
+  connected_of_lexNF_sq (lexNF_sq_is_lexNF hww) hww
 
 omit [LinearOrder α] in
 lemma forbidden_of_subword {u w v : List α} {a b : α}
-    (hw : w ∈ ForbiddenPattern I a b) :
-    u ++ w ++ v ∈ ForbiddenPattern I a b := by
-  unfold ForbiddenPattern at *
+    (hw : w ∈ forbiddenPattern I a b) :
+    u ++ w ++ v ∈ forbiddenPattern I a b := by
+  unfold forbiddenPattern at *
   simp [Language.mem_mul] at hw
   rcases hw with ⟨a1, b1, b2, b3, ⟨⟨ha1, hb1, hb2⟩, hb3⟩, ⟨x, hx, rfl⟩⟩
   simp [Language.mem_mul]
@@ -1695,8 +1695,8 @@ lemma forbidden_of_subword {u w v : List α} {a b : α}
     simp [mem_sigma]
 
 lemma sum_forbidden_of_subword {S : Finset (α × α)} {u w v : List α}
-    (hw : w ∈ ∑ p ∈ S, ForbiddenPattern I p.1 p.2) :
-    u ++ w ++ v ∈ ∑ p ∈ S, ForbiddenPattern I p.1 p.2 := by
+    (hw : w ∈ ∑ p ∈ S, forbiddenPattern I p.1 p.2) :
+    u ++ w ++ v ∈ ∑ p ∈ S, forbiddenPattern I p.1 p.2 := by
   induction S using Finset.induction_on generalizing w with
   | empty =>
     simp only [Finset.sum_empty] at hw
@@ -1711,24 +1711,24 @@ lemma sum_forbidden_of_subword {S : Finset (α × α)} {u w v : List α}
       right
       exact ih h_right
 
-lemma lexNf_of_subword {u w v : List α} (h : u ++ w ++ v ∈ LexNfLanguage I) :
-    w ∈ LexNfLanguage I := by
-  unfold LexNfLanguage at h ⊢
+lemma lexNF_of_subword {u w v : List α} (h : u ++ w ++ v ∈ lexNFLanguage I) :
+    w ∈ lexNFLanguage I := by
+  unfold lexNFLanguage at h ⊢
   rw [Set.mem_compl_iff] at h ⊢
-  unfold AllForbiddenPatterns at h ⊢
+  unfold allForbiddenPatterns at h ⊢
   contrapose! h
   exact sum_forbidden_of_subword h
 
-lemma connected_iterativeFactor_of_subset_lexNf {X : Language α}
-    (hX : X ≤ LexNfLanguage I) {w : List α}
+lemma connected_iterativeFactor_of_subset_lexNF {X : Language α}
+    (hX : X ≤ lexNFLanguage I) {w : List α}
     (hw : IsIterativeFactor X w) :
     IsConnected I ⟦w⟧ := by
   rcases hw with ⟨u, v, hw⟩
-  have h_lex1 : u ++ w ++ v ∈ LexNfLanguage I := hX (hw 1)
-  have h_lex2 : u ++ (w ++ w) ++ v ∈ LexNfLanguage I := hX (hw 2)
-  have h_w_lex : w ∈ LexNfLanguage I := lexNf_of_subword h_lex1
-  have h_ww_lex : w ++ w ∈ LexNfLanguage I := lexNf_of_subword h_lex2
-  exact connected_of_lexNf_sq h_w_lex h_ww_lex
+  have h_lex1 : u ++ w ++ v ∈ lexNFLanguage I := hX (hw 1)
+  have h_lex2 : u ++ (w ++ w) ++ v ∈ lexNFLanguage I := hX (hw 2)
+  have h_w_lex : w ∈ lexNFLanguage I := lexNF_of_subword h_lex1
+  have h_ww_lex : w ++ w ∈ lexNFLanguage I := lexNF_of_subword h_lex2
+  exact connected_of_lexNF_sq h_w_lex h_ww_lex
 
 /-- Theorem 4.1 (i) => (ii) -/
 theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
@@ -1736,13 +1736,13 @@ theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
     ∃ X : RegularExpression α,
       (∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) ∧
       toTrace I X.matches' = T := by
-  let L : Language α := (Trace.mk' I ⁻¹' T) ⊓ LexNfLanguage I
+  let L : Language α := (Trace.mk' I ⁻¹' T) ⊓ lexNFLanguage I
   have hL_reg : L.IsRegular := by
     apply Language.IsRegular.inf
     · apply isRegular_of_recognizable
       apply recognizable_has_recognizablePreImage
       exact hT
-    · apply isRegular_lexNf
+    · apply isRegular_lexNF
   have ⟨R, hR_matches⟩ : ∃ R : RegularExpression α, R.matches' = L := by
     classical
     have ⟨σ, h_fin, M, hL⟩ : ∃ (σ : Type) (_ : Fintype σ) (M : DFA α σ), M.accepts = L :=
@@ -1753,19 +1753,19 @@ theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
   use R
   constructor
   · intro s hs
-    have h_subset : R.matches' ≤ LexNfLanguage I := by
+    have h_subset : R.matches' ≤ lexNFLanguage I := by
       simp_all only [inf_le_right, L]
-    exact connected_iterativeFactor_of_subset_lexNf h_subset hs
+    exact connected_iterativeFactor_of_subset_lexNF h_subset hs
   · rw [hR_matches]
     ext t
     constructor
     · rintro ⟨s, hs, rfl⟩
       exact hs.left
     · intro ht
-      rcases exists_lexNf_rep I t with ⟨s, hs_eq, hs_lex⟩
+      rcases exists_lexNF_rep I t with ⟨s, hs_eq, hs_lex⟩
       refine ⟨s, ?_, hs_eq⟩
       unfold L
-      change s ∈ Trace.mk' I ⁻¹' T ∩ LexNfLanguage I
+      change s ∈ Trace.mk' I ⁻¹' T ∩ lexNFLanguage I
       constructor
       · rw [Set.mem_preimage]
         subst hs_eq
