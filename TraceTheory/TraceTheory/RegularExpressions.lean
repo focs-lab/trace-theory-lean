@@ -9,6 +9,8 @@ namespace RegularExpression
 
 variable {α : Type*} {I : Independence α}
 
+/-- A regular language is star-connected if the Kleene star is
+  used over connected languages only. -/
 def IsStarConnected (I : Independence α) : RegularExpression α → Prop
   | zero => True
   | epsilon => True
@@ -57,10 +59,5 @@ theorem traceMatches_toTrace (P : RegularExpression α) :
   | star P ih =>
     unfold traceMatches matches'
     rw [toTrace_kstar_comm, ih]
-
--- @[simp]
--- theorem traceMatches_toTrace_dist (P Q : RegularExpression α) :
---     toTrace I (P.matches' + Q.matches') = toTrace I P.matches' ∪ toTrace I Q.matches' := by
---   apply Set.image_union
 
 end RegularExpression
