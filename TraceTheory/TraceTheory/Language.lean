@@ -10,13 +10,13 @@ open Computability List Trace
 
 variable {α : Type*} {I : Independence α}
 
-section LexNf
+section LexNF
 
 variable [LinearOrder α] (I : Independence α)
 
 /-- Lexicographic Normal Form.
   A word x is in normal form if it is minimal among all words equivalent to it. -/
-def IsLexNf (x : List α) : Prop :=
+def IsLexNF (x : List α) : Prop :=
   ∀ w, TraceEqv I x w → x ≤ w
 
 /-- The condition to be in Lexicographic Normal Form.
@@ -29,11 +29,11 @@ def SatisfiesFactorCondition (x : List α) : Prop :=
     a < b →
     ∃ c ∈ u, ¬ I.rel a c
 
-lemma factorCondition_of_lexNf (x : List α) (h : IsLexNf I x) :
+lemma factorCondition_of_lexNF (x : List α) (h : IsLexNF I x) :
     SatisfiesFactorCondition I x := by
   intro y u z a b hx h_indep hlt
   contrapose! h
-  unfold IsLexNf
+  unfold IsLexNF
   push_neg
   use y ++ [a] ++ [b] ++ u ++ z
   rw [hx]
@@ -56,9 +56,9 @@ lemma factorCondition_of_lexNf (x : List α) (h : IsLexNf I x) :
     left
     exact hlt
 
-lemma lexNf_of_factorCondition (x : List α) (h : SatisfiesFactorCondition I x) :
-    IsLexNf I x := by
-  unfold IsLexNf
+lemma lexNF_of_factorCondition (x : List α) (h : SatisfiesFactorCondition I x) :
+    IsLexNF I x := by
+  unfold IsLexNF
   contrapose! h
   have ⟨w, h_equiv, hlt⟩ := h
   have ⟨p, a, b, w', x', hw, hx, hlt'⟩ :=
@@ -77,43 +77,40 @@ lemma lexNf_of_factorCondition (x : List α) (h : SatisfiesFactorCondition I x) 
   exact hu
 
 /-- The characterization of strings in Lexicographic Normal Form. -/
-theorem isLexNf_iff_factorCondition (x : List α) :
-    IsLexNf I x ↔ SatisfiesFactorCondition I x := by
+theorem isLexNF_iff_factorCondition (x : List α) :
+    IsLexNF I x ↔ SatisfiesFactorCondition I x := by
   constructor
-  · apply factorCondition_of_lexNf
-  · apply lexNf_of_factorCondition
+  · apply factorCondition_of_lexNF
+  · apply lexNF_of_factorCondition
 
 variable [Fintype α] [DecidableRel I.rel]
 
 /-- A single symbol. -/
-def Letter (a : α) : Language α :=
-  { [a] }
+def char (a : α) : Language α := { [a] }
 
 /-- The set of all symbols. -/
-def Sigma : Language α :=
-  ⊤
+def sigma : Language α := ⊤
 
 /-- The language consisting of single letters that are independent of `a`. -/
-def IndependentLetters (a : α) : Language α :=
-  ∑ c ∈ (Finset.univ.filter (fun c => I.rel a c)), Letter c
+def independentLetters (a : α) : Language α :=
+  ∑ c ∈ (Finset.univ.filter (fun c => I.rel a c)), char c
 
 /-- The "Forbidden Pattern" for a specific pair (a, b).
 Pattern: Σ* b (independent of a)* a Σ* -/
-def ForbiddenPattern (a b : α) : Language α :=
-  Sigma∗ * Letter b * (IndependentLetters I a)∗ * Letter a * Sigma∗
+def forbiddenPattern (a b : α) : Language α :=
+  sigma∗ * char b * (independentLetters I a)∗ * char a * sigma∗
 
 /-- Union of all forbidden patterns for (a,b) ∈ I with a < b. -/
-def AllForbiddenPatterns : Language α :=
+def allForbiddenPatterns : Language α :=
   ∑ p ∈ (Finset.univ.filter (fun (p : α × α) => p.1 < p.2 ∧ I.rel p.1 p.2)),
-    ForbiddenPattern I p.1 p.2
+    forbiddenPattern I p.1 p.2
 
 /-- LexNF is the complement of the forbidden patterns. -/
-def LexNfLanguage : Language α :=
-  (AllForbiddenPatterns I)ᶜ
+def lexNFLanguage : Language α := (allForbiddenPatterns I)ᶜ
 
 omit [LinearOrder α] in
-lemma isRegular_independentLetters (a : α) : Language.IsRegular (IndependentLetters I a) := by
-  unfold IndependentLetters
+lemma isRegular_independentLetters (a : α) : Language.IsRegular (independentLetters I a) := by
+  unfold independentLetters
   apply Finset.sum_induction
   · apply Language.IsRegular.add
   · apply Language.IsRegular.zero
@@ -121,8 +118,8 @@ lemma isRegular_independentLetters (a : α) : Language.IsRegular (IndependentLet
     exact Language.IsRegular.singleton
 
 omit [LinearOrder α] in
-lemma isRegular_forbiddenPattern (a b : α) : Language.IsRegular (ForbiddenPattern I a b) := by
-  unfold ForbiddenPattern Sigma Letter
+lemma isRegular_forbiddenPattern (a b : α) : Language.IsRegular (forbiddenPattern I a b) := by
+  unfold forbiddenPattern sigma char
   repeat apply Language.IsRegular.mul
   · apply Language.IsRegular.kstar
     exact Language.IsRegular.top
@@ -133,8 +130,8 @@ lemma isRegular_forbiddenPattern (a b : α) : Language.IsRegular (ForbiddenPatte
   · apply Language.IsRegular.kstar
     exact Language.IsRegular.top
 
-lemma isRegular_allForbiddenPatterns : Language.IsRegular (AllForbiddenPatterns I) := by
-  unfold AllForbiddenPatterns
+lemma isRegular_allForbiddenPatterns : Language.IsRegular (allForbiddenPatterns I) := by
+  unfold allForbiddenPatterns
   apply Finset.sum_induction
   · apply Language.IsRegular.add
   · apply Language.IsRegular.zero
@@ -142,16 +139,16 @@ lemma isRegular_allForbiddenPatterns : Language.IsRegular (AllForbiddenPatterns 
     simp
     apply isRegular_forbiddenPattern
 
-theorem isRegular_lexNf : Language.IsRegular (LexNfLanguage I) := by
+theorem isRegular_lexNF : Language.IsRegular (lexNFLanguage I) := by
   apply Language.IsRegular.compl
   apply isRegular_allForbiddenPatterns
 
 omit [Fintype α] [LinearOrder α] in
-lemma mem_sigma (x : List α) : x ∈ (Sigma : Language α)∗ := by
+lemma mem_sigma (x : List α) : x ∈ (sigma : Language α)∗ := by
   rw [Language.mem_kstar]
   use [x]
   simp only [flatten_cons, flatten_nil, append_nil, mem_cons,
-    not_mem_nil, or_false, Sigma, forall_eq, true_and]
+    not_mem_nil, or_false, sigma, forall_eq, true_and]
   apply Set.mem_univ
 
 omit [Fintype α] [LinearOrder α] in
@@ -176,23 +173,23 @@ lemma mem_sum_language
         exact ⟨j, hj, hxj⟩
 
 lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
-    x ∈ ForbiddenPattern I a b ↔
+    x ∈ forbiddenPattern I a b ↔
     ∃ y u z : List α, x = y ++ [b] ++ u ++ [a] ++ z ∧ (∀ c ∈ u, I.rel a c) := by
-  unfold ForbiddenPattern IndependentLetters
+  unfold forbiddenPattern independentLetters
   constructor
   · intro h
     simp [Language.mem_mul] at h
     rcases h with ⟨a1, b1, b2, b3, ⟨⟨ha1, hb1, hb2⟩, hb3⟩, ⟨x, hx, rfl⟩⟩
     use a1, b2, x
     constructor
-    · simp only [Letter] at hb3 hb1
+    · simp only [char] at hb3 hb1
       rw [Set.mem_singleton_iff] at hb3 hb1
       subst hb3 hb1
       simp
     · intro c hc
       rw [Language.mem_kstar] at hb2
       rcases hb2 with ⟨L, rfl, hL⟩
-      unfold Letter at hL
+      unfold char at hL
       simp only [mem_flatten] at hc
       rcases hc with ⟨y, hy, hcy⟩
       have hy_indep := hL y hy
@@ -208,7 +205,7 @@ lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
     rcases h with ⟨y, u, z, rfl, h_indep⟩
     simp [Language.mem_mul]
     use y, [b], u, [a]
-    unfold Letter
+    unfold char
     and_intros
     · apply mem_sigma
     · rfl
@@ -236,23 +233,23 @@ lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
       · simp
 
 lemma mem_allForbiddenPatterns_iff {x : List α} :
-    x ∈ AllForbiddenPatterns I ↔
-    ∃ a b, a < b ∧ I.rel a b ∧ x ∈ ForbiddenPattern I a b := by
-  unfold AllForbiddenPatterns
+    x ∈ allForbiddenPatterns I ↔
+    ∃ a b, a < b ∧ I.rel a b ∧ x ∈ forbiddenPattern I a b := by
+  unfold allForbiddenPatterns
   rw [mem_sum_language]
   simp only [Finset.mem_filter, Finset.mem_univ, true_and, Prod.exists, and_assoc]
 
-/-- The language LexNfLanguage contains exactly the strings satisfying the factor condition. -/
-theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
-    x ∈ LexNfLanguage I ↔ SatisfiesFactorCondition I x := by
-  unfold LexNfLanguage SatisfiesFactorCondition
+/-- The language LexNFLanguage contains exactly the strings satisfying the factor condition. -/
+theorem mem_lexNFLanguage_iff_factorCondition (x : List α) :
+    x ∈ lexNFLanguage I ↔ SatisfiesFactorCondition I x := by
+  unfold lexNFLanguage SatisfiesFactorCondition
   rw [Set.mem_compl_iff, mem_allForbiddenPatterns_iff]
   push_neg
   constructor
   · intro h y u z a b hx h_indep hlt
     by_contra h_all_indep
     push_neg at h_all_indep
-    have h_in_pattern : x ∈ ForbiddenPattern I a b := by
+    have h_in_pattern : x ∈ forbiddenPattern I a b := by
       rw [mem_forbiddenPattern_iff]
       exact ⟨y, u, z, hx, h_all_indep⟩
     exact h a b hlt h_indep h_in_pattern
@@ -262,11 +259,11 @@ theorem mem_lexNfLanguage_iff_factorCondition (x : List α) :
     rcases h y u z a b hx h_indep hlt with ⟨c, hc_mem, hc_not_indep⟩
     exact hc_not_indep (h_all_indep c hc_mem)
 
-/-- Words in LexNF are exactly the members of `LexNfLanguage`. -/
-theorem isLexNf_iff_mem_lexNfLanguage {x : List α} :
-    IsLexNf I x ↔ x ∈ LexNfLanguage I := by
-  rw [mem_lexNfLanguage_iff_factorCondition]
-  apply isLexNf_iff_factorCondition
+/-- Words in LexNF are exactly the members of `LexNFLanguage`. -/
+theorem isLexNF_iff_mem_lexNFLanguage {x : List α} :
+    IsLexNF I x ↔ x ∈ lexNFLanguage I := by
+  rw [mem_lexNFLanguage_iff_factorCondition]
+  apply isLexNF_iff_factorCondition
 
 omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
 lemma perm_of_traceEqv {w x : List α} (h : TraceEqv I w x) : w.Perm x := by
@@ -286,9 +283,9 @@ lemma finite_traceEqv_class (w : List α) : {x : List α | TraceEqv I w x}.Finit
     exact perm_of_traceEqv I hx
   exact Set.Finite.subset w.permutations.finite_toSet h_sub
 
-theorem exists_lexNf_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ LexNfLanguage I := by
+theorem exists_lexNF_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ lexNFLanguage I := by
   rcases t with ⟨u⟩
-  change ∃ s, ⟦s⟧ = ⟦u⟧ ∧ s ∈ LexNfLanguage I
+  change ∃ s, ⟦s⟧ = ⟦u⟧ ∧ s ∈ lexNFLanguage I
   let S : Set (List α) := {x | TraceEqv I u x}
   have h_fin : S.Finite := finite_traceEqv_class I u
   have h_nonempty : S.Nonempty := ⟨u, TraceEqv.refl u⟩
@@ -304,13 +301,13 @@ theorem exists_lexNf_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ 
   · symm
     apply Quotient.sound
     exact hs_eqv
-  · rw [mem_lexNfLanguage_iff_factorCondition, ← isLexNf_iff_factorCondition]
+  · rw [mem_lexNFLanguage_iff_factorCondition, ← isLexNF_iff_factorCondition]
     intro s' hs'
     have hs'_mem : s' ∈ S_finset := by
       simp [S_finset, S, hs_eqv.trans hs']
     exact Finset.min'_le S_finset s' hs'_mem
 
-end LexNf
+end LexNF
 
 section Language
 
@@ -320,8 +317,7 @@ def IsIterativeFactor (X : Language α) (t : List α) :=
   ∃ u v, ∀ n : ℕ, u ++ t ^ n ++ v ∈ X
 
 /-- Maps a word language to a trace language. -/
-def toTrace (I : Independence α) (X : Language α) : Set (Trace I) :=
-  Trace.mk' I '' X
+def toTrace (I : Independence α) (X : Language α) : Set (Trace I) := Trace.mk' I '' X
 
 /-- The `Language` of all strings trace equivalent to strings in language `X`. -/
 def traceClosure (I : Independence α) (X : Language α) : Language α :=
@@ -350,12 +346,12 @@ theorem traceClosure.idem {X : Language α} :
   · apply mono
     apply le_closure
 
-theorem kstar_diff_one (L : Language α) : (L \ {[]})∗ = L∗ := by
-  ext w
+theorem kstar_diff_one (X : Language α) : (X \ {[]})∗ = X∗ := by
+  ext x
   constructor
-  · intro ⟨ls, hw, hls⟩
+  · intro ⟨ls, hx, hls⟩
     use ls
-    simp [hw]
+    simp [hx]
     exact fun y hy => Set.diff_subset (hls y hy)
   · intro ⟨ls, hls, ht⟩
     use ls.filter (!·.isEmpty)
@@ -441,8 +437,8 @@ instance : KStar (Set (Trace I)) where
 def connectedComponents (T : Set (Trace I)) : Set (Trace I) :=
   {u | Trace.IsConnected I u ∧ u ≠ 1 ∧ ∃ v, u * v ∈ T ∧ Trace.Independent u v}
 
-theorem toTrace_kstar_comm (L : Language α) :
-    toTrace I (L∗) = (toTrace I L)∗ := by
+theorem toTrace_kstar_comm (X : Language α) :
+    toTrace I (X∗) = (toTrace I X)∗ := by
   simp [Language.kstar_def, Set.image, toTrace]
   ext t
   constructor

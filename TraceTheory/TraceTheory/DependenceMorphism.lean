@@ -19,8 +19,8 @@ structure DependenceMorphism (I : Independence α) (M : Type*) [Monoid M] where
   toFun : List α →* M
   A1 : ∀ w, toFun w = toFun 1 → w = []
   A2 : ∀ {a b}, I.rel a b → toFun [a, b] = toFun [b, a]
-  A3 : ∀ {u v} {a}, toFun (u ++ [a]) = toFun v → toFun u = toFun (v ÷ a)
-  A4 : ∀ {u v} {a b}, toFun (u ++ [a]) = toFun (v ++ [b]) ∧ a ≠ b → I.rel a b
+  A3 : ∀ {x y} {a}, toFun (x ++ [a]) = toFun y → toFun x = toFun (y ÷ a)
+  A4 : ∀ {x y} {a b}, toFun (x ++ [a]) = toFun (y ++ [b]) ∧ a ≠ b → I.rel a b
 
 instance {M : Type*} [Monoid M] :
     CoeFun (DependenceMorphism I M) (fun _ ↦ FreeMonoid α → M) where
@@ -29,45 +29,39 @@ instance {M : Type*} [Monoid M] :
 attribute [coe] DependenceMorphism.toFun
 
 theorem DependenceMorphism.map_append {I : Independence α} {M : Type*} [Monoid M]
-    (ϕ : DependenceMorphism I M) (u v : List α) :
-    ϕ (u ++ v) = ϕ u * ϕ v :=
-  ϕ.toFun.map_mul u v
+    (ϕ : DependenceMorphism I M) (x y : List α) :
+    ϕ (x ++ y) = ϕ x * ϕ y :=
+  ϕ.toFun.map_mul x y
 
 /-- The natural homomorphism from the free monoid of strings to the trace monoid
   is a dependence morphism. -/
 def traceDependenceMorphism : DependenceMorphism I (Trace I) where
   toFun := mk' I
   A1 := by
-    intro w hw
-    replace hw := Quotient.exact hw
-    apply List.length_eq_zero_iff.mp
-    exact length_eq_of_eqv hw
+    intro x hx
+    exact List.length_eq_zero_iff.mp (length_eq_of_eqv (Quotient.exact hx))
   A2 := by
     intro a b hab
     apply Quotient.sound
     exact TraceEqv.swap a b hab
   A3 := by
-    intro u v a huav
-    replace huav := Quotient.exact huav
+    intro x y a heq
     apply Quotient.sound
-    have h_cancel : TraceEqv I (u ++ [a] ÷ a) (v ÷ a) := cancelRight_congr a huav
-    simp at h_cancel
-    exact h_cancel
+    have h_cancel : TraceEqv I (x ++ [a] ÷ a) (y ÷ a) := cancelRight_congr a (Quotient.exact heq)
+    simpa using h_cancel
   A4 := by
-    intro u v a b huvab
-    have h_eqv := Quotient.exact huvab.left
-    have h_indep := indep_and_exists_of_eqv_of_tail_ne h_eqv huvab.right
-    exact h_indep.left
+    rintro x y a b ⟨heq, hne⟩
+    exact (indep_and_exists_of_eqv_of_tail_ne (Quotient.exact heq) hne).left
 
-lemma exists_of_image_eq_of_tail_ne {ϕ : DependenceMorphism I M} {u v : List α} {a b : α}
-    (heq : ϕ (u ++ [a]) = ϕ (v ++ [b])) (hne : a ≠ b) :
-    ∃ w, ϕ u = ϕ (w ++ [b]) ∧ ϕ v = ϕ (w ++ [a]) := by
-  have hu : ϕ u = ϕ (v ÷ a ++ [b]) := by simpa [append_cancelRight, hne] using ϕ.A3 heq
-  have hu' : ϕ (u ÷ b) = ϕ (v ÷ a) := (ϕ.A3 hu.symm).symm
-  use u ÷ b
+lemma exists_of_image_eq_of_tail_ne {ϕ : DependenceMorphism I M} {x y : List α} {a b : α}
+    (heq : ϕ (x ++ [a]) = ϕ (y ++ [b])) (hne : a ≠ b) :
+    ∃ w, ϕ x = ϕ (w ++ [b]) ∧ ϕ y = ϕ (w ++ [a]) := by
+  have hu : ϕ x = ϕ (y ÷ a ++ [b]) := by simpa [append_cancelRight, hne] using ϕ.A3 heq
+  have hu' : ϕ (x ÷ b) = ϕ (y ÷ a) := (ϕ.A3 hu.symm).symm
+  use x ÷ b
   constructor
   · rw [hu, ϕ.map_append, ϕ.map_append, hu']
-  · have hab : u ÷ b ++ [a] = u ++ [a] ÷ b := by simp [hne, Ne.symm]
+  · have hab : x ÷ b ++ [a] = x ++ [a] ÷ b := by simp [hne, Ne.symm]
     rw [hab]
     exact ϕ.A3 heq.symm
 
@@ -79,10 +73,10 @@ theorem image_eq_of_image_eq
   | nil =>
     replace h := ϕ.A1 y h.symm
     rw [h]
-  | append_singleton u a ihx =>
-    induction y using List.reverseRecOn generalizing u a with
+  | append_singleton x' a ihx =>
+    induction y using List.reverseRecOn generalizing x' a with
     | nil =>
-      replace h := ϕ.A1 (u ++ [a]) h
+      replace h := ϕ.A1 (x' ++ [a]) h
       rw [h]
     | append_singleton v b ihy =>
       by_cases hab : a = b

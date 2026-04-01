@@ -9,8 +9,8 @@ open Dependence List
 variable {α : Type*} {D : Dependence α}
 
 variable (D) in
-/-- A `DependenceGraph` over `D` is a triple $\gamma=(V,R,\varphi)$ where $V$ is a finite set,
-  $R\subseteq V\times V$ and $\varphi:V\to \Sigma$ is a labeling of the vertices.-/
+/-- A `DependenceGraph` over `D` is a triple `γ = (V,R,φ)` where `V` is a finite set,
+  `R` is the set of arcs, and `φ` is a labeling of the vertices.-/
 structure DependenceGraph where
   /-- The finite set of vertices of the graph. -/
   V : Type
@@ -25,8 +25,7 @@ structure DependenceGraph where
 
 /-- A dependence relation `D₁` is a subset of `D₂` if every pair of symbols dependent in `D₁`
 is also dependent in `D₂`. -/
-def Dependence.Subset (D₁ D₂ : Dependence α) : Prop :=
-  ∀ a b, D₁.rel a b → D₂.rel a b
+def Dependence.Subset (D₁ D₂ : Dependence α) : Prop := ∀ a b, D₁.rel a b → D₂.rel a b
 
 /-- Notation for `Dependence.Subset`. -/
 notation:50 D₁ " ⊆ " D₂ => Dependence.Subset D₁ D₂
@@ -46,7 +45,6 @@ instance (γ₁ γ₂ : DependenceGraph D) : CoeFun (γ₁.Iso γ₂) (fun _ => 
 
 instance (γ : DependenceGraph D) : Fintype γ.V := γ.fintype
 
--- Proposition (1.4.4)
 /-- The composition of two dependence graphs `γ₁` and `γ₂` over dependence `D`.
   The vertex set is the disjoint union of `γ₁.V` and `γ₂.V`.
   Arcs are preserved within the original graphs, and new arcs are added from `γ₁` to `γ₂`
@@ -216,7 +214,7 @@ def emptyGraph (D : Dependence α) : DependenceGraph D where
   acyclic := by simp
   d_conn := by simp
 
-/-- The identity element of the `Graph`, represented by the class of the empty graph. -/
+/-- The identity element of `DGraph`, represented by the class of the empty graph. -/
 def one (D : Dependence α) : DGraph D :=
   Quotient.mk (isomorphicSetoid D) (emptyGraph D)
 
@@ -240,7 +238,7 @@ theorem compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
     · rfl
     . rw [h₂.some.preserves_arcs']
 
-/-- Multiplication in the `Graph`, induced by the `compose` operation on dependence graphs. -/
+/-- Multiplication in the `DGraph`, induced by the `compose` operation on dependence graphs. -/
 def mul (D : Dependence α) : DGraph D → DGraph D → DGraph D :=
   Quotient.lift₂
     (fun γ₁ γ₂ => ⟦compose γ₁ γ₂⟧)
@@ -391,8 +389,7 @@ theorem exists_sink_of_nonempty_depGraph (γ : DependenceGraph D) (h : Nonempty 
   dsimp [flip] at hv
   exact hv hw
 
-/-- Removes a vertex `v` from the dependence graph `γ`,
-  returning the induced subgraph on $V \setminus \{v\}$. -/
+/-- Removes a vertex `v` from the dependence graph `γ` returning the induced subgraph. -/
 noncomputable def removeVertex (γ : DependenceGraph D) (v : γ.V) : DependenceGraph D where
   V := {u : γ.V // u ≠ v}
   fintype := Fintype.ofFinite {u : γ.V // u ≠ v}

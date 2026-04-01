@@ -111,7 +111,7 @@ variable {T : Set M}
 def SyntacticCongr (T : Set M) (x y : M) :=
   ∀ u v, u * x * v ∈ T ↔ u * y * v ∈ T
 
-/-- The setoid strcuture of the syntatic congruence in `T`. -/
+/-- The setoid structure of the syntatic congruence in `T`. -/
 def SyntacticSetoid (T : Set M) : Setoid (M) where
   r := SyntacticCongr T
   iseqv := Equivalence.mk

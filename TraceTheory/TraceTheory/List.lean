@@ -6,54 +6,52 @@ variable {α : Type*} [DecidableEq α]
 namespace List
 
 /-- The projection of a string onto an alpabet. Removes all symbols not in the Finset.-/
-def proj (S : Finset α) (w : List α) : List α := w.filter (· ∈ S)
+def proj (S : Finset α) (x : List α) : List α := x.filter (· ∈ S)
 
 @[simp]
-theorem proj_append {S : Finset α} {u v : List α} :
-    proj S (u ++ v) = proj S u ++ proj S v := by
+theorem proj_append {S : Finset α} {x y : List α} :
+    (x ++ y).proj S = x.proj S ++ y.proj S := by
   simp [proj]
 
 @[simp]
-theorem proj_reverse {S : Finset α} {w : List α} :
-    reverse (proj S w) = proj S (reverse w) := by
+theorem proj_reverse {S : Finset α} {x : List α} :
+    (x.proj S).reverse = x.reverse.proj S := by
   simp [proj]
 
 /-- Cancel the first occurrence of a symbol (if any) from the right of a word. -/
-def cancelRight (w : List α) (a : α) : List α := reverse (List.erase (reverse w) a)
+def cancelRight (x : List α) (a : α) : List α := (x.reverse.erase a).reverse
 
 /-- Notation for right cancellation. -/
 infixl:65 " ÷ " => cancelRight
 
 @[simp]
-theorem cancelRight_nil {a : α} : [] ÷ a = [] :=
-  rfl
+theorem cancelRight_nil {a : α} : [] ÷ a = [] := rfl
 
-lemma append_singleton_cancelRight {w : List α} {a b : α} :
-    (w ++ [b]) ÷ a = if b = a then w else w ÷ a ++ [b] := by
+lemma append_singleton_cancelRight {x : List α} {a b : α} :
+    (x ++ [b]) ÷ a = if b = a then x else x ÷ a ++ [b] := by
   split_ifs with heq <;> simp [cancelRight, heq]
 
 @[simp]
-theorem append_cancelRight {u v : List α} {a : α} :
-    (u ++ v) ÷ a = if a ∈ v then u ++ (v ÷ a) else (u ÷ a) ++ v := by
-  induction v using List.reverseRecOn with
+theorem append_cancelRight {x y : List α} {a : α} :
+    (x ++ y) ÷ a = if a ∈ y then x ++ (y ÷ a) else (x ÷ a) ++ y := by
+  induction y using List.reverseRecOn with
   | nil => simp
-  | append_singleton v' b ih =>
+  | append_singleton y' b ih =>
     rw [← append_assoc, append_singleton_cancelRight]
-    by_cases heq : b = a <;> by_cases h_mem : a ∈ v'
+    by_cases heq : b = a <;> by_cases h_mem : a ∈ y'
     · simp [heq, append_singleton_cancelRight]
     · simp [heq, append_singleton_cancelRight]
     · simp [heq, h_mem, ih, append_singleton_cancelRight]
     · simp [heq, h_mem, ih, Ne.symm]
 
 @[simp]
-theorem singleton_cancelRight {a : α} : [a] ÷ a = [] := by
-  simp [cancelRight]
+theorem singleton_cancelRight {a : α} : [a] ÷ a = [] := by simp [cancelRight]
 
-theorem proj_cancelRight {S : Finset α} {w : List α} {a : α} :
-    proj S (w ÷ a) = if a ∈ S then proj S w ÷ a else proj S w := by
-  induction w using List.reverseRecOn with
+theorem proj_cancelRight {S : Finset α} {x : List α} {a : α} :
+    (x ÷ a).proj S = if a ∈ S then x.proj S ÷ a else x.proj S := by
+  induction x using List.reverseRecOn with
   | nil => simp [proj]
-  | append_singleton w' b ih =>
+  | append_singleton x' b ih =>
     split_ifs with ha <;> by_cases heq : b = a
     · simp [heq, ha, proj]
     · simp [heq, ha, ih, Ne.symm]
@@ -63,32 +61,31 @@ theorem proj_cancelRight {S : Finset α} {w : List α} {a : α} :
     · simp [heq, ha, proj]
     · simp [heq, ha, ih, Ne.symm]
 
-theorem rightmost_occurrence {w : List α} {a : α} (h : a ∈ w) :
-    ∃ w' w'', w = w' ++ [a] ++ w'' ∧ a ∉ w'' := by
-  induction w using List.reverseRecOn with
+theorem rightmost_occurrence {x : List α} {a : α} (h : a ∈ x) :
+    ∃ x₁ x₂, x = x₁ ++ [a] ++ x₂ ∧ a ∉ x₂ := by
+  induction x using List.reverseRecOn with
   | nil => contradiction
-  | append_singleton v b ih =>
-    by_cases hab : a = b
-    · use v, []
-      simp [hab]
-    · simp only [mem_append, mem_cons, hab, not_mem_nil, or_self, or_false] at h
-      rcases ih h with ⟨w', w'', h_concat, h_in⟩
-      use w', w'' ++ [b]
-      simp [h_concat, h_in, hab]
+  | append_singleton x' b ih =>
+    by_cases heq : a = b
+    · use x', []
+      simp [heq]
+    · simp only [mem_append, mem_cons, heq, not_mem_nil, or_self, or_false] at h
+      rcases ih h with ⟨x₁, x₂, rfl, h_mem⟩
+      use x₁, x₂ ++ [b]
+      simp [h_mem, heq]
 
-theorem leftmost_occurrence {w : List α} {a : α} (h : a ∈ w) :
-    ∃ w' w'', w = w' ++ [a] ++ w'' ∧ a ∉ w' := by
-  induction w with
-  | nil =>
-    contradiction
-  | cons b v ih =>
+theorem leftmost_occurrence {x : List α} {a : α} (h : a ∈ x) :
+    ∃ x₁ x₂, x = x₁ ++ [a] ++ x₂ ∧ a ∉ x₁ := by
+  induction x with
+  | nil => contradiction
+  | cons b x' ih =>
     by_cases hab : a = b
-    · use [], v
+    · use [], x'
       simp [hab]
     · simp only [mem_cons, hab, false_or] at h
-      rcases ih h with ⟨w', w'', h_concat, h_in⟩
-      use [b] ++ w', w''
-      simp [h_concat, h_in, hab]
+      rcases ih h with ⟨x₁, x₂, rfl, h_mem⟩
+      use [b] ++ x₁, x₂
+      simp [h_mem, hab]
 
 omit [DecidableEq α] in
 theorem exists_decomp_of_lt_of_len_eq {w x : List α} [LinearOrder α]
