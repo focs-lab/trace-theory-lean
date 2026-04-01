@@ -62,30 +62,30 @@ theorem proj_cancelRight {S : Finset α} {x : List α} {a : α} :
     · simp [heq, ha, ih, Ne.symm]
 
 theorem rightmost_occurrence {x : List α} {a : α} (h : a ∈ x) :
-    ∃ x' x'', x = x' ++ [a] ++ x'' ∧ a ∉ x'' := by
+    ∃ x₁ x₂, x = x₁ ++ [a] ++ x₂ ∧ a ∉ x₂ := by
   induction x using List.reverseRecOn with
   | nil => contradiction
-  | append_singleton y b ih =>
+  | append_singleton x' b ih =>
     by_cases heq : a = b
-    · use y, []
+    · use x', []
       simp [heq]
     · simp only [mem_append, mem_cons, heq, not_mem_nil, or_self, or_false] at h
-      rcases ih h with ⟨x', x'', h_concat, h_in⟩
-      use x', x'' ++ [b]
-      simp [h_concat, h_in, heq]
+      rcases ih h with ⟨x₁, x₂, rfl, h_mem⟩
+      use x₁, x₂ ++ [b]
+      simp [h_mem, heq]
 
 theorem leftmost_occurrence {x : List α} {a : α} (h : a ∈ x) :
-    ∃ x' x'', x = x' ++ [a] ++ x'' ∧ a ∉ x' := by
+    ∃ x₁ x₂, x = x₁ ++ [a] ++ x₂ ∧ a ∉ x₁ := by
   induction x with
   | nil => contradiction
-  | cons b y ih =>
+  | cons b x' ih =>
     by_cases hab : a = b
-    · use [], y
+    · use [], x'
       simp [hab]
     · simp only [mem_cons, hab, false_or] at h
-      rcases ih h with ⟨x', x'', h_concat, h_in⟩
-      use [b] ++ x', x''
-      simp [h_concat, h_in, hab]
+      rcases ih h with ⟨x₁, x₂, rfl, h_mem⟩
+      use [b] ++ x₁, x₂
+      simp [h_mem, hab]
 
 omit [DecidableEq α] in
 theorem exists_decomp_of_lt_of_len_eq {w x : List α} [LinearOrder α]
