@@ -86,21 +86,19 @@ theorem isLexNF_iff_factorCondition (x : List α) :
 variable [Fintype α] [DecidableRel I.rel]
 
 /-- A single symbol. -/
-def Letter (a : α) : Language α :=
-  { [a] }
+def char (a : α) : Language α := { [a] }
 
 /-- The set of all symbols. -/
-def sigma : Language α :=
-  ⊤
+def sigma : Language α := ⊤
 
 /-- The language consisting of single letters that are independent of `a`. -/
 def independentLetters (a : α) : Language α :=
-  ∑ c ∈ (Finset.univ.filter (fun c => I.rel a c)), Letter c
+  ∑ c ∈ (Finset.univ.filter (fun c => I.rel a c)), char c
 
 /-- The "Forbidden Pattern" for a specific pair (a, b).
 Pattern: Σ* b (independent of a)* a Σ* -/
 def forbiddenPattern (a b : α) : Language α :=
-  sigma∗ * Letter b * (independentLetters I a)∗ * Letter a * sigma∗
+  sigma∗ * char b * (independentLetters I a)∗ * char a * sigma∗
 
 /-- Union of all forbidden patterns for (a,b) ∈ I with a < b. -/
 def allForbiddenPatterns : Language α :=
@@ -108,8 +106,7 @@ def allForbiddenPatterns : Language α :=
     forbiddenPattern I p.1 p.2
 
 /-- LexNF is the complement of the forbidden patterns. -/
-def lexNFLanguage : Language α :=
-  (allForbiddenPatterns I)ᶜ
+def lexNFLanguage : Language α := (allForbiddenPatterns I)ᶜ
 
 omit [LinearOrder α] in
 lemma isRegular_independentLetters (a : α) : Language.IsRegular (independentLetters I a) := by
@@ -122,7 +119,7 @@ lemma isRegular_independentLetters (a : α) : Language.IsRegular (independentLet
 
 omit [LinearOrder α] in
 lemma isRegular_forbiddenPattern (a b : α) : Language.IsRegular (forbiddenPattern I a b) := by
-  unfold forbiddenPattern sigma Letter
+  unfold forbiddenPattern sigma char
   repeat apply Language.IsRegular.mul
   · apply Language.IsRegular.kstar
     exact Language.IsRegular.top
@@ -185,14 +182,14 @@ lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
     rcases h with ⟨a1, b1, b2, b3, ⟨⟨ha1, hb1, hb2⟩, hb3⟩, ⟨x, hx, rfl⟩⟩
     use a1, b2, x
     constructor
-    · simp only [Letter] at hb3 hb1
+    · simp only [char] at hb3 hb1
       rw [Set.mem_singleton_iff] at hb3 hb1
       subst hb3 hb1
       simp
     · intro c hc
       rw [Language.mem_kstar] at hb2
       rcases hb2 with ⟨L, rfl, hL⟩
-      unfold Letter at hL
+      unfold char at hL
       simp only [mem_flatten] at hc
       rcases hc with ⟨y, hy, hcy⟩
       have hy_indep := hL y hy
@@ -208,7 +205,7 @@ lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
     rcases h with ⟨y, u, z, rfl, h_indep⟩
     simp [Language.mem_mul]
     use y, [b], u, [a]
-    unfold Letter
+    unfold char
     and_intros
     · apply mem_sigma
     · rfl
@@ -320,8 +317,7 @@ def IsIterativeFactor (X : Language α) (t : List α) :=
   ∃ u v, ∀ n : ℕ, u ++ t ^ n ++ v ∈ X
 
 /-- Maps a word language to a trace language. -/
-def toTrace (I : Independence α) (X : Language α) : Set (Trace I) :=
-  Trace.mk' I '' X
+def toTrace (I : Independence α) (X : Language α) : Set (Trace I) := Trace.mk' I '' X
 
 /-- The `Language` of all strings trace equivalent to strings in language `X`. -/
 def traceClosure (I : Independence α) (X : Language α) : Language α :=
@@ -350,12 +346,12 @@ theorem traceClosure.idem {X : Language α} :
   · apply mono
     apply le_closure
 
-theorem kstar_diff_one (L : Language α) : (L \ {[]})∗ = L∗ := by
-  ext w
+theorem kstar_diff_one (X : Language α) : (X \ {[]})∗ = X∗ := by
+  ext x
   constructor
-  · intro ⟨ls, hw, hls⟩
+  · intro ⟨ls, hx, hls⟩
     use ls
-    simp [hw]
+    simp [hx]
     exact fun y hy => Set.diff_subset (hls y hy)
   · intro ⟨ls, hls, ht⟩
     use ls.filter (!·.isEmpty)
