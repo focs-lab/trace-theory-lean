@@ -22,15 +22,13 @@ def projChar (S : Fin n → Finset α) (i : Fin n) (a : α) : Option (S i) :=
 /-- The projection function from a string onto an alphabet of a n-tuple. -/
 def proj (S : Fin n → Finset α) (i : Fin n) : List α →* List (S i) where
   toFun w := w.filterMap (projChar S i)
-  map_one' := by rfl
-  map_mul' := by
-    intro x y
-    exact List.filterMap_append
+  map_one' := rfl
+  map_mul' := fun _ _ => List.filterMap_append
 
 /-- The distribution function π(w) which returns the projections of w onto each alphabet. -/
 def distribution (S : Fin n → Finset α) : List α →* ProductMonoid S where
   toFun w := fun i => proj S i w
-  map_one' := by rfl
+  map_one' := rfl
   map_mul' := by
     intro x y
     funext i
@@ -48,9 +46,9 @@ def elementaryHistorySet (S : Fin n → Finset α) : Set (ProductMonoid S) :=
 def _root_.History (S : Fin n → Finset α) : Submonoid (ProductMonoid S) :=
   Submonoid.closure (elementaryHistorySet S)
 
-theorem distribution.map_append (S : Fin n → Finset α) (w₁ w₂ : List α) :
-    distribution S (w₁ ++ w₂) = distribution S w₁ * distribution S w₂ :=
-  (distribution S).map_mul w₁ w₂
+theorem distribution.map_append (S : Fin n → Finset α) (x y : List α) :
+    distribution S (x ++ y) = distribution S x * distribution S y :=
+  (distribution S).map_mul x y
 
 theorem distribution_mem_historyMonoid (S : Fin n → Finset α) (w : List α) :
     distribution S w ∈ History S := by
@@ -71,9 +69,9 @@ def distribution' (S : Fin n → Finset α) : List α →* History S where
   map_one' := Subtype.ext (distribution S).map_one
   map_mul' x y := Subtype.ext ((distribution S).map_mul x y)
 
-theorem distribution'.map_append (S : Fin n → Finset α) (w₁ w₂ : List α) :
-    distribution' S (w₁ ++ w₂) = distribution' S w₁ * distribution' S w₂ :=
-  (distribution' S).map_mul w₁ w₂
+theorem distribution'.map_append (S : Fin n → Finset α) (x y : List α) :
+    distribution' S (x ++ y) = distribution' S x * distribution' S y :=
+  (distribution' S).map_mul x y
 
 theorem distribution'_surjective (S : Fin n → Finset α) :
     Function.Surjective (distribution' S) := by
@@ -107,14 +105,14 @@ def SigmaDependence (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ S i
     intro a b ⟨i, ha, hb⟩
     use i, hb, ha
 
-theorem proj_append (S : Fin n → Finset α) (i : Fin n) (w₁ w₂ : List α) :
-    proj S i (w₁ ++ w₂) = (proj S i w₁) ++ (proj S i w₂) := by
+theorem proj_append (S : Fin n → Finset α) (i : Fin n) (x y : List α) :
+    proj S i (x ++ y) = (proj S i x) ++ (proj S i y) := by
   simp [proj]
 
-theorem proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (w : List α) (a : α) :
-    proj S i (w ÷ a) =
-      if h : a ∈ S i then (proj S i w) ÷ ⟨a, h⟩ else proj S i w := by
-  induction w using List.reverseRecOn with
+theorem proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (x : List α) (a : α) :
+    proj S i (x ÷ a) =
+      if h : a ∈ S i then (proj S i x) ÷ ⟨a, h⟩ else proj S i x := by
+  induction x using List.reverseRecOn with
   | nil =>
     split_ifs <;> rfl
   | append_singleton w' b ih =>
@@ -142,20 +140,18 @@ def historyDependenceMorphism (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i,
       (History S) where
   toFun := distribution' S
   A1 := by
-    intro w heq
-    have hw : distribution S w = 1 := by
+    intro x heq
+    have hx : distribution S x = 1 := by
       apply Subtype.ext_iff.mp heq
-    cases w with
-    | nil =>
-      rfl
+    cases x with
+    | nil => rfl
     | cons a w' =>
       have ⟨i, hi⟩ := h_cover a
       have h_proj : proj S i (a :: w') = [] := by
-        have h_fun := congr_fun hw i
+        have h_fun := congr_fun hx i
         dsimp [distribution] at h_fun
         exact h_fun
-      dsimp only [proj, MonoidHom.coe_mk, OneHom.coe_mk] at h_proj
-      simp [projChar, hi] at h_proj
+      simp [proj, projChar, hi] at h_proj
   A2 := by
     intro a b h_indep
     simp [distribution', distribution, proj]
@@ -169,20 +165,20 @@ def historyDependenceMorphism (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i,
     · simp [projChar, ha, hb]
     · simp [projChar, ha, hb]
   A3 := by
-    intro w₁ w₂ a heq
+    intro x y a heq
     simp [distribution', distribution]
     funext i
-    have hi : proj S i (w₁ ++ [a]) = proj S i w₂ := by
+    have hi : proj S i (x ++ [a]) = proj S i y := by
       rw [Subtype.ext_iff] at heq
       exact congr_fun heq i
     rw [proj_cancelRight]
     by_cases h : a ∈ S i
-    · have hi' : proj S i (w₁ ++ [a]) ÷ ⟨a, h⟩ = proj S i w₂ ÷ ⟨a, h⟩ := by rw [hi]
+    · have hi' : proj S i (x ++ [a]) ÷ ⟨a, h⟩ = proj S i y ÷ ⟨a, h⟩ := by rw [hi]
       simpa [proj, projChar, h] using hi'
     · simpa [proj, projChar, h] using hi
   A4 := by
-    intro w₁ w₂ a b ⟨heq, hne⟩ ⟨i, ha, hb⟩
-    have hi : proj S i (w₁ ++ [a]) = proj S i (w₂ ++ [b]) := by
+    intro x y a b ⟨heq, hne⟩ ⟨i, ha, hb⟩
+    have hi : proj S i (x ++ [a]) = proj S i (y ++ [b]) := by
       rw [Subtype.ext_iff] at heq
       exact congr_fun heq i
     simp [proj, projChar, ha, hb] at hi
