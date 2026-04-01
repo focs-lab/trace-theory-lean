@@ -10,7 +10,8 @@ open Computability Dependence RegularExpression Trace Independence
 
 variable {α : Type} {I : Independence α}
 
-/-- Main component of Theorem 4.1 (ii) => (iii).
+/-
+  Main component of Theorem 4.1 (ii) => (iii).
 
   For a rational expression X, if every iterative factor of L(X) is connected,
   then X' is star-connected (for some rational expression X' with L(X) = L(X')).
@@ -28,7 +29,7 @@ lemma exists_starConnected_of_connectedIterativeFactors_aux
   induction X with
   | zero => use zero, trivial
   | epsilon => use epsilon, trivial
-  | char a => use char a, trivial
+  | char a => use .char a, trivial
   | plus P Q ihP ihQ =>
     have condP : ∀ s, IsIterativeFactor P.matches' s → Trace.IsConnected I ⟦s⟧ := by
       intro s ⟨u, v, h⟩
