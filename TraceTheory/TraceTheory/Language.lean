@@ -365,7 +365,7 @@ theorem kstar_diff_one (X : Language α) : (X \ {[]})∗ = X∗ := by
 def IsValidFactorization
     (I : Independence α) (X : Language α) (x y : List α) (xs ys : List (List α)) : Prop :=
   xs.length = ys.length ∧
-  (zipWith (· ++ ·) xs ys).flatten ∈ traceClosure I X ∧
+  (zipWith (· ++ ·) xs ys).flatten ∈ X ∧
   TraceEqv I x xs.flatten ∧
   TraceEqv I y ys.flatten ∧
   ∀ i j (hi : i < ys.length) (hj : j < xs.length), i < j →
@@ -402,11 +402,12 @@ theorem concat_closed_rank [DecidableEq α]
     replace h₁ := h₁ (z₁ ++ z₃)
     replace h₂ := h₂ (z₂ ++ z₄)
     rw [Set.mem_setOf] at h₁ h₂
-    use z₁ ++ z₃ ++ (z₂ ++ z₄)
+    use z₁ ++ z₃
     constructor
-    · rw [Language.mem_mul]
-      exact ⟨z₁ ++ z₃, h₁.mp ⟨x₁, hx₁, hx₁_eqv⟩, z₂ ++ z₄, h₂.mp ⟨x₂, hx₂, hx₂_eqv⟩, rfl⟩
-    · apply TraceEqv.refl
+    · exact h₁.mp ⟨x₁, hx₁, hx₁_eqv⟩
+    · use z₂ ++ z₄
+      simp only [append_assoc, and_true]
+      exact h₂.mp ⟨x₂, hx₂, hx₂_eqv⟩
   · simpa
   · simpa
   · intro i j

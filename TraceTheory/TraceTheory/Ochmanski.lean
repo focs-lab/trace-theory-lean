@@ -499,6 +499,26 @@ lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List 
   rw [← Fintype.card_coe S]
   exact h_card
 
+/-- Helper for `group_split_factors`. -/
+def IsValidBlock (X : Language α) (p q : List α) : Prop :=
+  (p ∈ X∗ ∧ q ∈ X∗) ∨ (p ++ q ∈ X)
+
+lemma block_concat_in_kstar {X : Language α} {p q : List α} (h : IsValidBlock X p q) :
+    p ++ q ∈ X∗ := by
+  cases h with
+  | inl h_non_split =>
+    simp only [Language.mem_kstar] at *
+    rcases h_non_split with ⟨⟨L₁, rfl, hL₁⟩, ⟨L₂, rfl, hL₂⟩⟩
+    use L₁ ++ L₂
+    simp only [List.flatten_append, List.mem_append, true_and]
+    rintro y (hy₁ | hy₂)
+    · exact hL₁ y hy₁
+    · exact hL₂ y hy₂
+  | inr h_split =>
+    simp only [Language.mem_kstar]
+    use [p ++ q]
+    simpa
+
 lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
     (ps qs : List (List α))
     (hps_len : ps.length = n) (hqs_len : qs.length = n)
@@ -506,9 +526,9 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
     (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → I.Independent qs[i] ps[j]) :
     ∃ xs ys : List (List α),
       xs.length = ys.length ∧
-      xs.length ≤
-        2 * (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card + 1 ∧
-      (List.zipWith (· ++ ·) xs ys).flatten ∈ traceClosure I X∗ ∧
+      xs.length ≤ 2 * (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card + 1 ∧
+      (∀ i (hi : i < xs.length) (hi' : i < ys.length), IsValidBlock X xs[i] ys[i] ∧
+        (i = 0 → xs[i] ∈ X∗ ∧ ys[i] ∈ X∗)) ∧
       TraceEqv I ps.flatten xs.flatten ∧
       TraceEqv I qs.flatten ys.flatten ∧
       ∀ (i j : ℕ) (hi : i < ys.length) (hj : j < xs.length), i < j →
@@ -519,10 +539,7 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
     have hqs : qs = [] := List.length_eq_zero_iff.mp hqs_len
     subst hps hqs
     use [[]], [[]]
-    simp [TraceEqv.refl]
-    unfold traceClosure
-    use []
-    simp [TraceEqv.refl, Language.nil_mem_kstar]
+    simp [TraceEqv.refl, IsValidBlock, Language.nil_mem_kstar]
   | succ n' ih =>
     cases ps with | nil => contradiction | cons p ps' =>
     cases qs with | nil => contradiction | cons q qs' =>
@@ -534,10 +551,10 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
       have h_indep' : ∀ i j (hi : i < n') (hj : j < n'), i < j → I.Independent qs'[i] ps'[j] := by
         intro i j hi hj hlt
         simpa using h_indep (i + 1) (j + 1) (by omega) (by omega) (by omega)
-      have ⟨xs', ys', h_len_eq, h_bound, h_zip_in, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
+      have ⟨xs', ys', h_len_eq, h_bound, h_blocks, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
         ih ps' qs' hps'_len hqs'_len hpq_in_X' h_indep'
       by_cases h_split : p ≠ [] ∧ q ≠ []
-      · use (p :: xs'), (q :: ys')
+      · use ([] :: p :: xs'), ([] :: q :: ys')
         and_intros
         · simp [h_len_eq]
         · simp only [List.length_cons]
@@ -573,46 +590,66 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
               exact Fin.succ_ne_zero y hy_eq
           rw [h_card]
           omega
-        · simp only [List.zipWith_cons_cons, List.flatten_cons]
-          unfold traceClosure at h_zip_in ⊢
-          rw [Set.mem_setOf] at h_zip_in ⊢
-          rcases h_zip_in with ⟨x, hx, hx_eqv⟩
-          rw [Language.mem_kstar] at hx
-          rcases hx with ⟨L, hL, hLX⟩
-          have hpq_append_in_X := by simpa using hpq_in_X 0 (by omega)
-          use p ++ q ++ x
-          constructor
-          · rw [Language.mem_kstar]
-            use [p ++ q] ++ L
-            simp [hL, hpq_append_in_X]
-            exact hLX
-          · exact TraceEqv.compat (TraceEqv.refl _) hx_eqv
-        · simp only [List.flatten_cons]
+        · intro i hi hi'
+          cases i with
+          | zero =>
+            simp only [List.getElem_cons_zero]
+            simp only [Language.nil_mem_kstar, and_self, imp_self, and_true]
+            left
+            simp [Language.nil_mem_kstar]
+          | succ i' =>
+            cases i' with
+            | zero =>
+              simp only [List.getElem_cons_succ]
+              constructor
+              · right
+                exact hpq_in_X 0 (by omega)
+              · intro h_absurd
+                contradiction
+            | succ i'' =>
+              simp only [List.getElem_cons_succ]
+              constructor
+              · exact (h_blocks i'' (by simpa using hi) (by simpa using hi')).left
+              · intro h_absurd
+                contradiction
+        · simp only [List.flatten_cons, List.nil_append]
           exact TraceEqv.compat (TraceEqv.refl _) h_ps_eqv
-        · simp only [List.flatten_cons]
+        · simp only [List.flatten_cons, List.nil_append]
           exact TraceEqv.compat (TraceEqv.refl _) h_qs_eqv
         · intro i j hi hj hlt
           cases i with
           | zero =>
-            cases j with
-            | zero => contradiction
-            | succ j' =>
-              simp only [List.getElem_cons_zero, List.getElem_cons_succ]
-              have hq_ps_flat : I.Independent q ps'.flatten := by
-                intro a ha b hb
-                simp only [List.mem_flatten] at hb
-                rcases hb with ⟨p_k, hp_k_in, hb_in⟩
-                rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
-                exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a ha b hb_in
-              have hq_xs_flat : I.Independent q xs'.flatten :=
-                indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
-              exact indep_of_indep_flatten_right j' (by simpa using hj) hq_xs_flat
+            simp only [List.getElem_cons_zero]
+            intro a ha b hb
+            cases ha
           | succ i' =>
-            cases j with
-            | zero => contradiction
-            | succ j' =>
-              simp only [List.getElem_cons_succ]
-              exact h_xs_indep i' j' (by simpa using hi) (by simpa using hj) (by omega)
+            cases i' with
+            | zero =>
+              cases j with
+              | zero => contradiction
+              | succ j' =>
+                cases j' with
+                | zero => contradiction
+                | succ j'' =>
+                  simp only [List.getElem_cons_succ, List.getElem_cons_zero]
+                  have hq_ps_flat : I.Independent q ps'.flatten := by
+                    intro a ha b hb
+                    simp only [List.mem_flatten] at hb
+                    rcases hb with ⟨p_k, hp_k_in, hb_in⟩
+                    rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
+                    exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a ha b hb_in
+                  have hq_xs_flat : I.Independent q xs'.flatten :=
+                    indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
+                  exact indep_of_indep_flatten_right j'' (by simpa using hj) hq_xs_flat
+            | succ i'' =>
+              cases j with
+              | zero => contradiction
+              | succ j' =>
+                cases j' with
+                | zero => contradiction
+                | succ j'' =>
+                  simp only [List.getElem_cons_succ]
+                  exact h_xs_indep i'' j'' (by simpa using hi) (by simpa using hj) (by omega)
       · rcases xs' with _ | ⟨x_head, xs_tail⟩
         · have h_ys_nil : ys' = [] := by
             cases ys'
@@ -623,17 +660,26 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
           and_intros
           · rfl
           · simp only [List.length_singleton]; omega
-          · simp only [List.zipWith_cons_cons, List.zipWith_self, List.map_nil, List.flatten_cons,
-              List.flatten_nil, List.append_nil]
-            unfold traceClosure
-            rw [Set.mem_setOf]
-            have hpq_append_in_X := by simpa using hpq_in_X 0 (by omega)
-            use p ++ q
-            constructor
-            · rw [Language.mem_kstar]
-              use [p ++ q]
-              simp [hpq_append_in_X]
-            · exact TraceEqv.refl _
+          · intro i hi hi'
+            cases i with
+            | zero =>
+              simp only [List.getElem_cons_zero]
+              constructor
+              · right
+                exact hpq_in_X 0 (by omega)
+              · simp only [forall_const]
+                rcases (by simpa using not_and_or.mp h_split) with rfl | rfl
+                · have hq := by simpa using hpq_in_X 0 (by omega)
+                  constructor
+                  · apply Language.nil_mem_kstar
+                  · rw [Language.mem_kstar]
+                    exact ⟨[q], by simp [hq]⟩
+                · have hp := by simpa using hpq_in_X 0 (by omega)
+                  constructor
+                  · rw [Language.mem_kstar]
+                    exact ⟨[p], by simp [hp]⟩
+                  · apply Language.nil_mem_kstar
+            | succ i' => contradiction
           · simp only [List.flatten_cons, List.flatten_nil, List.append_nil]
             have h1 : TraceEqv I (p ++ ps'.flatten) (p ++ []) := TraceEqv.compat (TraceEqv.refl _) h_ps_eqv
             rw [List.append_nil] at h1
@@ -677,46 +723,49 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
             rw [h_S_eq, Finset.card_image_of_injective _ (Fin.succ_injective _)]
           rw [h_card]
           exact h_bound
-        · simp only [List.zipWith_cons_cons, List.flatten_cons]
-          unfold traceClosure at h_zip_in ⊢
-          rw [Set.mem_setOf] at h_zip_in ⊢
-          rcases h_zip_in with ⟨x, hx, hx_eqv⟩
-          have hpq_append_in_X := by simpa using hpq_in_X 0 (by omega)
-          use p ++ q ++ x
-          constructor
-          · rw [Language.mem_kstar] at hx ⊢
-            rcases hx with ⟨L, hL, hLX⟩
-            use [p ++ q] ++ L
-            simp [hL, hpq_append_in_X]
-            exact hLX
-          · have hq_ps_flat : I.Independent q ps'.flatten := by
-              intro a ha b hb
-              simp only [List.mem_flatten] at hb
-              rcases hb with ⟨p_k, hp_k_in, hb_in⟩
-              rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
-              exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a ha b hb_in
-            have hq_xs_flat := indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
-            have hq_xhead : I.Independent q x_head := by
-              intro a ha b hb
-              have hb_flat : b ∈ (x_head :: xs_tail).flatten := by
-                simp only [List.flatten_cons, List.mem_append]
-                exact Or.inl hb
-              exact hq_xs_flat a ha b hb_flat
-            have h_list_eq1 : (((p ++ x_head) ++ (q ++ y_head)) ++ (List.zipWith (fun x1 x2 => x1 ++ x2) xs_tail ys_tail).flatten) =
-                              (p ++ ((x_head ++ q) ++ y_head) ++ (List.zipWith (fun x1 x2 => x1 ++ x2) xs_tail ys_tail).flatten) := by simp
-            rw [h_list_eq1]
-            have h_swap : TraceEqv I (x_head ++ q) (q ++ x_head) := (comm_append_of_indep hq_xhead).symm
-            have h_swap2 : TraceEqv I ((x_head ++ q) ++ y_head) ((q ++ x_head) ++ y_head) := TraceEqv.compat h_swap (TraceEqv.refl _)
-            have h_swap3 : TraceEqv I (p ++ ((x_head ++ q) ++ y_head)) (p ++ ((q ++ x_head) ++ y_head)) := TraceEqv.compat (TraceEqv.refl _) h_swap2
-            have h_swap4 : TraceEqv I ((p ++ ((x_head ++ q) ++ y_head)) ++ (List.zipWith (fun x1 x2 => x1 ++ x2) xs_tail ys_tail).flatten)
-                                      ((p ++ ((q ++ x_head) ++ y_head)) ++ (List.zipWith (fun x1 x2 => x1 ++ x2) xs_tail ys_tail).flatten) :=
-              TraceEqv.compat h_swap3 (TraceEqv.refl _)
-            have h_list_eq2 : (p ++ ((q ++ x_head) ++ y_head) ++ (List.zipWith (fun x1 x2 => x1 ++ x2) xs_tail ys_tail).flatten) =
-                              ((p ++ q) ++ ((x_head ++ y_head) ++ (List.zipWith (fun x1 x2 => x1 ++ x2) xs_tail ys_tail).flatten)) := by simp
-            have h_final : TraceEqv I ((p ++ q) ++ ((x_head ++ y_head) ++ (List.zipWith (fun x1 x2 => x1 ++ x2) xs_tail ys_tail).flatten))
-                                      ((p ++ q) ++ x) := TraceEqv.compat (TraceEqv.refl _) hx_eqv.symm
-            rw [h_list_eq2] at h_swap4
-            exact h_final.symm.trans h_swap4.symm
+        · intro i hi hi'
+          cases i with
+          | zero =>
+            simp only [List.getElem_cons_zero]
+            rcases (by simpa using not_and_or.mp h_split) with rfl | rfl
+            · have hq := by simpa using hpq_in_X 0 (by simp)
+              have h_head := (h_blocks 0 (by simp) (by simp)).right rfl
+              rcases h_head with ⟨hx_head, hy_head⟩
+              simp only [List.getElem_cons_zero] at hx_head hy_head
+              rcases hy_head with ⟨L, rfl, hL⟩
+              constructor
+              · left
+                use hx_head
+                use [q] ++ L
+                simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
+                  forall_eq_or_imp, hq, true_and]
+                exact hL
+              · simp only [List.nil_append, hx_head, true_and, forall_const]
+                use [q] ++ L
+                simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
+                  forall_eq_or_imp, hq, true_and]
+                exact hL
+            · have hp := by simpa using hpq_in_X 0 (by simp)
+              have h_head := (h_blocks 0 (by simp) (by simp)).right rfl
+              rcases h_head with ⟨hx_head, hy_head⟩
+              simp only [List.getElem_cons_zero] at hx_head hy_head
+              rcases hx_head with ⟨L, rfl, hL⟩
+              constructor
+              · left
+                constructor
+                · use [p] ++ L
+                  simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
+                    forall_eq_or_imp, hp, true_and]
+                  exact hL
+                · simp [hy_head]
+              · simp only [List.nil_append, hy_head, and_true, forall_const]
+                use [p] ++ L
+                simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
+                  forall_eq_or_imp, hp, true_and]
+                exact hL
+          | succ i' =>
+            simp only [List.getElem_cons_succ]
+            simpa using h_blocks (i' + 1) (by simpa using hi) (by simpa using hi')
         · simp only [List.flatten_cons]
           rw [List.append_assoc]
           exact TraceEqv.compat (TraceEqv.refl _) h_ps_eqv
@@ -752,6 +801,36 @@ lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
               simp only [List.getElem_cons_succ]
               exact h_xs_indep (i' + 1) (j' + 1) (by simpa using hi) (by simpa using hj) (by omega)
 
+lemma flatten_mem_kstar {X : Language α} (L : List (List α)) (h : ∀ w ∈ L, w ∈ X∗) :
+    L.flatten ∈ X∗ := by
+  induction L with
+  | nil => simp [Language.nil_mem_kstar]
+  | cons w L' ih =>
+    simp only [Language.mem_kstar, List.flatten_cons]
+    simp only [List.mem_cons, forall_eq_or_imp] at h
+    rcases h.left with ⟨L₁, rfl, hL₁⟩
+    rcases ih h.right with ⟨L₂, heq, hL₂⟩
+    use L₁ ++ L₂
+    rw [heq]
+    simp only [List.flatten_append, List.mem_append, true_and]
+    rintro y (hy₁ | hy₂)
+    · exact hL₁ y hy₁
+    · exact hL₂ y hy₂
+
+lemma zipWith_append_mem_kstar {X : Language α} {xs ys : List (List α)}
+    (h_len : xs.length = ys.length)
+    (h_blocks : ∀ i (hi : i < xs.length) (hi' : i < ys.length), IsValidBlock X xs[i] ys[i] ∧
+      (i = 0 → xs[i] ∈ X∗ ∧ ys[i] ∈ X∗)) :
+    (List.zipWith (· ++ ·) xs ys).flatten ∈ X∗ := by
+  apply flatten_mem_kstar
+  intro w hw
+  rcases List.mem_iff_getElem.mp hw with ⟨i, hi_zip, rfl⟩
+  have hi_xs : i < xs.length := by
+    rw [List.length_zipWith, h_len, min_self, ← h_len] at hi_zip
+    exact hi_zip
+  rw [List.getElem_zipWith]
+  exact block_concat_in_kstar (h_blocks i hi_xs (by simp_all)).left
+
 lemma group_split_factors
     {x y : List α} {X : Language α} {n : ℕ} {ps qs : List (List α)} [Fintype α] [DecidableEq α]
     (hps_len : ps.length = n) (hqs_len : qs.length = n)
@@ -764,13 +843,14 @@ lemma group_split_factors
     ∃ xs ys : List (List α),
       xs.length ≤ 2 * Fintype.card α + 1 ∧
       IsValidFactorization I X∗ x y xs ys := by
-  have ⟨xs, ys, h_len_eq, h_len_bound, h_zip_in, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
+  have ⟨xs, ys, h_len_eq, h_len_bound, h_blocks, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
     group_split_factors_aux ps qs hps_len hqs_len hpq_in_X h_indep
   use xs, ys
   constructor
   · omega
   · unfold IsValidFactorization
-    refine ⟨h_len_eq, h_zip_in, ?_, ?_, h_xs_indep⟩
+    refine ⟨h_len_eq, ?_, ?_, ?_, h_xs_indep⟩
+    · exact zipWith_append_mem_kstar h_len_eq h_blocks
     · exact TraceEqv.trans hx_eqv h_ps_eqv
     · exact TraceEqv.trans hy_eqv h_qs_eqv
 
