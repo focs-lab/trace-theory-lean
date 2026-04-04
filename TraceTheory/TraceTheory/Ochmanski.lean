@@ -286,34 +286,6 @@ lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
       rw [hQ_eq, Set.mem_preimage]
       exact ⟨y, hy, hyq⟩
 
-lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
-    L.IsRegular := by
-  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
-  rw [Language.isRegular_iff]
-  let M_DFA : DFA α σ := {
-    step := fun q a => M.step q [a]
-    start := M.start
-    accept := M.accept
-  }
-  use σ, h_fin, M_DFA
-  rw [hM]
-  ext w
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  unfold DFMA.accepts DFMA.eval
-  rw [Set.mem_setOf, Set.mem_setOf]
-  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
-    induction w with
-    | nil =>
-      intro q
-      simp only [List.foldl_nil]
-      exact (M.idempotent q).symm
-    | cons a ws ih =>
-      intro q
-      simp only [List.foldl_cons]
-      rw [ih (M.step q [a])]
-      exact (M.composition q [a] ws)
-  rw [h_eval M_DFA.start]
-
 lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
   let L_P : Language α := Trace.mk' I ⁻¹' P
