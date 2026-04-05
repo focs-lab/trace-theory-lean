@@ -286,7 +286,7 @@ lemma recognizable_union {M : Type} [Monoid M] {P Q : Set M}
       rw [hQ_eq, Set.mem_preimage]
       exact ⟨y, hy, hyq⟩
 
-lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α]
+lemma recognizable_mul {P Q : Set (Trace I)} [DecidableEq α] [Fintype α]
     (hP : IsRecognizable P) (hQ : IsRecognizable Q) : IsRecognizable (P * Q) := by
   let L_P : Language α := Trace.mk' I ⁻¹' P
   let L_Q : Language α := Trace.mk' I ⁻¹' Q

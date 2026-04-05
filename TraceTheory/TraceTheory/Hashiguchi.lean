@@ -79,7 +79,8 @@ end Recognizability
 
 open Classical
 
-variable {α σ : Type} {I : Independence α} [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ]
+variable {α σ : Type} [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ]
+variable (I : Independence α)
 
 structure HashiguchiBucket (α σ : Type) where
   trans : σ → σ
@@ -99,351 +100,381 @@ def HashiguchiState (α σ : Type) (k : ℕ) := Finset (Fin (k + 1) → Hashiguc
 instance {k : ℕ} : Membership (Fin (k + 1) → HashiguchiBucket α σ) (HashiguchiState α σ k) :=
   Finset.instMembership
 
-noncomputable def hashiguchiStart (k : ℕ) : HashiguchiState α σ k :=
-  Finset.univ.filter (fun β => ∀ i, (β i).trans = id ∧ (β i).alph = ∅)
+instance {k : ℕ} : HasSubset (HashiguchiState α σ k) := Finset.instHasSubset
 
-noncomputable def stepBucket {k : ℕ}
-    (I : Independence α) (M : DFA α σ) (β : Fin (k + 1) → HashiguchiBucket α σ) (a : α) :
-    Finset (Fin (k + 1) → HashiguchiBucket α σ) :=
-  Finset.univ.filter (fun β' =>
-    ∃ m : Fin (k + 1),
-      (∀ j, m < j → ∀ c ∈ (β j).alph, I.rel a c) ∧
-      β' =
-        Function.update β m {
-          trans := fun q => M.step ((β m).trans q) a,
-          alph  := insert a (β m).alph
-        })
+instance : HasSubset (Language α) := Set.instHasSubset
 
-noncomputable def hashiguchiStep {k : ℕ}
-    (I : Independence α) (M : DFA α σ) (S : HashiguchiState α σ k) (a : α) :
+instance : Fintype (HashiguchiState α σ k) := by
+  unfold HashiguchiState
+  infer_instance
+
+def leftQuotient (L : Language α) (u : List α) : Language α :=
+  { v | u ++ v ∈ L }
+
+@[simp]
+lemma leftQuotient_nil : leftQuotient L [] = L := rfl
+
+omit [DecidableEq α] [Fintype α] in
+lemma leftQuotient_append (L : Language α) (u v : List α) :
+    leftQuotient L (u ++ v) = leftQuotient (leftQuotient L u) v := by
+  simp [leftQuotient, Language]
+
+noncomputable def diekertR (I : Independence α) (M : DFA α σ) (k : ℕ) (u : List α) :
     HashiguchiState α σ k :=
-  S.biUnion (fun β => stepBucket I M β a)
+  Finset.univ.filter (fun β => (
+    ∃ xs : Fin (k + 1) → List α,
+      TraceEqv I u (List.ofFn xs).flatten ∧
+      (∀ i, (β i).trans = fun q => (xs i).foldl M.step q) ∧
+      (∀ i, (β i).alph = (xs i).toFinset)))
 
-def hashiguchiAccept {k : ℕ} (M : DFA α σ) :
-    Set (HashiguchiState α σ k) :=
-  { S | ∃ β ∈ S, (List.ofFn β).foldl (fun q bucket => bucket.trans q) M.start ∈ M.accept }
+lemma zipWith_append_replicate_nil {α : Type} (n : ℕ) :
+    List.zipWith (· ++ ·) (List.replicate n ([] : List α)) (List.replicate n []) =
+    List.replicate n [] := by
+  simp
 
-noncomputable def hashiguchiDFA (I : Independence α) (M : DFA α σ) (k : ℕ) :
-    DFA α (HashiguchiState α σ k) where
-  step := hashiguchiStep I M
-  start := hashiguchiStart k
-  accept := hashiguchiAccept M
-
-omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
-lemma foldl_flatten_trans_eq
-    (M : DFA α σ) (lxs : List (List α)) (lβ : List (HashiguchiBucket α σ))
-    (h_len : lxs.length = lβ.length)
-    (h_trans : ∀ i (hi : i < lxs.length), (lβ[i]).trans = fun q => (lxs[i]).foldl M.step q)
-    (q₀ : σ) :
-    lxs.flatten.foldl M.step q₀ = lβ.foldl (fun q bucket => bucket.trans q) q₀ := by
-  induction lxs generalizing lβ q₀ with
+lemma zipWith_append_append_of_length_eq {α β γ : Type} (f : α → β → γ)
+    (xs1 : List α) (ys1 : List β) (xs2 : List α) (ys2 : List β)
+    (h : xs1.length = ys1.length) :
+    List.zipWith f (xs1 ++ xs2) (ys1 ++ ys2) =
+    List.zipWith f xs1 ys1 ++ List.zipWith f xs2 ys2 := by
+  induction xs1 generalizing ys1 with
   | nil =>
-    cases lβ
+    cases ys1
     · rfl
     · contradiction
   | cons x xs ih =>
-    cases lβ with
-    | nil => simp at h_len
-    | cons b β_tail =>
-      simp only [List.length_cons, Nat.succ_inj] at h_len
-      simp only [List.flatten_cons, List.foldl_append, List.foldl_cons]
-      have hb : b.trans = fun q => x.foldl M.step q := h_trans 0 (by simp)
-      rw [hb]
-      apply ih β_tail
-      · intro i hi
-        simpa [List.getElem_cons_succ] using h_trans (i + 1) (by simpa)
-      · exact h_len
+    cases ys1 with
+    | nil => contradiction
+    | cons y ys =>
+      simp only [List.length_cons, Nat.succ_inj] at h
+      simp [ih ys h]
+
+lemma ofFn_getElem_pad {α : Type} {k : ℕ} (L : List α) (h : L.length = k + 1) :
+    List.ofFn (fun (i : Fin (k + 1)) => L[ (i : ℕ) ]) = L := by
+  apply List.ext_getElem
+  · simp [h]
+  · intro i h1 h2
+    rw [List.getElem_ofFn]
+
+lemma getElem_pad_right {α : Type} (L : List (List α)) (pad : ℕ) (i : ℕ)
+    (hi : i < (L ++ List.replicate pad []).length) (h_out : L.length ≤ i) :
+    (L ++ List.replicate pad [])[i] = [] := by
+  have h1 : (L ++ List.replicate pad [])[i] =
+            (List.replicate pad [])[i - L.length]'(by simp_all; omega) :=
+    List.getElem_append_right h_out
+  rw [h1]
+  exact List.getElem_replicate _
+
+omit [DecidableEq α] [Fintype α] in
+lemma pad_factorization {k : ℕ} (I : Independence α) (X : Language α) (u v : List α)
+    (xs_list ys_list : List (List α)) (h_len : xs_list.length ≤ k + 1)
+    (h_valid : IsValidFactorization I X u v xs_list ys_list) :
+    ∃ xs ys : Fin (k + 1) → List α,
+      TraceEqv I u (List.ofFn xs).flatten ∧
+      TraceEqv I v (List.ofFn ys).flatten ∧
+      (List.ofFn (fun i => xs i ++ ys i)).flatten ∈ X ∧
+      ∀ i j, i < j → I.Independent (ys i) (xs j) := by
+  rcases h_valid with ⟨h_eq_len, h_in_X, h_u_eqv, h_v_eqv, h_indep⟩
+  let pad_len := k + 1 - xs_list.length
+  let xs_pad := xs_list ++ List.replicate pad_len []
+  let ys_pad := ys_list ++ List.replicate pad_len []
+  have h_xs_pad_len : xs_pad.length = k + 1 := by simp [xs_pad, pad_len]; omega
+  have h_ys_pad_len : ys_pad.length = k + 1 := by simp [ys_pad, pad_len, h_eq_len]; omega
+  let xs : Fin (k + 1) → List α := fun i => xs_pad[ (i : ℕ) ]'(by omega)
+  let ys : Fin (k + 1) → List α := fun i => ys_pad[ (i : ℕ) ]'(by omega)
+  use xs, ys
+  have h_ofFn_xs : List.ofFn xs = xs_pad := ofFn_getElem_pad xs_pad h_xs_pad_len
+  have h_ofFn_ys : List.ofFn ys = ys_pad := ofFn_getElem_pad ys_pad h_ys_pad_len
+  have h_ofFn_zip : List.ofFn (fun i => xs i ++ ys i) = List.zipWith (· ++ ·) xs_pad ys_pad := by
+    apply List.ext_getElem
+    · simp [h_xs_pad_len, h_ys_pad_len]
+    · intro i h1 h2
+      simp only [List.getElem_ofFn, List.getElem_zipWith]
+      rw [List.append_cancel_left_eq]
+  and_intros
+  · rw [h_ofFn_xs, List.flatten_append, List.flatten_replicate_nil, List.append_nil]
+    exact h_u_eqv
+  · rw [h_ofFn_ys, List.flatten_append, List.flatten_replicate_nil, List.append_nil]
+    exact h_v_eqv
+  · rw [h_ofFn_zip, zipWith_append_append_of_length_eq _ _ _ _ _ h_eq_len]
+    rw [zipWith_append_replicate_nil]
+    simp only [List.flatten_append, List.flatten_replicate_nil, List.append_nil]
+    exact h_in_X
+  · intro i j hij
+    have hi_bound : (i : ℕ) < k + 1 := i.isLt
+    have hj_bound : (j : ℕ) < k + 1 := j.isLt
+    by_cases hy : (i : ℕ) < ys_list.length
+    · by_cases hx : (j : ℕ) < xs_list.length
+      · have hy_val : ys i = ys_list[ (i : ℕ) ] := by
+          change ys_pad[(i : ℕ)] = _
+          exact List.getElem_append_left hy
+        have hx_val : xs j = xs_list[ (j : ℕ) ] := by
+          change xs_pad[(j : ℕ)] = _
+          exact List.getElem_append_left hx
+        rw [hy_val, hx_val]
+        exact h_indep (i : ℕ) (j : ℕ) hy hx hij
+      · have hx_val : xs j = [] := by
+          change xs_pad[(j : ℕ)] = _
+          apply getElem_pad_right
+          omega
+        rw [hx_val]
+        intro a ha b hb
+        cases hb
+    · have hy_val : ys i = [] := by
+        change ys_pad[(i : ℕ)] = _
+        apply getElem_pad_right
+        omega
+      rw [hy_val]
+      intro a ha b hb
+      cases ha
 
 omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
-lemma foldl_join_eq_foldl_bucket {k : ℕ} (M : DFA α σ)
-    (xs : Fin (k + 1) → List α) (β : Fin (k + 1) → HashiguchiBucket α σ)
-    (h_trans : ∀ i, (β i).trans = fun q => (xs i).foldl M.step q) (q₀ : σ) :
-    (List.ofFn xs).flatten.foldl M.step q₀ =
-    (List.ofFn β).foldl (fun q bucket => bucket.trans q) q₀ := by
-  apply foldl_flatten_trans_eq
-  · intro i hi
-    simp only [List.getElem_ofFn]
-    exact h_trans ⟨i, by simp_all⟩
-  · simp
-
-omit [DecidableEq α] [Fintype α] in
-lemma traceEqv_join_set_abstract (I : Independence α) (L : List (List α)) (m : ℕ) (a : α)
-    (hm : m < L.length)
-    (h_indep : ∀ j (hj : j < L.length), m < j → ∀ c ∈ L[j], I.rel a c) :
-    TraceEqv I (L.flatten ++ [a]) ((L.set m (L[m] ++ [a])).flatten) := by
-  induction L generalizing m with
-  | nil => contradiction
+lemma eval_interleaved_eq_list (M : DFA α σ) (xs xs' ys : List (List α))
+    (h1 : xs.length = ys.length) (h2 : xs'.length = ys.length)
+    (h_trans : ∀ i (hx : i < xs.length) (hx' : i < xs'.length),
+      xs[i].foldl M.step = xs'[i].foldl M.step)
+    (q₀ : σ) :
+    (List.zipWith (· ++ ·) xs ys).flatten.foldl M.step q₀ =
+    (List.zipWith (· ++ ·) xs' ys).flatten.foldl M.step q₀ := by
+  induction xs generalizing xs' ys q₀ with
+  | nil =>
+    cases ys
+    · cases xs'
+      · rfl
+      · simp at h2
+    · simp at h1
   | cons x xs ih =>
-    cases m with
-    | zero =>
-      simp only [List.set, List.flatten_cons, List.getElem_cons_zero, List.length_cons] at *
-      have h_comm : TraceEqv I (xs.flatten ++ [a]) ([a] ++ xs.flatten) := by
-        apply comm_append_of_indep
-        intro a' ha' c hc
-        simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
-        simp only [List.mem_flatten] at ha'
-        rcases ha' with ⟨l, hl_in_xs, ha'_in_l⟩
-        rcases List.mem_iff_getElem.mp hl_in_xs with ⟨j, hj_lt, hj_eq⟩
-        have h_rel := h_indep (j + 1) (by omega) (by omega) a' (by simp_all)
-        subst hc
-        exact I.symm c a' h_rel
-      have h_compat := TraceEqv.compat (TraceEqv.refl x) h_comm
-      simp only [List.append_assoc] at h_compat ⊢
-      exact h_compat
-    | succ m' =>
-      simp only [List.set, List.flatten_cons, List.getElem_cons_succ, List.length_cons] at *
-      have hm' : m' < xs.length := by simpa using hm
-      have h_indep' : ∀ j (hj : j < xs.length), m' < j → ∀ c ∈ xs[j], I.rel a c := by
-        intro j hj1 hj2 c hc
-        exact h_indep (j + 1) (by omega) (by omega) c hc
-      have h_ih := ih m' hm' h_indep'
-      have h_compat := TraceEqv.compat (TraceEqv.refl x) h_ih
-      simp only [List.append_assoc] at h_compat ⊢
-      exact h_compat
+    cases ys with
+    | nil => simp at h1
+    | cons y ys =>
+      cases xs' with
+      | nil => simp at h2
+      | cons x' xs' =>
+        simp only [List.zipWith_cons_cons, List.flatten_cons, List.append_assoc, List.foldl_append]
+        have h_eq_x : x.foldl M.step q₀ = x'.foldl M.step q₀ := by
+          have h0 := h_trans 0 (by simp) (by simp)
+          exact congrFun h0 q₀
+        rw [h_eq_x]
+        apply ih xs' ys (by simpa using h1) (by simpa using h2)
+        intro i hi hi'
+        exact h_trans (i + 1) (by simpa) (by simpa)
 
-omit [DecidableEq α] [Fintype α] in
-lemma traceEqv_join_update {k : ℕ} (I : Independence α)
-    (xs' : Fin (k + 1) → List α) (m : Fin (k + 1)) (a : α)
-    (h_indep : ∀ j, m < j → ∀ c ∈ xs' j, I.rel a c) :
-    TraceEqv I ((List.ofFn xs').flatten ++ [a])
-               ((List.ofFn (Function.update xs' m (xs' m ++ [a]))).flatten) := by
-  have h_update : List.ofFn (Function.update xs' m (xs' m ++ [a])) = (List.ofFn xs').set m (xs' m ++ [a]) := by
+omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
+lemma eval_interleaved_eq {k : ℕ} (M : DFA α σ) (xs xs' ys : Fin (k + 1) → List α)
+    (h_trans : ∀ i, (xs i).foldl M.step = (xs' i).foldl M.step) (q₀ : σ) :
+    (List.ofFn (fun i => xs i ++ ys i)).flatten.foldl M.step q₀ =
+    (List.ofFn (fun i => xs' i ++ ys i)).flatten.foldl M.step q₀ := by
+  have h_zip : ∀ f g : Fin (k + 1) → List α, List.ofFn (fun i => f i ++ g i) = List.zipWith (· ++ ·) (List.ofFn f) (List.ofFn g) := by
+    intro f g
     apply List.ext_getElem
     · simp
-    · intro i h1 h2
-      simp only [List.getElem_ofFn, List.getElem_set]
-      split_ifs with h_eq
-      · subst h_eq
-        simp
-      · have hne : (⟨i, by simpa using h1⟩ : Fin (k + 1)) ≠ m := by
-          intro hc
-          apply h_eq
-          rw [← hc]
-        simp [Function.update_of_ne hne]
-  rw [h_update]
-  have h_xm : xs' m = (List.ofFn xs')[ (m : ℕ) ] := by rw [List.getElem_ofFn]
-  rw [h_xm]
-  apply traceEqv_join_set_abstract
-  intro j hj1 hj2 c hc
-  rw [List.getElem_ofFn] at hc
-  simp only [List.ofFn_succ, List.length_cons, List.length_ofFn] at hj1
-  exact h_indep ⟨j, hj1⟩ hj2 c hc
+    · intro i hi1 hi2
+      simp only [List.getElem_ofFn, List.getElem_zipWith]
+  rw [h_zip xs ys, h_zip xs' ys]
+  apply eval_interleaved_eq_list
+  · simp
+  · simp
+  · intro i h1 h2
+    simp only [List.getElem_ofFn]
+    exact h_trans ⟨i, by simpa using h1⟩
 
-lemma hashiguchi_soundness_invariant (I : Independence α) (M : DFA α σ) (k : ℕ) (w : List α)
-    (β : Fin (k + 1) → HashiguchiBucket α σ)
-    (hβ : β ∈ w.foldl (hashiguchiStep I M) (hashiguchiStart k)) :
-    ∃ (xs : Fin (k + 1) → List α),
-      TraceEqv I w (List.ofFn xs).flatten ∧
-      (∀ i, (β i).trans = fun q => (xs i).foldl M.step q) ∧
-      (∀ i, (β i).alph = (xs i).toFinset) := by
-  induction w using List.reverseRecOn generalizing β with
-  | nil =>
-    simp only [List.foldl_nil] at hβ
-    rw [hashiguchiStart, Finset.mem_filter] at hβ
-    rcases hβ with ⟨_, hβ_prop⟩
-    use fun _ => []
-    and_intros
-    · simp [TraceEqv.refl]
-    · intro i
-      simpa using (hβ_prop i).left
-    · intro i
-      simpa using (hβ_prop i).right
-  | append_singleton w' a ih =>
-    simp only [List.foldl_append, List.foldl_cons, List.foldl_nil] at hβ
-    rw [hashiguchiStep, Finset.mem_biUnion] at hβ
-    rcases hβ with ⟨β', hβ'_in, hβ_step⟩
-    rcases ih β' hβ'_in with ⟨xs', hw', htrans', halph'⟩
-    rw [stepBucket, Finset.mem_filter] at hβ_step
-    rcases hβ_step with ⟨-, m, h_indep_cond, rfl⟩
-    use Function.update xs' m (xs' m ++ [a])
-    and_intros
-    · have h_indep : ∀ (j : Fin (k + 1)), m < j → ∀ c ∈ xs' j, I.rel a c := by
-        intro j hj c hc
-        have hc_in : c ∈ (β' j).alph := by
-          rw [halph' j]
-          exact List.mem_toFinset.mpr hc
-        exact h_indep_cond j hj c hc_in
-      have heqv := traceEqv_join_update I xs' m a h_indep
-      exact TraceEqv.trans (TraceEqv.compat hw' (TraceEqv.refl [a])) heqv
-    · intro i
-      by_cases h : i = m
-      · subst h
-        simp [Function.update_self, htrans']
-      · simp [Function.update_of_ne h, htrans' i]
-    · intro i
-      by_cases h : i = m
-      · subst h
-        simp [Function.update_self, halph']
-      · simp [Function.update_of_ne h, halph' i]
+omit [DecidableEq α] [Fintype α] in
+lemma traceEqv_append_swap (I : Independence α) (A B C D : List α)
+    (h : TraceEqv I (B ++ C) (C ++ B)) :
+    TraceEqv I (A ++ B ++ C ++ D) (A ++ C ++ B ++ D) := by
+  have eq1 : A ++ B ++ C ++ D = A ++ (B ++ C) ++ D := by simp only [List.append_assoc]
+  have eq2 : A ++ C ++ B ++ D = A ++ (C ++ B) ++ D := by simp only [List.append_assoc]
+  rw [eq1, eq2]
+  exact append_left_right A D h
 
-lemma hashiguchi_soundness (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
-    (h_acc : M.accepts = X) (w : List α) :
-    (hashiguchiDFA I M k).eval w ∈ hashiguchiAccept M → w ∈ traceClosure I X := by
-  intro h_eval
-  rw [hashiguchiAccept, Set.mem_setOf] at h_eval
-  rcases h_eval with ⟨β, hβ_in, hβ_acc⟩
-  have ⟨xs, h_equiv, h_trans, _⟩ := hashiguchi_soundness_invariant I M k w β hβ_in
-  let u := (List.ofFn xs).flatten
-  have hu_eqv : TraceEqv I u w := TraceEqv.symm h_equiv
-  have hu_acc : M.eval u ∈ M.accept := by
-    have h_fold := foldl_join_eq_foldl_bucket M xs β h_trans M.start
-    rwa [← h_fold] at hβ_acc
-  have hu_in_X : u ∈ X := by
-    rw [← h_acc]
-    exact hu_acc
-  unfold traceClosure
-  rw [Set.mem_setOf]
-  exact ⟨u, hu_in_X, hu_eqv⟩
-
-lemma zipWith_append_flatten_eq_of_flatten_empty {α : Type*} (xs ys : List (List α))
-    (hlen : xs.length = ys.length) (hys : ys.flatten = []) :
-    (List.zipWith (· ++ ·) xs ys).flatten = xs.flatten := by
+omit [DecidableEq α] [Fintype α] in
+lemma traceEqv_flatten_append_interleaved_list (I : Independence α)
+    (xs ys : List (List α)) (hlen : xs.length = ys.length)
+    (hindep : ∀ i j (hi : i < ys.length) (hj : j < xs.length), i < j → I.Independent ys[i] xs[j]) :
+    TraceEqv I (xs.flatten ++ ys.flatten) (List.zipWith (· ++ ·) xs ys).flatten := by
   induction xs generalizing ys with
   | nil =>
     cases ys
-    · rfl
-    · contradiction
+    · exact TraceEqv.refl []
+    · simp at hlen
   | cons x xs ih =>
     cases ys with
-    | nil => contradiction
+    | nil => simp only [List.length_cons, List.length_nil, Nat.succ_ne_zero] at hlen
     | cons y ys =>
       simp only [List.length_cons, Nat.succ_inj] at hlen
-      simp only [List.flatten_cons, List.append_eq_nil_iff] at hys
-      rcases hys with ⟨hy_nil, hys_nil⟩
-      simp only [List.zipWith_cons_cons, List.flatten_cons]
-      rw [hy_nil, List.append_nil, ih ys hlen hys_nil]
+      simp only [List.flatten, List.zipWith]
+      have hindep_y_xs : ∀ a ∈ xs.flatten, ∀ b ∈ y, I.rel a b := by
+        intro a ha b hb
+        simp only [List.mem_flatten] at ha
+        rcases ha with ⟨x', hx'_in, ha_in⟩
+        rcases List.mem_iff_getElem.mp hx'_in with ⟨j, hj, hj_eq⟩
+        subst hj_eq
+        have hindep_0 := hindep 0 (j + 1) (by simp) (by simpa) (by omega)
+        have rel_ba := hindep_0 b hb a ha_in
+        exact I.symm b a rel_ba
+      have h_comm : TraceEqv I (xs.flatten ++ y) (y ++ xs.flatten) := by
+        apply comm_append_of_indep
+        exact hindep_y_xs
+      have ih_app := ih ys hlen (by
+        intro i j hi hj hij
+        exact hindep (i + 1) (j + 1) (by simpa) (by simpa) (by omega)
+      )
+      have h_swap := traceEqv_append_swap I x xs.flatten y ys.flatten h_comm
+      have h_ih_compat := TraceEqv.compat (TraceEqv.refl (x ++ y)) ih_app
+      have eq3 : (x ++ y) ++ (xs.flatten ++ ys.flatten) = x ++ y ++ xs.flatten ++ ys.flatten := by
+        simp only [List.append_assoc]
+      rw [eq3] at h_ih_compat
+      simp only [List.append_eq, ← List.append_assoc]
+      exact TraceEqv.trans h_swap h_ih_compat
+
+omit [Fintype α] in
+lemma traceEqv_interleaved_swap {k : ℕ} (I : Independence α) (u' : List α)
+    (xs xs' ys : Fin (k + 1) → List α)
+    (hu' : TraceEqv I u' (List.ofFn xs').flatten)
+    (h_alph : ∀ i, (xs i).toFinset = (xs' i).toFinset)
+    (h_indep : ∀ i j, i < j → I.Independent (ys i) (xs j)) :
+    TraceEqv I (u' ++ (List.ofFn ys).flatten)
+               (List.ofFn (fun i => xs' i ++ ys i)).flatten := by
+  let L_xs' := List.ofFn xs'
+  let L_ys := List.ofFn ys
+  have hlen : L_xs'.length = L_ys.length := by simp [L_xs', L_ys]
+  have hindep_list : ∀ i j (hi : i < L_ys.length) (hj : j < L_xs'.length),
+      i < j → I.Independent L_ys[i] L_xs'[j] := by
+    intro i j hi hj hij a ha b hb
+    have hi_fin : i < k + 1 := by rwa [List.length_ofFn] at hi
+    have hj_fin : j < k + 1 := by rwa [List.length_ofFn] at hj
+    have h_orig := h_indep ⟨i, hi_fin⟩ ⟨j, hj_fin⟩ hij
+    have hy_eq : L_ys[i] = ys ⟨i, hi_fin⟩ := by rw [List.getElem_ofFn]
+    have hx'_eq : L_xs'[j] = xs' ⟨j, hj_fin⟩ := by rw [List.getElem_ofFn]
+    rw [hy_eq] at ha
+    rw [hx'_eq] at hb
+    have h_alph_j := h_alph ⟨j, hj_fin⟩
+    have hb_in_xs : b ∈ xs ⟨j, hj_fin⟩ := by
+      rw [← List.mem_toFinset, h_alph_j, List.mem_toFinset]
+      exact hb
+    exact h_orig a ha b hb_in_xs
+  have h_list_eqv := traceEqv_flatten_append_interleaved_list I L_xs' L_ys hlen hindep_list
+  have h_zip_eq : (List.zipWith (· ++ ·) L_xs' L_ys) = List.ofFn (fun i => xs' i ++ ys i) := by
+    apply List.ext_getElem
+    · simp [L_xs', L_ys]
+    · intro i hi1 hi2
+      simp only [L_xs', L_ys, List.getElem_ofFn, List.getElem_zipWith]
+  rw [h_zip_eq] at h_list_eqv
+  have h_step1 : TraceEqv I (u' ++ L_ys.flatten) (L_xs'.flatten ++ L_ys.flatten) :=
+    TraceEqv.compat hu' (TraceEqv.refl _)
+  exact TraceEqv.trans h_step1 h_list_eqv
+
+lemma diekert_subset (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
+    (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (u u' : List α)
+    (h_sub : diekertR I M k u ⊆ diekertR I M k u') :
+    leftQuotient (traceClosure I X) u ⊆ leftQuotient (traceClosure I X) u' := by
+  intro v hv
+  rw [leftQuotient, Set.mem_setOf] at hv ⊢
+  have ⟨xs_list, ys_list, h_len, h_valid⟩ := h_rank u v hv
+  have ⟨xs, ys, h_xs_eqv, h_ys_eqv, h_interleaved_in_X, h_indep⟩ :=
+    pad_factorization I X u v xs_list ys_list h_len h_valid
+  let β : Fin (k + 1) → HashiguchiBucket α σ := fun i =>
+    { trans := fun q => (xs i).foldl M.step q, alph := (xs i).toFinset }
+  have hβ_in_u : β ∈ diekertR I M k u := by
+    rw [diekertR, Finset.mem_filter]
+    exact ⟨Finset.mem_univ _, xs, h_xs_eqv, fun _ => rfl, fun _ => rfl⟩
+  have hβ_in_u' : β ∈ diekertR I M k u' := h_sub hβ_in_u
+  rw [diekertR, Finset.mem_filter] at hβ_in_u'
+  rcases hβ_in_u'.right with ⟨xs', h_xs'_eqv, h_trans_eq, h_alph_eq⟩
+  have h_trans_match : ∀ i, (xs i).foldl M.step = (xs' i).foldl M.step := by
+    intro i
+    have ht := h_trans_eq i
+    exact List.map_inj.mp (congrArg List.map (h_trans_eq i))
+  have h_alph_match : ∀ i, (xs i).toFinset = (xs' i).toFinset := by
+    intro i
+    exact Finset.val_inj.mp (congrArg Finset.val (h_alph_eq i))
+  let interleaved' := (List.ofFn (fun i => xs' i ++ ys i)).flatten
+  have h_interleaved'_in_X : interleaved' ∈ X := by
+    rw [← h_acc, DFA.accepts, DFA.acceptsFrom, Set.mem_setOf] at h_interleaved_in_X ⊢
+    have h_eval_eq := eval_interleaved_eq M xs xs' ys h_trans_match M.start
+    unfold interleaved'
+    rwa [DFA.evalFrom, ← h_eval_eq]
+  have h_trace_swap := traceEqv_interleaved_swap I u' xs xs' ys h_xs'_eqv h_alph_match h_indep
+  have h_v_eqv : TraceEqv I (u' ++ v) (u' ++ (List.ofFn ys).flatten) :=
+    TraceEqv.compat (TraceEqv.refl u') h_ys_eqv
+  have h_final_eqv : TraceEqv I (u' ++ v) interleaved' :=
+    TraceEqv.trans h_v_eqv h_trace_swap
+  exact ⟨interleaved', h_interleaved'_in_X, h_final_eqv.symm⟩
+
+lemma diekert_core (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
+    (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (u u' : List α)
+    (h_eq : diekertR I M k u = diekertR I M k u') :
+    leftQuotient (traceClosure I X) u = leftQuotient (traceClosure I X) u' := by
+  apply Set.Subset.antisymm
+  · apply diekert_subset I M k h_acc h_rank u u'
+    exact subset_of_subset_of_eq (fun _ a => a) h_eq
+  · apply diekert_subset I M k h_acc h_rank u' u
+    exact subset_of_subset_of_eq (fun _ a => a) h_eq.symm
+
+def QuotientState (I : Independence α) (X : Language α) :=
+  { L' : Language α // ∃ u : List α, L' = leftQuotient (traceClosure I X) u }
+
+noncomputable def quotientStateFintype (M : DFA α σ) {X : Language α} (k : ℕ)
+    (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) :
+    Fintype (QuotientState I X) :=
+  Fintype.ofSurjective
+    (fun R =>
+      if h : ∃ u : List α, diekertR I M k u = R then
+        ⟨leftQuotient (traceClosure I X) (Classical.choose h), ⟨Classical.choose h, rfl⟩⟩
+      else
+        ⟨leftQuotient (traceClosure I X) [], ⟨[], rfl⟩⟩)
+    (by
+      intro ⟨L', h_exists⟩
+      rcases h_exists with ⟨u, rfl⟩
+      use diekertR I M k u
+      dsimp
+      have h_ex : ∃ u_1 : List α, diekertR I M k u_1 = diekertR I M k u := ⟨u, rfl⟩
+      rw [dif_pos h_ex]
+      apply Subtype.ext
+      apply diekert_core I M k h_acc h_rank
+      exact Classical.choose_spec h_ex
+    )
+
+noncomputable def quotientDFMA (I : Independence α) (X : Language α) :
+    DFMA (List α) (QuotientState I X) where
+  step := fun ⟨L', h_exists⟩ w => ⟨leftQuotient L' w, by
+    rcases h_exists with ⟨u, rfl⟩
+    use u ++ w
+    exact (leftQuotient_append (traceClosure I X) u w).symm
+  ⟩
+  start := ⟨leftQuotient (traceClosure I X) [], ⟨[], rfl⟩⟩
+  accept := { ⟨L', _⟩ | [] ∈ L' }
+  idempotent := by
+    rintro ⟨L', hL'⟩
+    congr
+  composition := by
+    rintro ⟨L', hL'⟩ u v
+    simp only
+    simp_rw [← leftQuotient_append]
+    rfl
 
 omit [DecidableEq α] [Fintype α] in
-lemma rank_provides_factorization (I : Independence α) {X : Language α} (k : ℕ)
-    (h_rank : HasRankAtMost I X k) (w : List α) (hw : w ∈ traceClosure I X) :
-    ∃ xs : Fin (k + 1) → List α,
-      TraceEqv I w (List.ofFn xs).flatten ∧
-      (List.ofFn xs).flatten ∈ X := by
-  have hw_append : w ++ [] ∈ traceClosure I X := by
-    simp only [List.append_nil]
-    exact hw
-  rcases h_rank w [] hw_append with ⟨xs_list, ys_list, h_len_bound, h_valid⟩
-  unfold IsValidFactorization at h_valid
-  rcases h_valid with ⟨h_len_eq, h_zip_in_X, h_w_eqv, h_nil_eqv, -⟩
-  have h_ys_empty : ys_list.flatten = [] := by
-    have h_len_zero := length_eq_of_eqv h_nil_eqv
-    simp only [List.length_nil] at h_len_zero
-    exact List.length_eq_zero_iff.mp h_len_zero.symm
-  have h_zip_eq : (List.zipWith (· ++ ·) xs_list ys_list).flatten = xs_list.flatten :=
-    zipWith_append_flatten_eq_of_flatten_empty xs_list ys_list h_len_eq h_ys_empty
-  rw [h_zip_eq] at h_zip_in_X
-  let pad_len := k + 1 - xs_list.length
-  let xs_padded := xs_list ++ List.replicate pad_len []
-  have h_padded_len : xs_padded.length = k + 1 := by
-    simp only [xs_padded, pad_len, List.length_append, List.length_replicate]
-    omega
-  have h_padded_flatten : xs_padded.flatten = xs_list.flatten := by
-    rw [List.flatten_append, List.flatten_replicate_nil, List.append_nil]
-  let f : Fin (k + 1) → List α := fun i => xs_padded[ (i : ℕ) ]'(by omega)
-  use f
-  have h_ofFn : List.ofFn f = xs_padded := by
-    apply List.ext_getElem
-    · simp [h_padded_len]
-    · intro i _ _
-      rw [List.getElem_ofFn]
-  rw [h_ofFn, h_padded_flatten]
-  exact ⟨h_w_eqv, h_zip_in_X⟩
-
--- Helper 1: An empty trace equivalence implies all chunks are empty
-lemma traceEqv_nil_implies {k : ℕ} (I : Independence α) (xs : Fin (k + 1) → List α)
-    (h_eqv : TraceEqv I [] (List.ofFn xs).flatten) :
-    ∀ i, xs i = [] := by
-  sorry
-
--- Helper 2: The structural trace extraction
--- If w' ++ [a] is equivalent to the flattened chunks, `a` must have originated from
--- the end of some chunk `m`, and been commuted past all subsequent chunks (hence independent).
-lemma traceEqv_append_singleton_implies (I : Independence α) {k : ℕ} (w' : List α) (a : α)
-    (xs : Fin (k + 1) → List α) (h_eqv : TraceEqv I (w' ++ [a]) (List.ofFn xs).flatten) :
-    ∃ (xs' : Fin (k + 1) → List α) (m : Fin (k + 1)),
-      xs m = xs' m ++ [a] ∧
-      (∀ i, i ≠ m → xs i = xs' i) ∧
-      TraceEqv I w' (List.ofFn xs').flatten ∧
-      (∀ j, m < j → ∀ c ∈ xs' j, I.rel a c) := by
-  sorry
-
-lemma hashiguchi_completeness_invariant (I : Independence α) (M : DFA α σ) (k : ℕ) (w : List α)
-    (xs : Fin (k + 1) → List α) (h_eqv : TraceEqv I w (List.ofFn xs).flatten) :
-    ∃ β ∈ w.foldl (hashiguchiStep I M) (hashiguchiStart k),
-      (∀ i, (β i).trans = fun q => (xs i).foldl M.step q) ∧
-      (∀ i, (β i).alph = (xs i).toFinset) := by
-  induction w using List.reverseRecOn generalizing xs with
-  | nil =>
-    have h_nil := traceEqv_nil_implies I xs h_eqv
-    simp only [List.foldl_nil]
-    let β : Fin (k + 1) → HashiguchiBucket α σ := fun _ => { trans := id, alph := ∅ }
-    use β
-    rw [hashiguchiStart, Finset.mem_filter]
-    and_intros
-    · exact Finset.mem_univ β
-    · intro i
-      trivial
-    · intro i
-      rw [h_nil i]
-      trivial
-    · intro i
-      rw [h_nil i]
-      trivial
-  | append_singleton w' a ih =>
-    have ⟨xs', m, h_xm, h_xi, h_eqv', h_indep⟩ := traceEqv_append_singleton_implies I w' a xs h_eqv
-    rcases ih xs' h_eqv' with ⟨β', hβ'_in, htrans', halph'⟩
-    simp only [List.foldl_append, List.foldl_cons, List.foldl_nil, hashiguchiStep]
-    let β_new := Function.update β' m {
-      trans := fun q => M.step ((β' m).trans q) a,
-      alph  := insert a (β' m).alph
-    }
-    sorry
-
-lemma hashiguchi_completeness (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
-    (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (w : List α) :
-    w ∈ traceClosure I X → (hashiguchiDFA I M k).eval w ∈ hashiguchiAccept M := by
-  intro hw_in
-  have ⟨xs, hw_eqv, hxs_in_X⟩ := rank_provides_factorization I k h_rank w hw_in
-  have h_eval_w : (hashiguchiDFA I M k).eval w = w.foldl (hashiguchiStep I M) (hashiguchiStart k) :=
-    rfl
-  have ⟨β, hβ_in, h_trans, _⟩ := hashiguchi_completeness_invariant I M k w xs hw_eqv
-  rw [hashiguchiAccept, Set.mem_setOf]
-  use β
-  and_intros
-  · rw [h_eval_w]
-    exact hβ_in
-  · have h_fold := foldl_join_eq_foldl_bucket M xs β h_trans M.start
-    rw [← h_fold]
-    have hxs_acc : M.eval ((List.ofFn xs).flatten) ∈ M.accept := by
-      rw [← DFA.mem_accepts, h_acc]
-      exact hxs_in_X
-    exact hxs_acc
-
-theorem accepts_traceClosure (M : DFA α σ) {X : Language α} (k : ℕ)
-    (h_acc : M.accepts = X)
-    (h_rank : HasRankAtMost I X k) :
-    (hashiguchiDFA I M k).accepts = traceClosure I X := by
+lemma quotientDFMA_accepts (I : Independence α) (X : Language α) :
+    (quotientDFMA I X).accepts = traceClosure I X := by
   ext w
-  simp only [DFA.accepts]
-  constructor
-  · exact hashiguchi_soundness I M k h_acc w
-  · exact hashiguchi_completeness I M k h_acc h_rank w
+  unfold DFMA.accepts DFMA.eval quotientDFMA
+  simp [leftQuotient]
+  rw [Set.mem_setOf_eq, Set.mem_setOf_eq, List.append_nil]
 
-theorem recognizable_image_of_regular_finite_rank {X : Language α}
+omit [DecidableEq α] in
+theorem recognizable_image_of_regular_finite_rank {I : Independence α} {X : Language α}
     (hX_reg : X.IsRegular)
     (hX_rank : HasFiniteRank I X) :
     IsRecognizable (Trace.mk' I '' X) := by
-  rw [recognizable_iff_regular_preimage, preimage_mk_image_eq_traceClosure]
   rcases Language.isRegular_iff.mp hX_reg with ⟨σ, h_fin, M, hM_acc⟩
-  have ⟨k, hk_bound⟩ := hX_rank
-  let H := hashiguchiDFA I M k
-  have h_H_accepts : H.accepts = traceClosure I X :=
-    accepts_traceClosure M k hM_acc hk_bound
-  apply Language.isRegular_iff.mpr
-  use (HashiguchiState α σ k)
-  have h_fin' : Fintype (HashiguchiState α σ k) := by
-    unfold HashiguchiState
-    infer_instance
-  use h_fin', H
+  rcases hX_rank with ⟨k, hk_bound⟩
+  apply recognizablePreImage_is_recognizable (Trace.mk' I) Quotient.mk_surjective
+  rw [preimage_mk_image_eq_traceClosure]
+  apply recognizableDFMA_is_recognizable (traceClosure I X)
+  use QuotientState I X
+  use quotientStateFintype I M k hM_acc hk_bound
+  use Classical.decEq _
+  use quotientDFMA I X
+  exact (quotientDFMA_accepts I X).symm
 
 end TraceTheory
