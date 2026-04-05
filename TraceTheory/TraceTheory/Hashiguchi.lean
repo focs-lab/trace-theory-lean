@@ -81,296 +81,343 @@ open Classical
 
 variable {α σ : Type} {I : Independence α} [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ]
 
-/-- Represents the state of a single `xs` chunk in the factorization. -/
-structure ChunkProfile (α σ : Type) where
-  /-- State before processing `alph`. -/
-  q_start : σ
-  /-- State after processing `alph`. -/
-  q_end : σ
-  /-- Processed symbols. -/
+structure HashiguchiBucket (α σ : Type) where
+  trans : σ → σ
   alph : Finset α
-  deriving DecidableEq
 
-/-- We manually define an equivalence to a tuple so Lean can easily infer the Fintype. -/
-def ChunkProfile.equiv : ChunkProfile α σ ≃ (σ × σ × Finset α) where
-  toFun c := (c.q_start, c.q_end, c.alph)
-  invFun t := ⟨t.1, t.2.1, t.2.2⟩
+def HashiguchiBucket.equiv : HashiguchiBucket α σ ≃ (σ → σ) × Finset α where
+  toFun b := (b.trans, b.alph)
+  invFun p := ⟨p.1, p.2⟩
   left_inv _ := rfl
   right_inv _ := rfl
 
-instance [Fintype α] [Fintype σ] : Fintype (ChunkProfile α σ) :=
-  Fintype.ofEquiv _ ChunkProfile.equiv.symm
+instance [Fintype α] [Fintype σ] : Fintype (HashiguchiBucket α σ) :=
+  Fintype.ofEquiv _ HashiguchiBucket.equiv.symm
 
-/-- A configuration is a list of chunks (length ≤ k + 1).
-  Because the Hashiguchi automaton is a DFA, its state is a Set of these configurations
-  to track all non-deterministic guesses simultaneously. -/
-def HashiguchiState (α σ : Type) (k : ℕ) :=
-  Finset (Fin (k + 1) → ChunkProfile α σ)
+def HashiguchiState (α σ : Type) (k : ℕ) := Finset (Fin (k + 1) → HashiguchiBucket α σ)
 
-instance {k : ℕ} : Membership (Fin (k + 1) → (ChunkProfile α σ)) (HashiguchiState α σ k) :=
+instance {k : ℕ} : Membership (Fin (k + 1) → HashiguchiBucket α σ) (HashiguchiState α σ k) :=
   Finset.instMembership
 
-/-- To read a character `a`, we guess which chunk `m` it belongs to.
-  We can legally append `a` to chunk `m` if it is independent of all chunks `j > m`. -/
-noncomputable def stepConfiguration {k : ℕ}
-    (I : Independence α) (M : DFA α σ)
-    (config : Fin (k + 1) → ChunkProfile α σ) (a : α) :
-    Finset (Fin (k + 1) → ChunkProfile α σ) :=
-  Finset.univ.filter (fun config' =>
+noncomputable def hashiguchiStart (k : ℕ) : HashiguchiState α σ k :=
+  Finset.univ.filter (fun β => ∀ i, (β i).trans = id ∧ (β i).alph = ∅)
+
+noncomputable def stepBucket {k : ℕ}
+    (I : Independence α) (M : DFA α σ) (β : Fin (k + 1) → HashiguchiBucket α σ) (a : α) :
+    Finset (Fin (k + 1) → HashiguchiBucket α σ) :=
+  Finset.univ.filter (fun β' =>
     ∃ m : Fin (k + 1),
-      (∀ j, m < j → ∀ c ∈ (config j).alph, I.rel a c) ∧
-      config' =
-        Function.update config m {
-          config m with
-          q_end := M.step (config m).q_end a,
-          alph := insert a (config m).alph
+      (∀ j, m < j → ∀ c ∈ (β j).alph, I.rel a c) ∧
+      β' =
+        Function.update β m {
+          trans := fun q => M.step ((β m).trans q) a,
+          alph  := insert a (β m).alph
         })
 
-/-- The step function unions the results of all configurations in the current subset. -/
 noncomputable def hashiguchiStep {k : ℕ}
-    (I : Independence α) (M : DFA α σ) (q : HashiguchiState α σ k) (a : α) :
+    (I : Independence α) (M : DFA α σ) (S : HashiguchiState α σ k) (a : α) :
     HashiguchiState α σ k :=
-  q.biUnion (fun c => stepConfiguration I M c a)
+  S.biUnion (fun β => stepBucket I M β a)
 
-/-- The start configuration assumes all chunks are empty. -/
-noncomputable def hashiguchiStart (k : ℕ) : HashiguchiState α σ k:=
-  Finset.univ.filter (fun config =>
-    ∀ j, (config j).q_start = (config j).q_end ∧ (config j).alph = ∅)
+def hashiguchiAccept {k : ℕ} (M : DFA α σ) :
+    Set (HashiguchiState α σ k) :=
+  { S | ∃ β ∈ S, (List.ofFn β).foldl (fun q bucket => bucket.trans q) M.start ∈ M.accept }
 
-/-- A configuration is accepting if the chunks stitch together perfectly. -/
-def IsAcceptingConfig (M : DFA α σ) : List (ChunkProfile α σ) → σ → Prop
-  | [], q => q ∈ M.accept
-  | c :: cs, q =>
-    c.q_start = q ∧
-    IsAcceptingConfig M cs c.q_end
-
-/-- A configuration is accepting if we can find a valid run stitching together chunks
-  that connects `config[i].q_end` to `config[i+1].q_start`, ending in an accept state of M. -/
-def hashiguchiAccept {k : ℕ} (M : DFA α σ) : Set (HashiguchiState α σ k) :=
-  { S | ∃ config ∈ S, IsAcceptingConfig M (List.ofFn config) M.start }
-
-/-- The automaton which accepts the trace closure of L(`M`) if it has finite rank `k`. -/
 noncomputable def hashiguchiDFA (I : Independence α) (M : DFA α σ) (k : ℕ) :
     DFA α (HashiguchiState α σ k) where
   step := hashiguchiStep I M
   start := hashiguchiStart k
   accept := hashiguchiAccept M
 
-/-- The core invariant maintained by the Hashiguchi DFA execution. -/
-def ConfigInvariant {k : ℕ}
-    (I : Independence α) (M : DFA α σ) (C : Fin (k + 1) → ChunkProfile α σ) (w : List α) : Prop :=
-  ∃ xs : Fin (k + 1) → List α,
-    TraceEqv I w (List.flatten (List.ofFn xs)) ∧
-    (∀ i, (C i).alph = (xs i).toFinset) ∧
-    (∀ i, List.foldl M.step (C i).q_start (xs i) = (C i).q_end)
+omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
+lemma foldl_flatten_trans_eq
+    (M : DFA α σ) (lxs : List (List α)) (lβ : List (HashiguchiBucket α σ))
+    (h_len : lxs.length = lβ.length)
+    (h_trans : ∀ i (hi : i < lxs.length), (lβ[i]).trans = fun q => (lxs[i]).foldl M.step q)
+    (q₀ : σ) :
+    lxs.flatten.foldl M.step q₀ = lβ.foldl (fun q bucket => bucket.trans q) q₀ := by
+  induction lxs generalizing lβ q₀ with
+  | nil =>
+    cases lβ
+    · rfl
+    · contradiction
+  | cons x xs ih =>
+    cases lβ with
+    | nil => simp at h_len
+    | cons b β_tail =>
+      simp only [List.length_cons, Nat.succ_inj] at h_len
+      simp only [List.flatten_cons, List.foldl_append, List.foldl_cons]
+      have hb : b.trans = fun q => x.foldl M.step q := h_trans 0 (by simp)
+      rw [hb]
+      apply ih β_tail
+      · intro i hi
+        simpa [List.getElem_cons_succ] using h_trans (i + 1) (by simpa)
+      · exact h_len
 
-lemma hashiguchiStart_invariant {k : ℕ} (M : DFA α σ) (C : Fin (k + 1) → ChunkProfile α σ) :
-    C ∈ hashiguchiStart k → ConfigInvariant I M C [] := by
-  intro hC
-  use fun _ => []
-  simp only [List.ofFn_succ, List.ofFn_const, List.flatten_cons, List.flatten_replicate_nil,
-    List.append_nil, List.toFinset_nil, List.foldl_nil]
-  rw [hashiguchiStart, Finset.mem_filter] at hC
-  simp only [Finset.mem_univ, true_and] at hC
-  and_intros
-  · exact TraceEqv.refl _
-  · intro i
-    exact (hC i).right
-  · intro i
-    exact (hC i).left
+omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
+lemma foldl_join_eq_foldl_bucket {k : ℕ} (M : DFA α σ)
+    (xs : Fin (k + 1) → List α) (β : Fin (k + 1) → HashiguchiBucket α σ)
+    (h_trans : ∀ i, (β i).trans = fun q => (xs i).foldl M.step q) (q₀ : σ) :
+    (List.ofFn xs).flatten.foldl M.step q₀ =
+    (List.ofFn β).foldl (fun q bucket => bucket.trans q) q₀ := by
+  apply foldl_flatten_trans_eq
+  · intro i hi
+    simp only [List.getElem_ofFn]
+    exact h_trans ⟨i, by simp_all⟩
+  · simp
 
 omit [DecidableEq α] [Fintype α] in
-lemma traceEqv_flatten_update (n : ℕ) (xs : Fin n → List α) (m : Fin n) (a : α)
-    (hindep : ∀ j, m < j → ∀ c ∈ xs j, I.rel a c) :
-    TraceEqv I
-      ((List.ofFn xs).flatten ++ [a])
-      ((List.ofFn (Function.update xs m (xs m ++ [a]))).flatten) := by
-  induction n with
-  | zero => exact m.elim0
-  | succ n ih =>
-    rw [List.ofFn_succ, List.ofFn_succ]
-    by_cases hm0 : m.val = 0
-    · have hm : m = 0 := Fin.ext hm0
-      subst hm
-      have h_ne : ∀ i : Fin n, Fin.succ i ≠ 0 := by
-        intro i h
-        have hv := congrArg Fin.val h
-        simp at hv
-      rw [Function.update_self]
-      have h_upd_succ :
-          (fun i => Function.update xs 0 (xs 0 ++ [a]) (Fin.succ i)) =
-          fun i => xs (Fin.succ i) := by
-        ext i
-        rw [Function.update_of_ne (h_ne i)]
-      rw [h_upd_succ]
-      simp only [List.flatten_cons, List.append_assoc]
-      apply TraceEqv.compat (TraceEqv.refl (xs 0))
-      have h_indep_tl : I.Independent [a] (List.ofFn (fun i => xs (Fin.succ i))).flatten := by
-        intro x hx y hy
-        simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-        subst hx
-        rw [List.mem_flatten] at hy
-        rcases hy with ⟨l, hl, hyl⟩
-        rw [List.mem_ofFn] at hl
-        rcases hl with ⟨i, rfl⟩
-        have h_gt : (0 : Fin (n + 1)) < Fin.succ i := by
-          have h0 : (0 : Fin (n + 1)).val = 0 := rfl
-          have hi : (Fin.succ i).val = i.val + 1 := rfl
-          omega
-        exact hindep (Fin.succ i) h_gt y hyl
-      exact comm_singleton_of_indep h_indep_tl
-    · have ⟨m', hm'⟩ : ∃ m' : Fin n, m = Fin.succ m' := by
-        use ⟨m.val - 1, by omega⟩
-        ext
-        simp only [Fin.succ_mk]
-        omega
-      subst hm'
-      have h_ne : (0 : Fin (n + 1)) ≠ Fin.succ m' := by
-        intro h
-        simpa using congrArg Fin.val h
-      rw [Function.update_of_ne h_ne]
-      simp only [List.flatten_cons, List.append_assoc]
-      apply TraceEqv.compat (TraceEqv.refl (xs 0))
-      have h_fun_eq :
-          (fun i => Function.update xs (Fin.succ m') (xs (Fin.succ m') ++ [a]) (Fin.succ i)) =
-          Function.update (fun i => xs (Fin.succ i)) m' (xs (Fin.succ m') ++ [a]) := by
-        ext i
-        by_cases hi : i = m'
-        · subst hi
-          simp
-        · have h_ne' : Fin.succ i ≠ Fin.succ m' := by
-            intro h
-            have hv := congrArg Fin.val h
-            simp at hv
-            exact hi (Fin.ext hv)
-          simp only [Function.update_of_ne hi, Function.update_of_ne h_ne']
-      rw [h_fun_eq]
-      apply ih (fun i => xs (Fin.succ i)) m'
-      intro j hj c hc
-      have hj_succ : Fin.succ m' < Fin.succ j := by
-        have hm : (Fin.succ m').val = m'.val + 1 := rfl
-        have hj_val : (Fin.succ j).val = j.val + 1 := rfl
-        omega
-      exact hindep (Fin.succ j) hj_succ c hc
+lemma traceEqv_join_set_abstract (I : Independence α) (L : List (List α)) (m : ℕ) (a : α)
+    (hm : m < L.length)
+    (h_indep : ∀ j (hj : j < L.length), m < j → ∀ c ∈ L[j], I.rel a c) :
+    TraceEqv I (L.flatten ++ [a]) ((L.set m (L[m] ++ [a])).flatten) := by
+  induction L generalizing m with
+  | nil => contradiction
+  | cons x xs ih =>
+    cases m with
+    | zero =>
+      simp only [List.set, List.flatten_cons, List.getElem_cons_zero, List.length_cons] at *
+      have h_comm : TraceEqv I (xs.flatten ++ [a]) ([a] ++ xs.flatten) := by
+        apply comm_append_of_indep
+        intro a' ha' c hc
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+        simp only [List.mem_flatten] at ha'
+        rcases ha' with ⟨l, hl_in_xs, ha'_in_l⟩
+        rcases List.mem_iff_getElem.mp hl_in_xs with ⟨j, hj_lt, hj_eq⟩
+        have h_rel := h_indep (j + 1) (by omega) (by omega) a' (by simp_all)
+        subst hc
+        exact I.symm c a' h_rel
+      have h_compat := TraceEqv.compat (TraceEqv.refl x) h_comm
+      simp only [List.append_assoc] at h_compat ⊢
+      exact h_compat
+    | succ m' =>
+      simp only [List.set, List.flatten_cons, List.getElem_cons_succ, List.length_cons] at *
+      have hm' : m' < xs.length := by simpa using hm
+      have h_indep' : ∀ j (hj : j < xs.length), m' < j → ∀ c ∈ xs[j], I.rel a c := by
+        intro j hj1 hj2 c hc
+        exact h_indep (j + 1) (by omega) (by omega) c hc
+      have h_ih := ih m' hm' h_indep'
+      have h_compat := TraceEqv.compat (TraceEqv.refl x) h_ih
+      simp only [List.append_assoc] at h_compat ⊢
+      exact h_compat
 
-lemma stepConfiguration_invariant {k : ℕ} (I : Independence α) (M : DFA α σ)
-    (C C' : Fin (k + 1) → ChunkProfile α σ) (w : List α) (a : α) :
-    ConfigInvariant I M C w →
-    C' ∈ stepConfiguration I M C a →
-    ConfigInvariant I M C' (w ++ [a]) := by
-  rintro ⟨xs, heqv, halph, hstate⟩ hC'
-  simp only [stepConfiguration, Finset.mem_filter, Finset.mem_univ, true_and] at hC'
-  rcases hC' with ⟨m, h_indep, hC'_eq⟩
-  use Function.update xs m (xs m ++ [a])
-  and_intros
-  · apply TraceEqv.trans (TraceEqv.compat heqv (TraceEqv.refl [a]))
-    have hindep_xs : ∀ j, m < j → ∀ c ∈ xs j, I.rel a c := by
-      intro j hj c hc
-      have hc_finset : c ∈ (xs j).toFinset := by simpa using hc
-      rw [← halph j] at hc_finset
-      exact h_indep j hj c hc_finset
-    exact traceEqv_flatten_update (k + 1) xs m a hindep_xs
-  · intro i
-    subst hC'_eq
-    by_cases hi : i = m
-    · subst hi
-      simp [halph i]
-    · push_neg at hi
-      rw [Function.update_of_ne hi, Function.update_of_ne hi]
-      exact halph i
-  · intro i
-    subst hC'_eq
-    by_cases hi : i = m
-    · subst hi
-      simp only [Function.update_self, List.foldl_append, List.foldl_cons, List.foldl_nil]
-      rw [hstate i]
-    · push_neg at hi
-      rw [Function.update_of_ne hi, Function.update_of_ne hi]
-      exact hstate i
+omit [DecidableEq α] [Fintype α] in
+lemma traceEqv_join_update {k : ℕ} (I : Independence α)
+    (xs' : Fin (k + 1) → List α) (m : Fin (k + 1)) (a : α)
+    (h_indep : ∀ j, m < j → ∀ c ∈ xs' j, I.rel a c) :
+    TraceEqv I ((List.ofFn xs').flatten ++ [a])
+               ((List.ofFn (Function.update xs' m (xs' m ++ [a]))).flatten) := by
+  have h_update : List.ofFn (Function.update xs' m (xs' m ++ [a])) = (List.ofFn xs').set m (xs' m ++ [a]) := by
+    apply List.ext_getElem
+    · simp
+    · intro i h1 h2
+      simp only [List.getElem_ofFn, List.getElem_set]
+      split_ifs with h_eq
+      · subst h_eq
+        simp
+      · have hne : (⟨i, by simpa using h1⟩ : Fin (k + 1)) ≠ m := by
+          intro hc
+          apply h_eq
+          rw [← hc]
+        simp [Function.update_of_ne hne]
+  rw [h_update]
+  have h_xm : xs' m = (List.ofFn xs')[ (m : ℕ) ] := by rw [List.getElem_ofFn]
+  rw [h_xm]
+  apply traceEqv_join_set_abstract
+  intro j hj1 hj2 c hc
+  rw [List.getElem_ofFn] at hc
+  simp only [List.ofFn_succ, List.length_cons, List.length_ofFn] at hj1
+  exact h_indep ⟨j, hj1⟩ hj2 c hc
 
-lemma eval_invariant {k : ℕ} (I : Independence α) (M : DFA α σ)
-    (w : List α) (C : Fin (k + 1) → ChunkProfile α σ) :
-    C ∈ (hashiguchiDFA I M k).eval w → ConfigInvariant I M C w := by
-  change C ∈ List.foldl (hashiguchiStep I M) (hashiguchiStart k) w → ConfigInvariant I M C w
-  induction w using List.reverseRecOn generalizing C with
+lemma hashiguchi_soundness_invariant (I : Independence α) (M : DFA α σ) (k : ℕ) (w : List α)
+    (β : Fin (k + 1) → HashiguchiBucket α σ)
+    (hβ : β ∈ w.foldl (hashiguchiStep I M) (hashiguchiStart k)) :
+    ∃ (xs : Fin (k + 1) → List α),
+      TraceEqv I w (List.ofFn xs).flatten ∧
+      (∀ i, (β i).trans = fun q => (xs i).foldl M.step q) ∧
+      (∀ i, (β i).alph = (xs i).toFinset) := by
+  induction w using List.reverseRecOn generalizing β with
   | nil =>
-    simp only [List.foldl_nil]
-    intro hC
-    exact hashiguchiStart_invariant M C hC
+    simp only [List.foldl_nil] at hβ
+    rw [hashiguchiStart, Finset.mem_filter] at hβ
+    rcases hβ with ⟨_, hβ_prop⟩
+    use fun _ => []
+    and_intros
+    · simp [TraceEqv.refl]
+    · intro i
+      simpa using (hβ_prop i).left
+    · intro i
+      simpa using (hβ_prop i).right
   | append_singleton w' a ih =>
-    intro hC
-    rw [List.foldl_append, List.foldl_cons, List.foldl_nil] at hC
-    rw [hashiguchiStep, Finset.mem_biUnion] at hC
-    rcases hC with ⟨C', hC'_eval, hC'_step⟩
-    have h_inv' := ih C' hC'_eval
-    exact stepConfiguration_invariant I M C' C w' a h_inv' hC'_step
-
-omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
-lemma accepts_stitched_chunks_list (M : DFA α σ)
-    (pairs : List (ChunkProfile α σ × List α)) (q : σ) :
-    IsAcceptingConfig M (pairs.map Prod.fst) q →
-    (∀ p ∈ pairs, List.foldl M.step p.1.q_start p.2 = p.1.q_end) →
-    List.foldl M.step q (pairs.map Prod.snd).flatten ∈ M.accept := by
-  induction pairs generalizing q with
-  | nil =>
-    intro h_acc _
-    exact h_acc
-  | cons p pairs' ih =>
-    intro h_acc h_fold
-    simp only [List.map_cons, List.flatten_cons, List.foldl_append]
-    have h_fold_p := h_fold p List.mem_cons_self
-    have h_q : p.1.q_start = q := h_acc.left
-    have h_acc' : IsAcceptingConfig M (pairs'.map Prod.fst) p.1.q_end := h_acc.right
-    rw [← h_q, h_fold_p]
-    apply ih p.1.q_end h_acc'
-    intro p' hp'
-    exact h_fold p' (List.mem_cons_of_mem p hp')
-
-omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
-lemma accepts_stitched_chunks {k : ℕ} (M : DFA α σ) (C : Fin (k + 1) → ChunkProfile α σ)
-    (xs : Fin (k + 1) → List α) :
-    IsAcceptingConfig M (List.ofFn C) M.start →
-    (∀ i, List.foldl M.step (C i).q_start (xs i) = (C i).q_end) →
-    List.flatten (List.ofFn xs) ∈ M.accepts := by
-  intro h_acc h_fold
-  let pairs : List (ChunkProfile α σ × List α) := List.ofFn (fun i => (C i, xs i))
-  have h_fst : pairs.map Prod.fst = List.ofFn C := by
-    simp only [List.ofFn_succ, List.map_cons, List.map_ofFn, List.cons.injEq, List.ofFn_inj,
-      true_and, pairs]
-    rfl
-  have h_snd : pairs.map Prod.snd = List.ofFn xs := by
-    simp only [List.ofFn_succ, List.map_cons, List.map_ofFn, List.cons.injEq, List.ofFn_inj,
-      true_and, pairs]
-    rfl
-  have h_fold' : ∀ p ∈ pairs, List.foldl M.step p.1.q_start p.2 = p.1.q_end := by
-    intro p hp
-    rw [List.mem_ofFn] at hp
-    rcases hp with ⟨i, rfl⟩
-    exact h_fold i
-  have h_acc' : IsAcceptingConfig M (pairs.map Prod.fst) M.start := by
-    rw [h_fst]
-    exact h_acc
-  have h_res := accepts_stitched_chunks_list M pairs M.start h_acc' h_fold'
-  change List.foldl M.step M.start (List.flatten (List.ofFn xs)) ∈ M.accept
-  rw [← h_snd]
-  exact h_res
+    simp only [List.foldl_append, List.foldl_cons, List.foldl_nil] at hβ
+    rw [hashiguchiStep, Finset.mem_biUnion] at hβ
+    rcases hβ with ⟨β', hβ'_in, hβ_step⟩
+    rcases ih β' hβ'_in with ⟨xs', hw', htrans', halph'⟩
+    rw [stepBucket, Finset.mem_filter] at hβ_step
+    rcases hβ_step with ⟨-, m, h_indep_cond, rfl⟩
+    use Function.update xs' m (xs' m ++ [a])
+    and_intros
+    · have h_indep : ∀ (j : Fin (k + 1)), m < j → ∀ c ∈ xs' j, I.rel a c := by
+        intro j hj c hc
+        have hc_in : c ∈ (β' j).alph := by
+          rw [halph' j]
+          exact List.mem_toFinset.mpr hc
+        exact h_indep_cond j hj c hc_in
+      have heqv := traceEqv_join_update I xs' m a h_indep
+      exact TraceEqv.trans (TraceEqv.compat hw' (TraceEqv.refl [a])) heqv
+    · intro i
+      by_cases h : i = m
+      · subst h
+        simp [Function.update_self, htrans']
+      · simp [Function.update_of_ne h, htrans' i]
+    · intro i
+      by_cases h : i = m
+      · subst h
+        simp [Function.update_self, halph']
+      · simp [Function.update_of_ne h, halph' i]
 
 lemma hashiguchi_soundness (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
     (h_acc : M.accepts = X) (w : List α) :
     (hashiguchiDFA I M k).eval w ∈ hashiguchiAccept M → w ∈ traceClosure I X := by
-  intro h_acc_config
-  rcases h_acc_config with ⟨C, hC_eval, hC_acc⟩
-  have ⟨xs, h_eqv, _, h_state⟩ := eval_invariant I M w C hC_eval
-  use List.flatten (List.ofFn xs)
-  constructor
-  · rw [← h_acc]
-    exact accepts_stitched_chunks M C xs hC_acc h_state
-  · exact h_eqv.symm
+  intro h_eval
+  rw [hashiguchiAccept, Set.mem_setOf] at h_eval
+  rcases h_eval with ⟨β, hβ_in, hβ_acc⟩
+  have ⟨xs, h_equiv, h_trans, _⟩ := hashiguchi_soundness_invariant I M k w β hβ_in
+  let u := (List.ofFn xs).flatten
+  have hu_eqv : TraceEqv I u w := TraceEqv.symm h_equiv
+  have hu_acc : M.eval u ∈ M.accept := by
+    have h_fold := foldl_join_eq_foldl_bucket M xs β h_trans M.start
+    rwa [← h_fold] at hβ_acc
+  have hu_in_X : u ∈ X := by
+    rw [← h_acc]
+    exact hu_acc
+  unfold traceClosure
+  rw [Set.mem_setOf]
+  exact ⟨u, hu_in_X, hu_eqv⟩
+
+lemma zipWith_append_flatten_eq_of_flatten_empty {α : Type*} (xs ys : List (List α))
+    (hlen : xs.length = ys.length) (hys : ys.flatten = []) :
+    (List.zipWith (· ++ ·) xs ys).flatten = xs.flatten := by
+  induction xs generalizing ys with
+  | nil =>
+    cases ys
+    · rfl
+    · contradiction
+  | cons x xs ih =>
+    cases ys with
+    | nil => contradiction
+    | cons y ys =>
+      simp only [List.length_cons, Nat.succ_inj] at hlen
+      simp only [List.flatten_cons, List.append_eq_nil_iff] at hys
+      rcases hys with ⟨hy_nil, hys_nil⟩
+      simp only [List.zipWith_cons_cons, List.flatten_cons]
+      rw [hy_nil, List.append_nil, ih ys hlen hys_nil]
+
+omit [DecidableEq α] [Fintype α] in
+lemma rank_provides_factorization (I : Independence α) {X : Language α} (k : ℕ)
+    (h_rank : HasRankAtMost I X k) (w : List α) (hw : w ∈ traceClosure I X) :
+    ∃ xs : Fin (k + 1) → List α,
+      TraceEqv I w (List.ofFn xs).flatten ∧
+      (List.ofFn xs).flatten ∈ X := by
+  have hw_append : w ++ [] ∈ traceClosure I X := by
+    simp only [List.append_nil]
+    exact hw
+  rcases h_rank w [] hw_append with ⟨xs_list, ys_list, h_len_bound, h_valid⟩
+  unfold IsValidFactorization at h_valid
+  rcases h_valid with ⟨h_len_eq, h_zip_in_X, h_w_eqv, h_nil_eqv, -⟩
+  have h_ys_empty : ys_list.flatten = [] := by
+    have h_len_zero := length_eq_of_eqv h_nil_eqv
+    simp only [List.length_nil] at h_len_zero
+    exact List.length_eq_zero_iff.mp h_len_zero.symm
+  have h_zip_eq : (List.zipWith (· ++ ·) xs_list ys_list).flatten = xs_list.flatten :=
+    zipWith_append_flatten_eq_of_flatten_empty xs_list ys_list h_len_eq h_ys_empty
+  rw [h_zip_eq] at h_zip_in_X
+  let pad_len := k + 1 - xs_list.length
+  let xs_padded := xs_list ++ List.replicate pad_len []
+  have h_padded_len : xs_padded.length = k + 1 := by
+    simp only [xs_padded, pad_len, List.length_append, List.length_replicate]
+    omega
+  have h_padded_flatten : xs_padded.flatten = xs_list.flatten := by
+    rw [List.flatten_append, List.flatten_replicate_nil, List.append_nil]
+  let f : Fin (k + 1) → List α := fun i => xs_padded[ (i : ℕ) ]'(by omega)
+  use f
+  have h_ofFn : List.ofFn f = xs_padded := by
+    apply List.ext_getElem
+    · simp [h_padded_len]
+    · intro i _ _
+      rw [List.getElem_ofFn]
+  rw [h_ofFn, h_padded_flatten]
+  exact ⟨h_w_eqv, h_zip_in_X⟩
+
+-- Helper 1: An empty trace equivalence implies all chunks are empty
+lemma traceEqv_nil_implies {k : ℕ} (I : Independence α) (xs : Fin (k + 1) → List α)
+    (h_eqv : TraceEqv I [] (List.ofFn xs).flatten) :
+    ∀ i, xs i = [] := by
+  sorry
+
+-- Helper 2: The structural trace extraction
+-- If w' ++ [a] is equivalent to the flattened chunks, `a` must have originated from
+-- the end of some chunk `m`, and been commuted past all subsequent chunks (hence independent).
+lemma traceEqv_append_singleton_implies (I : Independence α) {k : ℕ} (w' : List α) (a : α)
+    (xs : Fin (k + 1) → List α) (h_eqv : TraceEqv I (w' ++ [a]) (List.ofFn xs).flatten) :
+    ∃ (xs' : Fin (k + 1) → List α) (m : Fin (k + 1)),
+      xs m = xs' m ++ [a] ∧
+      (∀ i, i ≠ m → xs i = xs' i) ∧
+      TraceEqv I w' (List.ofFn xs').flatten ∧
+      (∀ j, m < j → ∀ c ∈ xs' j, I.rel a c) := by
+  sorry
+
+lemma hashiguchi_completeness_invariant (I : Independence α) (M : DFA α σ) (k : ℕ) (w : List α)
+    (xs : Fin (k + 1) → List α) (h_eqv : TraceEqv I w (List.ofFn xs).flatten) :
+    ∃ β ∈ w.foldl (hashiguchiStep I M) (hashiguchiStart k),
+      (∀ i, (β i).trans = fun q => (xs i).foldl M.step q) ∧
+      (∀ i, (β i).alph = (xs i).toFinset) := by
+  induction w using List.reverseRecOn generalizing xs with
+  | nil =>
+    have h_nil := traceEqv_nil_implies I xs h_eqv
+    simp only [List.foldl_nil]
+    let β : Fin (k + 1) → HashiguchiBucket α σ := fun _ => { trans := id, alph := ∅ }
+    use β
+    rw [hashiguchiStart, Finset.mem_filter]
+    and_intros
+    · exact Finset.mem_univ β
+    · intro i
+      trivial
+    · intro i
+      rw [h_nil i]
+      trivial
+    · intro i
+      rw [h_nil i]
+      trivial
+  | append_singleton w' a ih =>
+    have ⟨xs', m, h_xm, h_xi, h_eqv', h_indep⟩ := traceEqv_append_singleton_implies I w' a xs h_eqv
+    rcases ih xs' h_eqv' with ⟨β', hβ'_in, htrans', halph'⟩
+    simp only [List.foldl_append, List.foldl_cons, List.foldl_nil, hashiguchiStep]
+    let β_new := Function.update β' m {
+      trans := fun q => M.step ((β' m).trans q) a,
+      alph  := insert a (β' m).alph
+    }
+    sorry
 
 lemma hashiguchi_completeness (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (w : List α) :
     w ∈ traceClosure I X → (hashiguchiDFA I M k).eval w ∈ hashiguchiAccept M := by
-  sorry
+  intro hw_in
+  have ⟨xs, hw_eqv, hxs_in_X⟩ := rank_provides_factorization I k h_rank w hw_in
+  have h_eval_w : (hashiguchiDFA I M k).eval w = w.foldl (hashiguchiStep I M) (hashiguchiStart k) :=
+    rfl
+  have ⟨β, hβ_in, h_trans, _⟩ := hashiguchi_completeness_invariant I M k w xs hw_eqv
+  rw [hashiguchiAccept, Set.mem_setOf]
+  use β
+  and_intros
+  · rw [h_eval_w]
+    exact hβ_in
+  · have h_fold := foldl_join_eq_foldl_bucket M xs β h_trans M.start
+    rw [← h_fold]
+    have hxs_acc : M.eval ((List.ofFn xs).flatten) ∈ M.accept := by
+      rw [← DFA.mem_accepts, h_acc]
+      exact hxs_in_X
+    exact hxs_acc
 
 theorem accepts_traceClosure (M : DFA α σ) {X : Language α} (k : ℕ)
     (h_acc : M.accepts = X)
