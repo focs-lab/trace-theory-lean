@@ -3,6 +3,8 @@ import TraceTheory.MyhillNerode
 
 namespace Language
 
+/-- The left quotient of a language `L` by `u` is the set of all strings `v` such that
+  `u ++ v` is in `L`. -/
 def leftQuotient (L : Language α) (u : List α) : Language α :=
   { v | u ++ v ∈ L }
 
@@ -24,9 +26,12 @@ variable (I : Independence α)
 
 /-- A possible factor of a prefix being read. -/
 structure HashiguchiBucket (α σ : Type) where
+  /-- The effect of the factor on the states of an automaton. -/
   trans : σ → σ
+  /-- The alphabet of this factor. -/
   alph : Finset α
 
+/-- An explicit equivalence to allow inference of finiteness. -/
 def HashiguchiBucket.equiv : HashiguchiBucket α σ ≃ (σ → σ) × Finset α where
   toFun b := (b.trans, b.alph)
   invFun p := ⟨p.1, p.2⟩
@@ -322,6 +327,8 @@ lemma leftQuotient_eq_of_profile_eq (I : Independence α) (M : DFA α σ) {X : L
   · apply leftQuotient_subset_of_profile_subset I M k h_acc h_rank u' u
     exact subset_of_subset_of_eq (fun _ a => a) h_eq.symm
 
+/-- The Myhill-Nerode construction of the state space of an automaton recongizing
+  the trace closure of `X`. -/
 def QuotientState (I : Independence α) (X : Language α) :=
   { L : Language α // ∃ u : List α, L = (traceClosure I X).leftQuotient u }
 
@@ -347,6 +354,7 @@ noncomputable def quotientStateFintype (M : DFA α σ) {X : Language α} (k : �
       exact choose_spec h_exists'
     )
 
+/-- The M-automaton that recognizes the trace closure of `X`. -/
 noncomputable def quotientDFMA (I : Independence α) (X : Language α) :
     DFMA (List α) (QuotientState I X) where
   step := fun ⟨L, h_exists⟩ w => ⟨L.leftQuotient w, by
