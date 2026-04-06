@@ -1,87 +1,28 @@
 import TraceTheory.Language
 import TraceTheory.MyhillNerode
 
+namespace Language
+
+def leftQuotient (L : Language α) (u : List α) : Language α :=
+  { v | u ++ v ∈ L }
+
+@[simp]
+lemma leftQuotient_nil : leftQuotient L [] = L := rfl
+
+lemma leftQuotient_append (L : Language α) (u v : List α) :
+    leftQuotient L (u ++ v) = leftQuotient (leftQuotient L u) v := by
+  simp [leftQuotient, Language]
+
+end Language
+
 namespace TraceTheory
 
-section Recognizability
-
-variable {α : Type} {I : Independence α}
-
-lemma isRegular_of_recognizable {L : Language α} (h : IsRecognizable L) :
-    L.IsRegular := by
-  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
-  rw [Language.isRegular_iff]
-  let M_DFA : DFA α σ := {
-    step := fun q a => M.step q [a]
-    start := M.start
-    accept := M.accept
-  }
-  use σ, h_fin, M_DFA
-  rw [hM]
-  ext w
-  simp [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom]
-  unfold DFMA.accepts DFMA.eval
-  rw [Set.mem_setOf, Set.mem_setOf]
-  have h_eval : ∀ q, List.foldl M_DFA.step q w = M.step q w := by
-    induction w with
-    | nil =>
-      intro q
-      simp only [List.foldl_nil]
-      exact (M.idempotent q).symm
-    | cons a ws ih =>
-      intro q
-      simp only [List.foldl_cons]
-      rw [ih (M.step q [a])]
-      exact (M.composition q [a] ws)
-  rw [h_eval M_DFA.start]
-
-lemma recognizable_of_isRegular {L : Language α} (h : L.IsRegular) :
-    IsRecognizable L := by
-  rcases Language.isRegular_iff.mp h with ⟨σ, h_fin, M, hM⟩
-  apply recognizableDFMA_is_recognizable L
-  use σ, h_fin, Classical.decEq σ
-  let M_DFMA : DFMA (List α) σ := {
-    step := fun q w => List.foldl M.step q w
-    start := M.start
-    accept := M.accept
-    idempotent := fun _ => rfl
-    composition := by
-      intro q u v
-      symm
-      apply List.foldl_append
-  }
-  use M_DFMA
-  rw [← hM]
-  ext w
-  simp [DFMA.accepts, DFMA.eval, DFA.accepts, DFA.acceptsFrom, DFA.evalFrom, M_DFMA]
-
-lemma recognizable_iff_regular_preimage (T : Set (Trace I)) :
-    IsRecognizable T ↔ Language.IsRegular (Trace.mk' I ⁻¹' T) := by
-  constructor
-  · intro h
-    have h_pre_rec := recognizable_has_recognizablePreImage (Trace.mk' I) h
-    exact isRegular_of_recognizable h_pre_rec
-  · intro h
-    have h_pre_rec := recognizable_of_isRegular h
-    exact recognizablePreImage_is_recognizable (Trace.mk' I) Quotient.mk_surjective h_pre_rec
-
-lemma preimage_mk_image_eq_traceClosure (X : Language α) :
-    Trace.mk' I ⁻¹' (Trace.mk' I '' X) = traceClosure I X := by
-  ext w
-  simp only [Set.mem_preimage, Set.mem_image]
-  constructor
-  · rintro ⟨x, hx, heq⟩
-    exact ⟨x, hx, Quotient.exact heq⟩
-  · rintro ⟨x, hx, heqv⟩
-    exact ⟨x, hx, Quotient.sound heqv⟩
-
-end Recognizability
-
-open Classical
+open Classical Language
 
 variable {α σ : Type} [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ]
 variable (I : Independence α)
 
+/-- A possible factor of a prefix being read. -/
 structure HashiguchiBucket (α σ : Type) where
   trans : σ → σ
   alph : Finset α
@@ -95,6 +36,7 @@ def HashiguchiBucket.equiv : HashiguchiBucket α σ ≃ (σ → σ) × Finset α
 instance [Fintype α] [Fintype σ] : Fintype (HashiguchiBucket α σ) :=
   Fintype.ofEquiv _ HashiguchiBucket.equiv.symm
 
+/-- A possible factorization of a prefix being read. -/
 def HashiguchiState (α σ : Type) (k : ℕ) := Finset (Fin (k + 1) → HashiguchiBucket α σ)
 
 instance {k : ℕ} : Membership (Fin (k + 1) → HashiguchiBucket α σ) (HashiguchiState α σ k) :=
@@ -108,18 +50,8 @@ instance : Fintype (HashiguchiState α σ k) := by
   unfold HashiguchiState
   infer_instance
 
-def leftQuotient (L : Language α) (u : List α) : Language α :=
-  { v | u ++ v ∈ L }
-
-@[simp]
-lemma leftQuotient_nil : leftQuotient L [] = L := rfl
-
-omit [DecidableEq α] [Fintype α] in
-lemma leftQuotient_append (L : Language α) (u v : List α) :
-    leftQuotient L (u ++ v) = leftQuotient (leftQuotient L u) v := by
-  simp [leftQuotient, Language]
-
-noncomputable def diekertR (I : Independence α) (M : DFA α σ) (k : ℕ) (u : List α) :
+/-- Returns the possible factorizations of a prefix being read. -/
+noncomputable def hashiguchiProfile (I : Independence α) (M : DFA α σ) (k : ℕ) (u : List α) :
     HashiguchiState α σ k :=
   Finset.univ.filter (fun β => (
     ∃ xs : Fin (k + 1) → List α,
@@ -127,12 +59,7 @@ noncomputable def diekertR (I : Independence α) (M : DFA α σ) (k : ℕ) (u : 
       (∀ i, (β i).trans = fun q => (xs i).foldl M.step q) ∧
       (∀ i, (β i).alph = (xs i).toFinset)))
 
-lemma zipWith_append_replicate_nil {α : Type} (n : ℕ) :
-    List.zipWith (· ++ ·) (List.replicate n ([] : List α)) (List.replicate n []) =
-    List.replicate n [] := by
-  simp
-
-lemma zipWith_append_append_of_length_eq {α β γ : Type} (f : α → β → γ)
+lemma zipWith_append_append_of_length_eq {α β γ : Type*} (f : α → β → γ)
     (xs1 : List α) (ys1 : List β) (xs2 : List α) (ys2 : List β)
     (h : xs1.length = ys1.length) :
     List.zipWith f (xs1 ++ xs2) (ys1 ++ ys2) =
@@ -149,14 +76,14 @@ lemma zipWith_append_append_of_length_eq {α β γ : Type} (f : α → β → γ
       simp only [List.length_cons, Nat.succ_inj] at h
       simp [ih ys h]
 
-lemma ofFn_getElem_pad {α : Type} {k : ℕ} (L : List α) (h : L.length = k + 1) :
+lemma ofFn_getElem_pad {α : Type*} {k : ℕ} (L : List α) (h : L.length = k + 1) :
     List.ofFn (fun (i : Fin (k + 1)) => L[ (i : ℕ) ]) = L := by
   apply List.ext_getElem
   · simp [h]
   · intro i h1 h2
     rw [List.getElem_ofFn]
 
-lemma getElem_pad_right {α : Type} (L : List (List α)) (pad : ℕ) (i : ℕ)
+lemma getElem_pad_right {α : Type*} (L : List (List α)) (pad : ℕ) (i : ℕ)
     (hi : i < (L ++ List.replicate pad []).length) (h_out : L.length ≤ i) :
     (L ++ List.replicate pad [])[i] = [] := by
   have h1 : (L ++ List.replicate pad [])[i] =
@@ -165,8 +92,8 @@ lemma getElem_pad_right {α : Type} (L : List (List α)) (pad : ℕ) (i : ℕ)
   rw [h1]
   exact List.getElem_replicate _
 
-omit [DecidableEq α] [Fintype α] in
-lemma pad_factorization {k : ℕ} (I : Independence α) (X : Language α) (u v : List α)
+lemma pad_factorization {α : Type*} {k : ℕ}
+    (I : Independence α) (X : Language α) (u v : List α)
     (xs_list ys_list : List (List α)) (h_len : xs_list.length ≤ k + 1)
     (h_valid : IsValidFactorization I X u v xs_list ys_list) :
     ∃ xs ys : Fin (k + 1) → List α,
@@ -178,10 +105,14 @@ lemma pad_factorization {k : ℕ} (I : Independence α) (X : Language α) (u v :
   let pad_len := k + 1 - xs_list.length
   let xs_pad := xs_list ++ List.replicate pad_len []
   let ys_pad := ys_list ++ List.replicate pad_len []
-  have h_xs_pad_len : xs_pad.length = k + 1 := by simp [xs_pad, pad_len]; omega
-  have h_ys_pad_len : ys_pad.length = k + 1 := by simp [ys_pad, pad_len, h_eq_len]; omega
-  let xs : Fin (k + 1) → List α := fun i => xs_pad[ (i : ℕ) ]'(by omega)
-  let ys : Fin (k + 1) → List α := fun i => ys_pad[ (i : ℕ) ]'(by omega)
+  have h_xs_pad_len : xs_pad.length = k + 1 := by
+    simp only [List.length_append, List.length_replicate, xs_pad, pad_len]
+    omega
+  have h_ys_pad_len : ys_pad.length = k + 1 := by
+    simp only [List.length_append, List.length_replicate, ys_pad, pad_len]
+    omega
+  let xs : Fin (k + 1) → List α := fun i => xs_pad[ (i : ℕ) ]
+  let ys : Fin (k + 1) → List α := fun i => ys_pad[ (i : ℕ) ]
   use xs, ys
   have h_ofFn_xs : List.ofFn xs = xs_pad := ofFn_getElem_pad xs_pad h_xs_pad_len
   have h_ofFn_ys : List.ofFn ys = ys_pad := ofFn_getElem_pad ys_pad h_ys_pad_len
@@ -197,46 +128,36 @@ lemma pad_factorization {k : ℕ} (I : Independence α) (X : Language α) (u v :
   · rw [h_ofFn_ys, List.flatten_append, List.flatten_replicate_nil, List.append_nil]
     exact h_v_eqv
   · rw [h_ofFn_zip, zipWith_append_append_of_length_eq _ _ _ _ _ h_eq_len]
-    rw [zipWith_append_replicate_nil]
-    simp only [List.flatten_append, List.flatten_replicate_nil, List.append_nil]
-    exact h_in_X
+    simp [h_in_X]
   · intro i j hij
-    have hi_bound : (i : ℕ) < k + 1 := i.isLt
-    have hj_bound : (j : ℕ) < k + 1 := j.isLt
-    by_cases hy : (i : ℕ) < ys_list.length
-    · by_cases hx : (j : ℕ) < xs_list.length
-      · have hy_val : ys i = ys_list[ (i : ℕ) ] := by
-          change ys_pad[(i : ℕ)] = _
-          exact List.getElem_append_left hy
-        have hx_val : xs j = xs_list[ (j : ℕ) ] := by
-          change xs_pad[(j : ℕ)] = _
-          exact List.getElem_append_left hx
+    by_cases hy : i < ys_list.length
+    · by_cases hx : j < xs_list.length
+      · have hy_val : ys i = ys_list[i] := by exact List.getElem_append_left hy
+        have hx_val : xs j = xs_list[j] := by exact List.getElem_append_left hx
         rw [hy_val, hx_val]
-        exact h_indep (i : ℕ) (j : ℕ) hy hx hij
+        exact h_indep i j hy hx hij
       · have hx_val : xs j = [] := by
-          change xs_pad[(j : ℕ)] = _
           apply getElem_pad_right
           omega
         rw [hx_val]
         intro a ha b hb
         cases hb
     · have hy_val : ys i = [] := by
-        change ys_pad[(i : ℕ)] = _
         apply getElem_pad_right
         omega
       rw [hy_val]
       intro a ha b hb
       cases ha
 
-omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
-lemma eval_interleaved_eq_list (M : DFA α σ) (xs xs' ys : List (List α))
+lemma eval_interleaved_eq_list {α σ : Type*}
+    (M : DFA α σ) (xs xs' ys : List (List α))
     (h1 : xs.length = ys.length) (h2 : xs'.length = ys.length)
     (h_trans : ∀ i (hx : i < xs.length) (hx' : i < xs'.length),
       xs[i].foldl M.step = xs'[i].foldl M.step)
-    (q₀ : σ) :
-    (List.zipWith (· ++ ·) xs ys).flatten.foldl M.step q₀ =
-    (List.zipWith (· ++ ·) xs' ys).flatten.foldl M.step q₀ := by
-  induction xs generalizing xs' ys q₀ with
+    (q : σ) :
+    (List.zipWith (· ++ ·) xs ys).flatten.foldl M.step q =
+    (List.zipWith (· ++ ·) xs' ys).flatten.foldl M.step q := by
+  induction xs generalizing xs' ys q with
   | nil =>
     cases ys
     · cases xs'
@@ -251,20 +172,21 @@ lemma eval_interleaved_eq_list (M : DFA α σ) (xs xs' ys : List (List α))
       | nil => simp at h2
       | cons x' xs' =>
         simp only [List.zipWith_cons_cons, List.flatten_cons, List.append_assoc, List.foldl_append]
-        have h_eq_x : x.foldl M.step q₀ = x'.foldl M.step q₀ := by
+        have h_eq_x : x.foldl M.step q = x'.foldl M.step q := by
           have h0 := h_trans 0 (by simp) (by simp)
-          exact congrFun h0 q₀
+          exact congrFun h0 q
         rw [h_eq_x]
         apply ih xs' ys (by simpa using h1) (by simpa using h2)
         intro i hi hi'
         exact h_trans (i + 1) (by simpa) (by simpa)
 
-omit [DecidableEq α] [DecidableEq σ] [Fintype α] [Fintype σ] in
-lemma eval_interleaved_eq {k : ℕ} (M : DFA α σ) (xs xs' ys : Fin (k + 1) → List α)
-    (h_trans : ∀ i, (xs i).foldl M.step = (xs' i).foldl M.step) (q₀ : σ) :
-    (List.ofFn (fun i => xs i ++ ys i)).flatten.foldl M.step q₀ =
-    (List.ofFn (fun i => xs' i ++ ys i)).flatten.foldl M.step q₀ := by
-  have h_zip : ∀ f g : Fin (k + 1) → List α, List.ofFn (fun i => f i ++ g i) = List.zipWith (· ++ ·) (List.ofFn f) (List.ofFn g) := by
+lemma eval_interleaved_eq {α σ: Type*} {k : ℕ}
+    (M : DFA α σ) (xs xs' ys : Fin (k + 1) → List α)
+    (h_trans : ∀ i, (xs i).foldl M.step = (xs' i).foldl M.step) (q : σ) :
+    (List.ofFn (fun i => xs i ++ ys i)).flatten.foldl M.step q =
+    (List.ofFn (fun i => xs' i ++ ys i)).flatten.foldl M.step q := by
+  have h_zip : ∀ f g : Fin (k + 1) → List α,
+      List.ofFn (fun i => f i ++ g i) = List.zipWith (· ++ ·) (List.ofFn f) (List.ofFn g) := by
     intro f g
     apply List.ext_getElem
     · simp
@@ -278,17 +200,8 @@ lemma eval_interleaved_eq {k : ℕ} (M : DFA α σ) (xs xs' ys : Fin (k + 1) →
     simp only [List.getElem_ofFn]
     exact h_trans ⟨i, by simpa using h1⟩
 
-omit [DecidableEq α] [Fintype α] in
-lemma traceEqv_append_swap (I : Independence α) (A B C D : List α)
-    (h : TraceEqv I (B ++ C) (C ++ B)) :
-    TraceEqv I (A ++ B ++ C ++ D) (A ++ C ++ B ++ D) := by
-  have eq1 : A ++ B ++ C ++ D = A ++ (B ++ C) ++ D := by simp only [List.append_assoc]
-  have eq2 : A ++ C ++ B ++ D = A ++ (C ++ B) ++ D := by simp only [List.append_assoc]
-  rw [eq1, eq2]
-  exact append_left_right A D h
-
-omit [DecidableEq α] [Fintype α] in
-lemma traceEqv_flatten_append_interleaved_list (I : Independence α)
+lemma traceEqv_flatten_append_interleaved_list {α : Type*}
+    (I : Independence α)
     (xs ys : List (List α)) (hlen : xs.length = ys.length)
     (hindep : ∀ i j (hi : i < ys.length) (hj : j < xs.length), i < j → I.Independent ys[i] xs[j]) :
     TraceEqv I (xs.flatten ++ ys.flatten) (List.zipWith (· ++ ·) xs ys).flatten := by
@@ -319,11 +232,11 @@ lemma traceEqv_flatten_append_interleaved_list (I : Independence α)
         intro i j hi hj hij
         exact hindep (i + 1) (j + 1) (by simpa) (by simpa) (by omega)
       )
-      have h_swap := traceEqv_append_swap I x xs.flatten y ys.flatten h_comm
+      have h_swap :
+          TraceEqv I (x ++ xs.flatten ++ y ++ ys.flatten) (x ++ y ++ xs.flatten ++ ys.flatten) := by
+        simpa using append_left_right x ys.flatten h_comm
       have h_ih_compat := TraceEqv.compat (TraceEqv.refl (x ++ y)) ih_app
-      have eq3 : (x ++ y) ++ (xs.flatten ++ ys.flatten) = x ++ y ++ xs.flatten ++ ys.flatten := by
-        simp only [List.append_assoc]
-      rw [eq3] at h_ih_compat
+      simp only [← List.append_assoc] at h_ih_compat
       simp only [List.append_eq, ← List.append_assoc]
       exact TraceEqv.trans h_swap h_ih_compat
 
@@ -364,92 +277,90 @@ lemma traceEqv_interleaved_swap {k : ℕ} (I : Independence α) (u' : List α)
     TraceEqv.compat hu' (TraceEqv.refl _)
   exact TraceEqv.trans h_step1 h_list_eqv
 
-lemma diekert_subset (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
+lemma leftQuotient_subset_of_profile_subset {X : Language α}
+    (I : Independence α) (M : DFA α σ) (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (u u' : List α)
-    (h_sub : diekertR I M k u ⊆ diekertR I M k u') :
-    leftQuotient (traceClosure I X) u ⊆ leftQuotient (traceClosure I X) u' := by
+    (h_sub : hashiguchiProfile I M k u ⊆ hashiguchiProfile I M k u') :
+    (traceClosure I X).leftQuotient u ⊆ (traceClosure I X).leftQuotient u' := by
   intro v hv
   rw [leftQuotient, Set.mem_setOf] at hv ⊢
+
   have ⟨xs_list, ys_list, h_len, h_valid⟩ := h_rank u v hv
   have ⟨xs, ys, h_xs_eqv, h_ys_eqv, h_interleaved_in_X, h_indep⟩ :=
     pad_factorization I X u v xs_list ys_list h_len h_valid
+
   let β : Fin (k + 1) → HashiguchiBucket α σ := fun i =>
     { trans := fun q => (xs i).foldl M.step q, alph := (xs i).toFinset }
-  have hβ_in_u : β ∈ diekertR I M k u := by
-    rw [diekertR, Finset.mem_filter]
+  have hβ_in_u : β ∈ hashiguchiProfile I M k u := by
+    rw [hashiguchiProfile, Finset.mem_filter]
     exact ⟨Finset.mem_univ _, xs, h_xs_eqv, fun _ => rfl, fun _ => rfl⟩
-  have hβ_in_u' : β ∈ diekertR I M k u' := h_sub hβ_in_u
-  rw [diekertR, Finset.mem_filter] at hβ_in_u'
+  have hβ_in_u' : β ∈ hashiguchiProfile I M k u' := h_sub hβ_in_u
+  rw [hashiguchiProfile, Finset.mem_filter] at hβ_in_u'
   rcases hβ_in_u'.right with ⟨xs', h_xs'_eqv, h_trans_eq, h_alph_eq⟩
-  have h_trans_match : ∀ i, (xs i).foldl M.step = (xs' i).foldl M.step := by
-    intro i
-    have ht := h_trans_eq i
-    exact List.map_inj.mp (congrArg List.map (h_trans_eq i))
-  have h_alph_match : ∀ i, (xs i).toFinset = (xs' i).toFinset := by
-    intro i
-    exact Finset.val_inj.mp (congrArg Finset.val (h_alph_eq i))
+
+  have h_trans_match (i : Fin (k + 1)) : (xs i).foldl M.step = (xs' i).foldl M.step :=
+    List.map_inj.mp (congrArg List.map (h_trans_eq i))
+  have h_alph_match (i : Fin (k + 1)) : (xs i).toFinset = (xs' i).toFinset :=
+    Finset.val_inj.mp (congrArg Finset.val (h_alph_eq i))
   let interleaved' := (List.ofFn (fun i => xs' i ++ ys i)).flatten
-  have h_interleaved'_in_X : interleaved' ∈ X := by
-    rw [← h_acc, DFA.accepts, DFA.acceptsFrom, Set.mem_setOf] at h_interleaved_in_X ⊢
+  use interleaved'
+  constructor
+  · rw [← h_acc, DFA.accepts, DFA.acceptsFrom, Set.mem_setOf] at h_interleaved_in_X ⊢
     have h_eval_eq := eval_interleaved_eq M xs xs' ys h_trans_match M.start
     unfold interleaved'
     rwa [DFA.evalFrom, ← h_eval_eq]
-  have h_trace_swap := traceEqv_interleaved_swap I u' xs xs' ys h_xs'_eqv h_alph_match h_indep
-  have h_v_eqv : TraceEqv I (u' ++ v) (u' ++ (List.ofFn ys).flatten) :=
-    TraceEqv.compat (TraceEqv.refl u') h_ys_eqv
-  have h_final_eqv : TraceEqv I (u' ++ v) interleaved' :=
-    TraceEqv.trans h_v_eqv h_trace_swap
-  exact ⟨interleaved', h_interleaved'_in_X, h_final_eqv.symm⟩
+  · have h_trace_swap := traceEqv_interleaved_swap I u' xs xs' ys h_xs'_eqv h_alph_match h_indep
+    exact (TraceEqv.trans (TraceEqv.compat (TraceEqv.refl u') h_ys_eqv) h_trace_swap).symm
 
-lemma diekert_core (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
+lemma leftQuotient_eq_of_profile_eq (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (u u' : List α)
-    (h_eq : diekertR I M k u = diekertR I M k u') :
-    leftQuotient (traceClosure I X) u = leftQuotient (traceClosure I X) u' := by
-  apply Set.Subset.antisymm
-  · apply diekert_subset I M k h_acc h_rank u u'
+    (h_eq : hashiguchiProfile I M k u = hashiguchiProfile I M k u') :
+    (traceClosure I X).leftQuotient  u = (traceClosure I X).leftQuotient  u' := by
+  apply le_antisymm
+  · apply leftQuotient_subset_of_profile_subset I M k h_acc h_rank u u'
     exact subset_of_subset_of_eq (fun _ a => a) h_eq
-  · apply diekert_subset I M k h_acc h_rank u' u
+  · apply leftQuotient_subset_of_profile_subset I M k h_acc h_rank u' u
     exact subset_of_subset_of_eq (fun _ a => a) h_eq.symm
 
 def QuotientState (I : Independence α) (X : Language α) :=
-  { L' : Language α // ∃ u : List α, L' = leftQuotient (traceClosure I X) u }
+  { L : Language α // ∃ u : List α, L = (traceClosure I X).leftQuotient u }
 
+/-- The finiteness of `QuotientState` via a surjection from `HashiguchiState`. -/
 noncomputable def quotientStateFintype (M : DFA α σ) {X : Language α} (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) :
     Fintype (QuotientState I X) :=
   Fintype.ofSurjective
-    (fun R =>
-      if h : ∃ u : List α, diekertR I M k u = R then
-        ⟨leftQuotient (traceClosure I X) (Classical.choose h), ⟨Classical.choose h, rfl⟩⟩
+    (fun profile =>
+      if h : ∃ u' : List α, hashiguchiProfile I M k u' = profile then
+        ⟨(traceClosure I X).leftQuotient (choose h), ⟨choose h, rfl⟩⟩
       else
-        ⟨leftQuotient (traceClosure I X) [], ⟨[], rfl⟩⟩)
+        ⟨(traceClosure I X).leftQuotient [], ⟨[], rfl⟩⟩)
     (by
-      intro ⟨L', h_exists⟩
+      intro ⟨L, h_exists⟩
       rcases h_exists with ⟨u, rfl⟩
-      use diekertR I M k u
-      dsimp
-      have h_ex : ∃ u_1 : List α, diekertR I M k u_1 = diekertR I M k u := ⟨u, rfl⟩
-      rw [dif_pos h_ex]
+      simp only [leftQuotient_nil]
+      use hashiguchiProfile I M k u
+      have h_exists' : ∃ u', hashiguchiProfile I M k u' = hashiguchiProfile I M k u := ⟨u, rfl⟩
+      rw [dif_pos h_exists']
       apply Subtype.ext
-      apply diekert_core I M k h_acc h_rank
-      exact Classical.choose_spec h_ex
+      apply leftQuotient_eq_of_profile_eq I M k h_acc h_rank
+      exact choose_spec h_exists'
     )
 
 noncomputable def quotientDFMA (I : Independence α) (X : Language α) :
     DFMA (List α) (QuotientState I X) where
-  step := fun ⟨L', h_exists⟩ w => ⟨leftQuotient L' w, by
+  step := fun ⟨L, h_exists⟩ w => ⟨L.leftQuotient w, by
     rcases h_exists with ⟨u, rfl⟩
     use u ++ w
     exact (leftQuotient_append (traceClosure I X) u w).symm
   ⟩
-  start := ⟨leftQuotient (traceClosure I X) [], ⟨[], rfl⟩⟩
-  accept := { ⟨L', _⟩ | [] ∈ L' }
+  start := ⟨(traceClosure I X).leftQuotient [], ⟨[], rfl⟩⟩
+  accept := { ⟨L, _⟩ | [] ∈ L }
   idempotent := by
-    rintro ⟨L', hL'⟩
+    rintro ⟨L, hL⟩
     congr
   composition := by
-    rintro ⟨L', hL'⟩ u v
-    simp only
+    rintro ⟨L, hL⟩ u v
     simp_rw [← leftQuotient_append]
     rfl
 
@@ -457,8 +368,7 @@ omit [DecidableEq α] [Fintype α] in
 lemma quotientDFMA_accepts (I : Independence α) (X : Language α) :
     (quotientDFMA I X).accepts = traceClosure I X := by
   ext w
-  unfold DFMA.accepts DFMA.eval quotientDFMA
-  simp [leftQuotient]
+  simp only [DFMA.accepts, DFMA.eval, quotientDFMA, leftQuotient, List.nil_append, Set.mem_setOf_eq]
   rw [Set.mem_setOf_eq, Set.mem_setOf_eq, List.append_nil]
 
 omit [DecidableEq α] in
@@ -473,7 +383,7 @@ theorem recognizable_image_of_regular_finite_rank {I : Independence α} {X : Lan
   apply recognizableDFMA_is_recognizable (traceClosure I X)
   use QuotientState I X
   use quotientStateFintype I M k hM_acc hk_bound
-  use Classical.decEq _
+  use decEq _
   use quotientDFMA I X
   exact (quotientDFMA_accepts I X).symm
 
