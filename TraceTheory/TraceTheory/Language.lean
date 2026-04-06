@@ -346,7 +346,17 @@ theorem traceClosure.idem {X : Language α} :
   · apply mono
     apply le_closure
 
-theorem kstar_diff_one (X : Language α) : (X \ {[]})∗ = X∗ := by
+theorem preimage_mk_image_eq_traceClosure {X : Language α} :
+    Trace.mk' I ⁻¹' (Trace.mk' I '' X) = traceClosure I X := by
+  ext w
+  simp only [Set.mem_preimage, Set.mem_image]
+  constructor
+  · rintro ⟨x, hx, heq⟩
+    exact ⟨x, hx, Quotient.exact heq⟩
+  · rintro ⟨x, hx, heqv⟩
+    exact ⟨x, hx, Quotient.sound heqv⟩
+
+theorem kstar_diff_one {X : Language α} : (X \ {[]})∗ = X∗ := by
   ext x
   constructor
   · intro ⟨ls, hx, hls⟩

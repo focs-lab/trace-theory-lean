@@ -304,4 +304,59 @@ theorem recognizablePreImage_is_recognizable {L : Type} [Monoid L]
   have ψ := @preImage_syntacticMonoid_iso M _ T L _ φ hφ
   exact ψ.finite_iff.mp h
 
+theorem isRegular_of_recognizable {α : Type} {L : Language α} (h : IsRecognizable L) :
+    L.IsRegular := by
+  rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
+  rw [Language.isRegular_iff]
+  let M_DFA : DFA α σ := {
+    step := fun q a => M.step q [a]
+    start := M.start
+    accept := M.accept
+  }
+  use σ, h_fin, M_DFA
+  rw [hM]
+  ext w
+  simp only [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom, DFMA.accepts, DFMA.eval, M_DFA]
+  rw [Set.mem_setOf, Set.mem_setOf]
+  have h_eval (q : σ) : List.foldl M_DFA.step q w = M.step q w := by
+    induction w generalizing q with
+    | nil =>
+      simp only [List.foldl_nil]
+      exact (M.idempotent q).symm
+    | cons a ws ih =>
+      simp only [List.foldl_cons]
+      rw [ih]
+      apply M.composition
+  rw [h_eval]
+
+theorem recognizable_of_isRegular {α : Type} {L : Language α} (h : L.IsRegular) :
+    IsRecognizable L := by
+  rcases Language.isRegular_iff.mp h with ⟨σ, h_fin, M, hM⟩
+  apply recognizableDFMA_is_recognizable L
+  use σ, h_fin, Classical.decEq σ
+  let M_DFMA : DFMA (List α) σ := {
+    step := fun q w => List.foldl M.step q w
+    start := M.start
+    accept := M.accept
+    idempotent := fun _ => rfl
+    composition := by
+      intro q u v
+      symm
+      apply List.foldl_append
+  }
+  use M_DFMA
+  rw [← hM]
+  ext w
+  simp [DFMA.accepts, DFMA.eval, DFA.accepts, DFA.acceptsFrom, DFA.evalFrom, M_DFMA]
+
+theorem recognizable_iff_regular_preimage {α : Type} {I : Independence α} (T : Set (Trace I)) :
+    IsRecognizable T ↔ Language.IsRegular (Trace.mk' I ⁻¹' T) := by
+  constructor
+  · intro h
+    have h_pre_rec := recognizable_has_recognizablePreImage (Trace.mk' I) h
+    exact isRegular_of_recognizable h_pre_rec
+  · intro h
+    have h_pre_rec := recognizable_of_isRegular h
+    exact recognizablePreImage_is_recognizable (Trace.mk' I) Quotient.mk_surjective h_pre_rec
+
 end TraceTheory
