@@ -41,120 +41,61 @@ def HashiguchiBucket.equiv : HashiguchiBucket α σ ≃ (σ → σ) × Finset α
 instance [Fintype α] [Fintype σ] : Fintype (HashiguchiBucket α σ) :=
   Fintype.ofEquiv _ HashiguchiBucket.equiv.symm
 
-/-- A possible factorization of a prefix being read. -/
-def HashiguchiState (α σ : Type) (k : ℕ) := Finset (Fin (k + 1) → HashiguchiBucket α σ)
+/-- A sequence of buckets bounded by length k + 1. -/
+abbrev BucketSeq (α σ : Type) (k : ℕ) :=
+  { β : List (HashiguchiBucket α σ) // β.length ≤ k + 1 }
 
-instance {k : ℕ} : Membership (Fin (k + 1) → HashiguchiBucket α σ) (HashiguchiState α σ k) :=
+namespace BucketSeq
+
+variable {α σ : Type} {k : ℕ}
+
+/-- Embed a bounded bucket sequence into a fixed-domain Pi type of Options.
+  Indices out of bounds naturally map to `none`. -/
+def toPi (β : BucketSeq α σ k) : Fin (k + 1) → Option (HashiguchiBucket α σ) :=
+  fun i => β.val[i.val]?
+
+/-- The embedding into the Pi type is strictly injective. -/
+lemma toPi_injective : Function.Injective (toPi (α := α) (σ := σ) (k := k)) := by
+  intro ⟨l₁, h₁⟩ ⟨l₂, h₂⟩ heq
+  apply Subtype.ext
+  apply List.ext_getElem?
+  intro i
+  by_cases hi : i < k + 1
+  · exact congr_fun heq ⟨i, hi⟩
+  · push_neg at hi
+    have h_out₁ : l₁[i]? = none := List.getElem?_eq_none (by omega)
+    have h_out₂ : l₂[i]? = none := List.getElem?_eq_none (by omega)
+    rw [h_out₁, h_out₂]
+
+end BucketSeq
+
+/-- Derive the Fintype instance for bounded bucket sequences via injection. -/
+noncomputable instance {k : ℕ} : Fintype (BucketSeq α σ k) :=
+  Fintype.ofInjective BucketSeq.toPi BucketSeq.toPi_injective
+
+/-- A possible factorization of a prefix being read. -/
+def HashiguchiState (α σ : Type) (k : ℕ) := Finset (BucketSeq α σ k)
+
+/-- Returns the possible factorizations of a prefix being read. -/
+noncomputable def hashiguchiProfile (I : Independence α) (M : DFA α σ) (k : ℕ) (u : List α) :
+    HashiguchiState α σ k :=
+  Finset.univ.filter (fun ⟨β, _⟩ => (
+    ∃ xs : List (List α),
+      TraceEqv I u xs.flatten ∧
+      β = xs.map (fun x => { trans := fun q => x.foldl M.step q, alph := x.toFinset })))
+
+instance {k : ℕ} : Membership (BucketSeq α σ k) (HashiguchiState α σ k) :=
   Finset.instMembership
 
 instance {k : ℕ} : HasSubset (HashiguchiState α σ k) := Finset.instHasSubset
 
 instance : HasSubset (Language α) := Set.instHasSubset
 
-instance : Fintype (HashiguchiState α σ k) := by
+noncomputable instance : Fintype (HashiguchiState α σ k) := by
   unfold HashiguchiState
   infer_instance
 
-/-- Returns the possible factorizations of a prefix being read. -/
-noncomputable def hashiguchiProfile (I : Independence α) (M : DFA α σ) (k : ℕ) (u : List α) :
-    HashiguchiState α σ k :=
-  Finset.univ.filter (fun β => (
-    ∃ xs : Fin (k + 1) → List α,
-      TraceEqv I u (List.ofFn xs).flatten ∧
-      (∀ i, (β i).trans = fun q => (xs i).foldl M.step q) ∧
-      (∀ i, (β i).alph = (xs i).toFinset)))
-
-lemma zipWith_append_append_of_length_eq {α β γ : Type*} (f : α → β → γ)
-    (xs1 : List α) (ys1 : List β) (xs2 : List α) (ys2 : List β)
-    (h : xs1.length = ys1.length) :
-    List.zipWith f (xs1 ++ xs2) (ys1 ++ ys2) =
-    List.zipWith f xs1 ys1 ++ List.zipWith f xs2 ys2 := by
-  induction xs1 generalizing ys1 with
-  | nil =>
-    cases ys1
-    · rfl
-    · contradiction
-  | cons x xs ih =>
-    cases ys1 with
-    | nil => contradiction
-    | cons y ys =>
-      simp only [List.length_cons, Nat.succ_inj] at h
-      simp [ih ys h]
-
-lemma ofFn_getElem_pad {α : Type*} {k : ℕ} (L : List α) (h : L.length = k + 1) :
-    List.ofFn (fun (i : Fin (k + 1)) => L[ (i : ℕ) ]) = L := by
-  apply List.ext_getElem
-  · simp [h]
-  · intro i h1 h2
-    rw [List.getElem_ofFn]
-
-lemma getElem_pad_right {α : Type*} (L : List (List α)) (pad : ℕ) (i : ℕ)
-    (hi : i < (L ++ List.replicate pad []).length) (h_out : L.length ≤ i) :
-    (L ++ List.replicate pad [])[i] = [] := by
-  have h1 : (L ++ List.replicate pad [])[i] =
-            (List.replicate pad [])[i - L.length]'(by simp_all; omega) :=
-    List.getElem_append_right h_out
-  rw [h1]
-  exact List.getElem_replicate _
-
-lemma pad_factorization {α : Type*} {k : ℕ}
-    (I : Independence α) (X : Language α) (u v : List α)
-    (xs_list ys_list : List (List α)) (h_len : xs_list.length ≤ k + 1)
-    (h_valid : IsValidFactorization I X u v xs_list ys_list) :
-    ∃ xs ys : Fin (k + 1) → List α,
-      TraceEqv I u (List.ofFn xs).flatten ∧
-      TraceEqv I v (List.ofFn ys).flatten ∧
-      (List.ofFn (fun i => xs i ++ ys i)).flatten ∈ X ∧
-      ∀ i j, i < j → I.Independent (ys i) (xs j) := by
-  rcases h_valid with ⟨h_eq_len, h_in_X, h_u_eqv, h_v_eqv, h_indep⟩
-  let pad_len := k + 1 - xs_list.length
-  let xs_pad := xs_list ++ List.replicate pad_len []
-  let ys_pad := ys_list ++ List.replicate pad_len []
-  have h_xs_pad_len : xs_pad.length = k + 1 := by
-    simp only [List.length_append, List.length_replicate, xs_pad, pad_len]
-    omega
-  have h_ys_pad_len : ys_pad.length = k + 1 := by
-    simp only [List.length_append, List.length_replicate, ys_pad, pad_len]
-    omega
-  let xs : Fin (k + 1) → List α := fun i => xs_pad[ (i : ℕ) ]
-  let ys : Fin (k + 1) → List α := fun i => ys_pad[ (i : ℕ) ]
-  use xs, ys
-  have h_ofFn_xs : List.ofFn xs = xs_pad := ofFn_getElem_pad xs_pad h_xs_pad_len
-  have h_ofFn_ys : List.ofFn ys = ys_pad := ofFn_getElem_pad ys_pad h_ys_pad_len
-  have h_ofFn_zip : List.ofFn (fun i => xs i ++ ys i) = List.zipWith (· ++ ·) xs_pad ys_pad := by
-    apply List.ext_getElem
-    · simp [h_xs_pad_len, h_ys_pad_len]
-    · intro i h1 h2
-      simp only [List.getElem_ofFn, List.getElem_zipWith]
-      rw [List.append_cancel_left_eq]
-  and_intros
-  · rw [h_ofFn_xs, List.flatten_append, List.flatten_replicate_nil, List.append_nil]
-    exact h_u_eqv
-  · rw [h_ofFn_ys, List.flatten_append, List.flatten_replicate_nil, List.append_nil]
-    exact h_v_eqv
-  · rw [h_ofFn_zip, zipWith_append_append_of_length_eq _ _ _ _ _ h_eq_len]
-    simp [h_in_X]
-  · intro i j hij
-    by_cases hy : i < ys_list.length
-    · by_cases hx : j < xs_list.length
-      · have hy_val : ys i = ys_list[i] := by exact List.getElem_append_left hy
-        have hx_val : xs j = xs_list[j] := by exact List.getElem_append_left hx
-        rw [hy_val, hx_val]
-        exact h_indep i j hy hx hij
-      · have hx_val : xs j = [] := by
-          apply getElem_pad_right
-          omega
-        rw [hx_val]
-        intro a ha b hb
-        cases hb
-    · have hy_val : ys i = [] := by
-        apply getElem_pad_right
-        omega
-      rw [hy_val]
-      intro a ha b hb
-      cases ha
-
-lemma eval_interleaved_eq_list {α σ : Type*}
+lemma eval_interleaved_eq {α σ : Type*}
     (M : DFA α σ) (xs xs' ys : List (List α))
     (h1 : xs.length = ys.length) (h2 : xs'.length = ys.length)
     (h_trans : ∀ i (hx : i < xs.length) (hx' : i < xs'.length),
@@ -184,26 +125,6 @@ lemma eval_interleaved_eq_list {α σ : Type*}
         apply ih xs' ys (by simpa using h1) (by simpa using h2)
         intro i hi hi'
         exact h_trans (i + 1) (by simpa) (by simpa)
-
-lemma eval_interleaved_eq {α σ: Type*} {k : ℕ}
-    (M : DFA α σ) (xs xs' ys : Fin (k + 1) → List α)
-    (h_trans : ∀ i, (xs i).foldl M.step = (xs' i).foldl M.step) (q : σ) :
-    (List.ofFn (fun i => xs i ++ ys i)).flatten.foldl M.step q =
-    (List.ofFn (fun i => xs' i ++ ys i)).flatten.foldl M.step q := by
-  have h_zip : ∀ f g : Fin (k + 1) → List α,
-      List.ofFn (fun i => f i ++ g i) = List.zipWith (· ++ ·) (List.ofFn f) (List.ofFn g) := by
-    intro f g
-    apply List.ext_getElem
-    · simp
-    · intro i hi1 hi2
-      simp only [List.getElem_ofFn, List.getElem_zipWith]
-  rw [h_zip xs ys, h_zip xs' ys]
-  apply eval_interleaved_eq_list
-  · simp
-  · simp
-  · intro i h1 h2
-    simp only [List.getElem_ofFn]
-    exact h_trans ⟨i, by simpa using h1⟩
 
 lemma traceEqv_flatten_append_interleaved_list {α : Type*}
     (I : Independence α)
@@ -245,43 +166,6 @@ lemma traceEqv_flatten_append_interleaved_list {α : Type*}
       simp only [List.append_eq, ← List.append_assoc]
       exact TraceEqv.trans h_swap h_ih_compat
 
-omit [Fintype α] in
-lemma traceEqv_interleaved_swap {k : ℕ} (I : Independence α) (u' : List α)
-    (xs xs' ys : Fin (k + 1) → List α)
-    (hu' : TraceEqv I u' (List.ofFn xs').flatten)
-    (h_alph : ∀ i, (xs i).toFinset = (xs' i).toFinset)
-    (h_indep : ∀ i j, i < j → I.Independent (ys i) (xs j)) :
-    TraceEqv I (u' ++ (List.ofFn ys).flatten)
-               (List.ofFn (fun i => xs' i ++ ys i)).flatten := by
-  let L_xs' := List.ofFn xs'
-  let L_ys := List.ofFn ys
-  have hlen : L_xs'.length = L_ys.length := by simp [L_xs', L_ys]
-  have hindep_list : ∀ i j (hi : i < L_ys.length) (hj : j < L_xs'.length),
-      i < j → I.Independent L_ys[i] L_xs'[j] := by
-    intro i j hi hj hij a ha b hb
-    have hi_fin : i < k + 1 := by rwa [List.length_ofFn] at hi
-    have hj_fin : j < k + 1 := by rwa [List.length_ofFn] at hj
-    have h_orig := h_indep ⟨i, hi_fin⟩ ⟨j, hj_fin⟩ hij
-    have hy_eq : L_ys[i] = ys ⟨i, hi_fin⟩ := by rw [List.getElem_ofFn]
-    have hx'_eq : L_xs'[j] = xs' ⟨j, hj_fin⟩ := by rw [List.getElem_ofFn]
-    rw [hy_eq] at ha
-    rw [hx'_eq] at hb
-    have h_alph_j := h_alph ⟨j, hj_fin⟩
-    have hb_in_xs : b ∈ xs ⟨j, hj_fin⟩ := by
-      rw [← List.mem_toFinset, h_alph_j, List.mem_toFinset]
-      exact hb
-    exact h_orig a ha b hb_in_xs
-  have h_list_eqv := traceEqv_flatten_append_interleaved_list I L_xs' L_ys hlen hindep_list
-  have h_zip_eq : (List.zipWith (· ++ ·) L_xs' L_ys) = List.ofFn (fun i => xs' i ++ ys i) := by
-    apply List.ext_getElem
-    · simp [L_xs', L_ys]
-    · intro i hi1 hi2
-      simp only [L_xs', L_ys, List.getElem_ofFn, List.getElem_zipWith]
-  rw [h_zip_eq] at h_list_eqv
-  have h_step1 : TraceEqv I (u' ++ L_ys.flatten) (L_xs'.flatten ++ L_ys.flatten) :=
-    TraceEqv.compat hu' (TraceEqv.refl _)
-  exact TraceEqv.trans h_step1 h_list_eqv
-
 lemma leftQuotient_subset_of_profile_subset {X : Language α}
     (I : Independence α) (M : DFA α σ) (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (u u' : List α)
@@ -290,32 +174,60 @@ lemma leftQuotient_subset_of_profile_subset {X : Language α}
   intro v hv
   rw [leftQuotient, Set.mem_setOf] at hv ⊢
 
-  have ⟨xs_list, ys_list, h_len, h_valid⟩ := h_rank u v hv
-  have ⟨xs, ys, h_xs_eqv, h_ys_eqv, h_interleaved_in_X, h_indep⟩ :=
-    pad_factorization I X u v xs_list ys_list h_len h_valid
+  have ⟨xs, ys, h_len_le, h_valid⟩ := h_rank u v hv
+  rcases h_valid with ⟨h_len_eq, h_in_X, h_u_eqv, h_v_eqv, h_indep⟩
 
-  let β : Fin (k + 1) → HashiguchiBucket α σ := fun i =>
-    { trans := fun q => (xs i).foldl M.step q, alph := (xs i).toFinset }
+  let β_list : List (HashiguchiBucket α σ) :=
+    xs.map (fun x => { trans := fun q => x.foldl M.step q, alph := x.toFinset })
+  have hβ_len : β_list.length ≤ k + 1 := by simpa [β_list] using h_len_le
+  let β : BucketSeq α σ k := ⟨β_list, hβ_len⟩
+
   have hβ_in_u : β ∈ hashiguchiProfile I M k u := by
     rw [hashiguchiProfile, Finset.mem_filter]
-    exact ⟨Finset.mem_univ _, xs, h_xs_eqv, fun _ => rfl, fun _ => rfl⟩
+    exact ⟨Finset.mem_univ _, xs, h_u_eqv, rfl⟩
   have hβ_in_u' : β ∈ hashiguchiProfile I M k u' := h_sub hβ_in_u
   rw [hashiguchiProfile, Finset.mem_filter] at hβ_in_u'
-  rcases hβ_in_u'.right with ⟨xs', h_xs'_eqv, h_trans_eq, h_alph_eq⟩
+  rcases hβ_in_u'.right with ⟨xs', h_xs'_eqv, h_map_eq⟩
 
-  have h_trans_match (i : Fin (k + 1)) : (xs i).foldl M.step = (xs' i).foldl M.step :=
-    List.map_inj.mp (congrArg List.map (h_trans_eq i))
-  have h_alph_match (i : Fin (k + 1)) : (xs i).toFinset = (xs' i).toFinset :=
-    Finset.val_inj.mp (congrArg Finset.val (h_alph_eq i))
-  let interleaved' := (List.ofFn (fun i => xs' i ++ ys i)).flatten
+  have h_map_eq_list : xs.map (fun x => { trans := fun q => x.foldl M.step q, alph := x.toFinset : HashiguchiBucket α σ }) =
+      xs'.map (fun x => { trans := fun q => x.foldl M.step q, alph := x.toFinset }) := by
+    exact h_map_eq
+
+  have h_len_xs' : xs'.length = ys.length := by
+    have h1 : xs.length = β_list.length := by simp only [β_list, List.length_map]
+    have h2 : β_list.length = xs'.length := by simp_all
+    omega
+
+  have h_bucket_eq : ∀ i (hx : i < xs.length) (hx' : i < xs'.length),
+      { trans := fun q => xs[i].foldl M.step q, alph := xs[i].toFinset : HashiguchiBucket α σ } =
+      { trans := fun q => xs'[i].foldl M.step q, alph := xs'[i].toFinset } := by
+    intro i hx hx'
+    have h_get := congr_arg (fun l : List (HashiguchiBucket α σ) => l[i]?) h_map_eq_list
+    simpa [List.getElem?_map, hx, hx'] using h_get
+
+  have h_trans_match : ∀ i (hx : i < xs.length) (hx' : i < xs'.length),
+      xs[i].foldl M.step = xs'[i].foldl M.step := by
+    intro i hx hx'
+    exact congr_arg HashiguchiBucket.trans (h_bucket_eq i hx hx')
+
+  have h_indep' : ∀ i j (hi : i < ys.length) (hj : j < xs'.length), i < j → I.Independent ys[i] xs'[j] := by
+    intro i j hi hj hij a ha b hb
+    have hj_xs : j < xs.length := by omega
+    have h_rel := h_indep i j hi hj_xs hij a ha
+    have h_alph := by simpa using congr_arg HashiguchiBucket.alph (h_bucket_eq j hj_xs hj)
+    have hb_in_xs : b ∈ xs[j] := by rwa [← List.mem_toFinset, h_alph, List.mem_toFinset]
+    exact h_rel b hb_in_xs
+
+  let interleaved' := (List.zipWith (· ++ ·) xs' ys).flatten
   use interleaved'
   constructor
-  · rw [← h_acc, DFA.accepts, DFA.acceptsFrom, Set.mem_setOf] at h_interleaved_in_X ⊢
-    have h_eval_eq := eval_interleaved_eq M xs xs' ys h_trans_match M.start
+  · rw [← h_acc, DFA.accepts, DFA.acceptsFrom, Set.mem_setOf] at h_in_X ⊢
+    have h_eval_eq := eval_interleaved_eq M xs xs' ys h_len_eq h_len_xs' h_trans_match M.start
     unfold interleaved'
     rwa [DFA.evalFrom, ← h_eval_eq]
-  · have h_trace_swap := traceEqv_interleaved_swap I u' xs xs' ys h_xs'_eqv h_alph_match h_indep
-    exact (TraceEqv.trans (TraceEqv.compat (TraceEqv.refl u') h_ys_eqv) h_trace_swap).symm
+  · have h_u'_ys := TraceEqv.compat h_xs'_eqv (TraceEqv.refl ys.flatten)
+    have h_trace_swap := TraceEqv.trans h_u'_ys (traceEqv_flatten_append_interleaved_list I xs' ys h_len_xs' h_indep')
+    exact (TraceEqv.trans (TraceEqv.compat (TraceEqv.refl u') h_v_eqv) h_trace_swap).symm
 
 lemma leftQuotient_eq_of_profile_eq (I : Independence α) (M : DFA α σ) {X : Language α} (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (u u' : List α)
