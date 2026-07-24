@@ -5,13 +5,13 @@ namespace Language
 
 /-- The left quotient of a language `L` by `u` is the set of all strings `v` such that
   `u ++ v` is in `L`. -/
-def leftQuotient (L : Language α) (u : List α) : Language α :=
+def leftQuotient {α : Type} (L : Language α) (u : List α) : Language α :=
   { v | u ++ v ∈ L }
 
 @[simp]
-lemma leftQuotient_nil : leftQuotient L [] = L := rfl
+lemma leftQuotient_nil {α : Type} {L : Language α} : leftQuotient L [] = L := rfl
 
-lemma leftQuotient_append (L : Language α) (u v : List α) :
+lemma leftQuotient_append {α : Type} (L : Language α) (u v : List α) :
     leftQuotient L (u ++ v) = leftQuotient (leftQuotient L u) v := by
   simp [leftQuotient, Language]
 
@@ -51,7 +51,7 @@ instance {k : ℕ} : HasSubset (HashiguchiState α σ k) := Finset.instHasSubset
 
 instance : HasSubset (Language α) := Set.instHasSubset
 
-instance : Fintype (HashiguchiState α σ k) := by
+instance {k : ℕ} : Fintype (HashiguchiState α σ k) := by
   unfold HashiguchiState
   infer_instance
 
