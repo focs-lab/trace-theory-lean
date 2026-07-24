@@ -121,7 +121,7 @@ theorem append_cancel_right {w x y : List α} [DecidableEq α] (h : TraceEqv I (
   replace h := by simpa [reverse_append] using reverse_eqv_of_eqv (append_cancel_left h)
   exact h
 
-theorem append_cancel_middle {l r x y : List α} [DecidableEq α]
+theorem append_cancel_left_right {l r x y : List α} [DecidableEq α]
     (h : TraceEqv I (l ++ x ++ r) (l ++ y ++ r)) :
     TraceEqv I x y :=
   append_cancel_left (append_cancel_right h)
@@ -627,10 +627,8 @@ theorem projection_lemma {x y : List α} [DecidableEq α] (D : Dependence α) :
         nth_rw 2 [filter_append] at h_proj
         rw [hy''_empty, append_nil, filter_append, filter_append] at h_proj
         exact List.append_cancel_right h_proj
-      · simp at hc_in
-        simp [proj, filter_append, hc_in] at h_proj
-        simp
-        exact h_proj
+      · simp only [Finset.mem_insert, Finset.mem_singleton, not_or] at hc_in
+        simp_all [proj, filter_append]
 
 namespace Trace
 
@@ -641,21 +639,24 @@ theorem exists_gcp {u v w : List α} [DecidableEq α]
       ∀ g', IsPrefix I ⟦g'⟧ ⟦u⟧ → IsPrefix I ⟦g'⟧ ⟦v⟧ → IsPrefix I ⟦g'⟧ ⟦g⟧ := by
   have ⟨u', hu'⟩ := hu
   have ⟨v', hv'⟩ := hv
-  simp at hu' hv'
+  obtain ⟨u', rfl⟩ := Quotient.exists_rep u'
+  obtain ⟨v', rfl⟩ := Quotient.exists_rep v'
   replace hu' := Quotient.exact hu'
   replace hv' := Quotient.exact hv'
   have ⟨z₁, z₂, z₃, _, h_indep, huz, _, hvz, _⟩ := levi_lemma (hu'.trans hv'.symm)
   use z₁
   and_intros
-  · use z₂
+  · use ⟦z₂⟧
     apply Quotient.sound
     exact huz.symm
-  · use z₃
+  · use ⟦z₃⟧
     apply Quotient.sound
     exact hvz.symm
   · intro g' hg'u hg'v
     have ⟨w₁, hw₁⟩ := hg'u
     have ⟨w₂, hw₂⟩ := hg'v
+    obtain ⟨w₁, rfl⟩ := Quotient.exists_rep w₁
+    obtain ⟨w₂, rfl⟩ := Quotient.exists_rep w₂
     replace hw₁ := Quotient.exact hw₁
     replace hw₂ := Quotient.exact hw₂
     replace hw₁ := hw₁.trans huz
@@ -681,7 +682,7 @@ theorem exists_gcp {u v w : List α} [DecidableEq α]
             exact I.irrefl a (h_indep a ha_z₂ a haz)
         exact I.irrefl a (h_indep_yy a ha a ha_y₃)
     rw [h_y₂_empty, append_nil] at hy_g'
-    use y₃
+    use ⟦y₃⟧
     apply Quotient.sound
     exact (hy_g'.compat (TraceEqv.refl y₃)).trans hy_z₁.symm
 
@@ -692,16 +693,17 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
       ∀ d', IsPrefix I ⟦u⟧ ⟦d'⟧ → IsPrefix I ⟦v⟧ ⟦d'⟧ → IsPrefix I ⟦d⟧ ⟦d'⟧ := by
   have ⟨u', hu'⟩ := hu
   have ⟨v', hv'⟩ := hv
-  simp at hu' hv'
+  obtain ⟨u', rfl⟩ := Quotient.exists_rep u'
+  obtain ⟨v', rfl⟩ := Quotient.exists_rep v'
   replace hu' := Quotient.exact hu'
   replace hv' := Quotient.exact hv'
   have ⟨z₁, z₂, z₃, z₄, h_indep, huz, hu'z, hvz, hv'z⟩ := levi_lemma (hu'.trans hv'.symm)
   use z₁ ++ z₂ ++ z₃
   and_intros
-  · use z₃
+  · use ⟦z₃⟧
     apply Quotient.sound
     exact huz.compat (TraceEqv.refl z₃)
-  · use z₂
+  · use ⟦z₂⟧
     apply Quotient.sound
     have hz := ((TraceEqv.refl z₁).compat (comm_append_of_indep h_indep)).symm
     rw [← append_assoc, ← append_assoc] at hz
@@ -710,6 +712,8 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
   · intro d' hud' hvd'
     have ⟨w₁, hw₁⟩ := hud'
     have ⟨w₂, hw₂⟩ := hvd'
+    obtain ⟨w₁, rfl⟩ := Quotient.exists_rep w₁
+    obtain ⟨w₂, rfl⟩ := Quotient.exists_rep w₂
     replace hw₁ := Quotient.exact hw₁
     replace hw₂ := Quotient.exact hw₂
     have huv : TraceEqv I (u ++ w₁) (v ++ w₂) := hw₁.trans hw₂.symm
@@ -738,7 +742,7 @@ theorem exists_lcd {u v w : List α} [DecidableEq α]
     replace hd' :=
       hd'.trans ((TraceEqv.refl (z₁ ++ z₂)).compat (hy_z₃.symm.compat (TraceEqv.refl y₄)))
     rw [← append_assoc] at hd'
-    use y₄
+    use ⟦y₄⟧
     apply Quotient.sound
     exact hd'.symm
 
@@ -796,6 +800,7 @@ theorem not_isConnected_mul_of_indep {u v : Trace I}
   have h_ab_dis := not_depPath_mul_of_indep h ha hb
   exact h_ab_dis h_ab_con
 
+@[simp]
 theorem mk'_eq_one_iff {x : List α} : ⟦x⟧ = (1 : Trace I) ↔ x = [] := by
   cases x with
   | nil =>
