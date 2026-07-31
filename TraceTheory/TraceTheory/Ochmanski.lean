@@ -429,13 +429,12 @@ lemma dependent_letters_of_connected [DecidableEq α] {u v : List α}
   have hv_trace : ⟦v⟧ ≠ (1 : Trace I) := by simpa [mk'_eq_one_iff]
   exact not_isConnected_mul_of_indep h_indep_trace hu_trace hv_trace h_conn
 
-lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List (List α)}
-    (hps_len : ps.length = n) (hqs_len : qs.length = n)
-    (hpq_conn : ∀ i (hi : i < n), IsConnected I ⟦ps[i] ++ qs[i]⟧)
-    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → I.Independent qs[i] ps[j]) :
-    (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card ≤
-    Fintype.card α := by
-  let S := Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])
+lemma split_indices_bound [Fintype α] [DecidableEq α] {ps qs : List (List α)}
+    (h_len : ps.length = qs.length)
+    (hpq_conn : ∀ i (hi : i < ps.length), IsConnected I ⟦ps[i] ++ qs[i]⟧)
+    (h_indep : ∀ i j (hi : i < qs.length) (hj : j < ps.length), i < j → I.Independent qs[i] ps[j]) :
+    ((ps.zip qs).filter (fun (p, q) => p ≠ [] ∧ q ≠ [])).length ≤ Fintype.card α := by
+  let S := Finset.univ.filter (fun (i : Fin ps.length) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])
   have h_ex' : ∀ i : S, ∃ b ∈ qs[i.val.val], ∃ a ∈ ps[i.val.val], ¬ I.rel a b := by
     intro ⟨i, hi⟩
     simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hi
@@ -452,7 +451,7 @@ lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List 
       apply h_neq
       exact Subtype.ext (Fin.ext h_eq_val)
     rcases lt_trichotomy i.val j.val with hlt | heq_val | hgt
-    · have h_indep_ij := h_indep i.val j.val i.isLt j.isLt hlt
+    · have h_indep_ij := h_indep i.val j.val (by rw [← h_len]; exact i.isLt) j.isLt hlt
       have h_bi_in := (hf_spec ⟨i, hi⟩).1
       rcases (hf_spec ⟨j, hj⟩).2 with ⟨aj, haj, hdep⟩
       have h_rel := h_indep_ij (f ⟨i, hi⟩) h_bi_in aj haj
@@ -460,15 +459,22 @@ lemma split_indices_bound [Fintype α] [DecidableEq α] {n : ℕ} {ps qs : List 
       rw [heq] at h_symm
       exact hdep h_symm
     · contradiction
-    · have h_indep_ji := h_indep j.val i.val j.isLt i.isLt hgt
+    · have h_indep_ji := h_indep j.val i.val (by rw [← h_len]; exact j.isLt) i.isLt hgt
       have h_bj_in := (hf_spec ⟨j, hj⟩).1
       rcases (hf_spec ⟨i, hi⟩).2 with ⟨ai, hai, hdep⟩
       have h_rel := h_indep_ji (f ⟨j, hj⟩) h_bj_in ai hai
       have h_symm := I.symm (f ⟨j, hj⟩) ai h_rel
       rw [← heq] at h_symm
       exact hdep h_symm
-  have h_card := Fintype.card_le_of_injective f h_inj
-  rw [← Fintype.card_coe S]
+  have h_card : S.card ≤ Fintype.card α := by
+    rw [← Fintype.card_coe S]
+    exact Fintype.card_le_of_injective f h_inj
+  have h_len_eq : ((ps.zip qs).filter (fun (p, q) => p ≠ [] ∧ q ≠ [])).length = S.card := by
+    have h_zip : ps.zip qs = (List.finRange ps.length).map (fun i => (ps[i.val], qs[i.val])) := by
+      apply List.ext_getElem <;> simp [h_len]
+    rw [h_zip, ← List.countP_eq_length_filter, List.countP_map, List.countP_eq_length_filter]
+    rfl
+  rw [h_len_eq]
   exact h_card
 
 /-- Helper for `group_split_factors`. -/
@@ -491,287 +497,195 @@ lemma block_concat_in_kstar {X : Language α} {p q : List α} (h : IsValidBlock 
     use [p ++ q]
     simpa
 
-lemma group_split_factors_aux {n : ℕ} {X : Language α} [DecidableEq α]
-    (ps qs : List (List α))
-    (hps_len : ps.length = n) (hqs_len : qs.length = n)
-    (hpq_in_X : ∀ i (hi : i < n), ps[i] ++ qs[i] ∈ X)
-    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → I.Independent qs[i] ps[j]) :
-    ∃ xs ys : List (List α),
-      xs.length = ys.length ∧
-      xs.length ≤ 2 * (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card + 1 ∧
-      (∀ i (hi : i < xs.length) (hi' : i < ys.length), IsValidBlock X xs[i] ys[i] ∧
-        (i = 0 → xs[i] ∈ X∗ ∧ ys[i] ∈ X∗)) ∧
-      TraceEqv I ps.flatten xs.flatten ∧
-      TraceEqv I qs.flatten ys.flatten ∧
-      ∀ (i j : ℕ) (hi : i < ys.length) (hj : j < xs.length), i < j →
-        I.Independent ys[i] xs[j] := by
-  induction n generalizing ps qs with
-  | zero =>
-    have hps : ps = [] := List.length_eq_zero_iff.mp hps_len
-    have hqs : qs = [] := List.length_eq_zero_iff.mp hqs_len
-    subst hps hqs
-    use [[]], [[]]
-    simp [TraceEqv.refl, IsValidBlock, Language.nil_mem_kstar]
-  | succ n' ih =>
-    cases ps with | nil => contradiction | cons p ps' =>
+structure SplitFactorization (I : Independence α) (X : Language α) (ps qs : List (List α)) where
+  x_star : List α
+  y_star : List α
+  hx_star : x_star ∈ X∗
+  hy_star : y_star ∈ X∗
+  xs : List (List α)
+  ys : List (List α)
+  len_eq : xs.length = ys.length
+  bound : xs.length ≤ 2 * ((ps.zip qs).filter (fun (p, q) => p ≠ [] ∧ q ≠ [])).length
+  valid_blocks : ∀ i (hi : i < xs.length) (hi' : i < ys.length), IsValidBlock X xs[i] ys[i]
+  trace_x : TraceEqv I ps.flatten (x_star :: xs).flatten
+  trace_y : TraceEqv I qs.flatten (y_star :: ys).flatten
+  indep_star : ∀ j (hj : j < xs.length), I.Independent y_star xs[j]
+  indep_blocks : ∀ (i j : ℕ) (hi : i < ys.length) (hj : j < xs.length), i < j → I.Independent ys[i] xs[j]
+
+def SplitFactorization.cons_split {X : Language α} {ps qs : List (List α)}
+    (sf : SplitFactorization I X ps qs) {p q : List α}
+    (h_split : p ≠ [] ∧ q ≠ [])
+    (hpq_in_X : p ++ q ∈ X)
+    (h_indep : ∀ j (hj : j < ps.length), I.Independent q ps[j]) :
+    SplitFactorization I X (p :: ps) (q :: qs) :=
+  {
+    x_star := []
+    y_star := []
+    hx_star := by simp [Language.nil_mem_kstar]
+    hy_star := by simp [Language.nil_mem_kstar]
+    xs := p :: sf.x_star :: sf.xs
+    ys := q :: sf.y_star :: sf.ys
+    len_eq := by simp [sf.len_eq]
+    bound := by
+      have h_bound := sf.bound
+      have h_filter : ((p :: ps).zip (q :: qs)).filter (fun (x, y) => x ≠ [] ∧ y ≠ []) =
+          (p, q) :: (ps.zip qs).filter (fun (x, y) => x ≠ [] ∧ y ≠ []) := by
+        rcases p with _ | ⟨a, p'⟩ <;> rcases q with _ | ⟨b, q'⟩ <;> simp_all
+      rw [h_filter, List.length_cons, List.length_cons, List.length_cons]
+      omega
+    valid_blocks := by
+      intro i hi hi'
+      cases i with
+      | zero => exact Or.inr hpq_in_X
+      | succ i' =>
+        cases i' with
+        | zero => exact Or.inl ⟨sf.hx_star, sf.hy_star⟩
+        | succ i'' => exact sf.valid_blocks i'' (by simp_all) (by simp_all)
+    trace_x := by simpa using TraceEqv.compat (TraceEqv.refl p) sf.trace_x
+    trace_y := by simpa using TraceEqv.compat (TraceEqv.refl q) sf.trace_y
+    indep_star := by simp
+    indep_blocks := by
+      have hq_ps_flat : I.Independent q ps.flatten := by
+        intro a ha b hb
+        simp only [List.mem_flatten] at hb
+        rcases hb with ⟨p_k, hp_k_in, hb_in⟩
+        rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
+        exact h_indep k hk_lt a ha b hb_in
+      have hq_xs_flat : I.Independent q (sf.x_star :: sf.xs).flatten :=
+        indep_of_indep_of_eqv hq_ps_flat sf.trace_x
+      intro i j hi hj hij
+      cases i with
+      | zero =>
+        cases j with
+        | zero => contradiction
+        | succ j' =>
+          simp only [List.getElem_cons_zero, List.getElem_cons_succ]
+          exact indep_of_indep_flatten_right j' (by simp_all) hq_xs_flat
+      | succ i' =>
+        cases j with
+        | zero => contradiction
+        | succ j' =>
+          cases i' with
+          | zero =>
+            cases j' with
+            | zero => contradiction
+            | succ j'' =>
+              simp only [List.getElem_cons_succ, List.getElem_cons_zero]
+              exact sf.indep_star j'' (by simp_all)
+          | succ i'' =>
+            cases j' with
+            | zero => contradiction
+            | succ j'' =>
+              simp only [List.getElem_cons_succ]
+              exact sf.indep_blocks i'' j'' (by simp_all) (by simp_all) (by simp_all)
+  }
+
+def SplitFactorization.cons_merge {X : Language α} {ps qs : List (List α)}
+    (sf : SplitFactorization I X ps qs) {p q : List α}
+    (h_not_split : ¬(p ≠ [] ∧ q ≠ []))
+    (hpq_in_X : p ++ q ∈ X)
+    (h_indep : ∀ j (hj : j < ps.length), I.Independent q ps[j]) :
+    SplitFactorization I X (p :: ps) (q :: qs) := by
+  have hpq_star : p ∈ X∗ ∧ q ∈ X∗ := by
+    by_cases hp : p = []
+    · have hq : q ∈ X∗ := by
+        rw [Language.mem_kstar]
+        use [q]
+        simpa [hp] using hpq_in_X
+      exact ⟨by simp [hp, Language.nil_mem_kstar], hq⟩
+    · have hq : q = [] := by
+        by_contra hq
+        exact h_not_split ⟨hp, hq⟩
+      have hp_star : p ∈ X∗ := by
+        rw [Language.mem_kstar]
+        use [p]
+        simpa [hq] using hpq_in_X
+      exact ⟨hp_star, by simp [hq, Language.nil_mem_kstar]⟩
+  have h_star_mul : ∀ {u v : List α}, u ∈ X∗ → v ∈ X∗ → u ++ v ∈ X∗ := by
+    intro u v hu hv
+    rw [Language.mem_kstar] at hu hv ⊢
+    rcases hu with ⟨L₁, rfl, hL₁⟩
+    rcases hv with ⟨L₂, rfl, hL₂⟩
+    use L₁ ++ L₂
+    simp only [List.flatten_append, List.mem_append, true_and]
+    rintro y (hy₁ | hy₂)
+    · exact hL₁ y hy₁
+    · exact hL₂ y hy₂
+  refine {
+    x_star := p ++ sf.x_star
+    y_star := q ++ sf.y_star
+    hx_star := h_star_mul hpq_star.left sf.hx_star
+    hy_star := h_star_mul hpq_star.right sf.hy_star
+    xs := sf.xs
+    ys := sf.ys
+    len_eq := sf.len_eq
+    bound := by
+      have h_bound := sf.bound
+      have h_zip : ((p :: ps).zip (q :: qs)).filter (fun (x, y) => x ≠ [] ∧ y ≠ []) =
+          if p ≠ [] ∧ q ≠ [] then (p, q) :: (ps.zip qs).filter (fun (x, y) => x ≠ [] ∧ y ≠ [])
+          else (ps.zip qs).filter (fun (x, y) => x ≠ [] ∧ y ≠ []) := by
+        rcases p with _ | ⟨a, p'⟩ <;> rcases q with _ | ⟨b, q'⟩ <;> simp_all
+      rw [h_zip]
+      split_ifs
+      omega
+    valid_blocks := sf.valid_blocks
+    trace_x := by
+      have h := TraceEqv.compat (TraceEqv.refl p) sf.trace_x
+      simpa only [List.flatten_cons, List.append_assoc] using h
+    trace_y := by
+      have h := TraceEqv.compat (TraceEqv.refl q) sf.trace_y
+      simpa only [List.flatten_cons, List.append_assoc] using h
+    indep_star := by
+      have hq_ps_flat : I.Independent q ps.flatten := by
+        intro a ha b hb
+        simp only [List.mem_flatten] at hb
+        rcases hb with ⟨p_k, hp_k_in, hb_in⟩
+        rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
+        exact h_indep k hk_lt a ha b hb_in
+      have hq_xs_flat : I.Independent q (sf.x_star :: sf.xs).flatten :=
+        indep_of_indep_of_eqv hq_ps_flat sf.trace_x
+      intro j hj a ha b hb
+      simp only [List.mem_append] at ha
+      rcases ha with ha_q | ha_star
+      · exact indep_of_indep_flatten_right (j + 1) (by simpa) hq_xs_flat a ha_q b hb
+      · exact sf.indep_star j hj a ha_star b hb
+    indep_blocks := sf.indep_blocks
+  }
+
+def group_split_factors_aux {X : Language α} {ps qs : List (List α)}
+    (h_len : ps.length = qs.length)
+    (hpq_in_X : ∀ i (hi : i < ps.length), ps[i] ++ qs[i] ∈ X)
+    (h_indep : ∀ i j (hi : i < qs.length) (hj : j < ps.length), i < j → I.Independent qs[i] ps[j]) :
+    SplitFactorization I X ps qs := by
+  induction ps generalizing qs with
+  | nil =>
+    have hqs : qs = [] := List.length_eq_zero_iff.mp h_len.symm
+    subst hqs
+    exact {
+      x_star := [],
+      y_star := [],
+      hx_star := by simp [Language.nil_mem_kstar],
+      hy_star := by simp [Language.nil_mem_kstar],
+      xs := [],
+      ys := [],
+      len_eq := rfl,
+      bound := by simp,
+      valid_blocks := by simp,
+      trace_x := by simp [TraceEqv.refl],
+      trace_y := by simp [TraceEqv.refl],
+      indep_star := by simp,
+      indep_blocks := by simp
+    }
+  | cons p ps' ih =>
     cases qs with | nil => contradiction | cons q qs' =>
-      have hps'_len : ps'.length = n' := by simpa using hps_len
-      have hqs'_len : qs'.length = n' := by simpa using hqs_len
-      have hpq_in_X' : ∀ i (hi : i < n'), ps'[i] ++ qs'[i] ∈ X := by
-        intro i hi
-        simpa using hpq_in_X (i + 1) (by omega)
-      have h_indep' : ∀ i j (hi : i < n') (hj : j < n'), i < j → I.Independent qs'[i] ps'[j] := by
-        intro i j hi hj hlt
-        simpa using h_indep (i + 1) (j + 1) (by omega) (by omega) (by omega)
-      have ⟨xs', ys', h_len_eq, h_bound, h_blocks, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
-        ih ps' qs' hps'_len hqs'_len hpq_in_X' h_indep'
+      have h_len' : ps'.length = qs'.length := by simpa using h_len
+      have hpq_in_X' : ∀ i (hi : i < ps'.length), ps'[i] ++ qs'[i] ∈ X := fun i hi => hpq_in_X (i + 1) (by simpa)
+      have h_indep' : ∀ i j (hi : i < qs'.length) (hj : j < ps'.length), i < j → I.Independent qs'[i] ps'[j] :=
+        fun i j hi hj hij => h_indep (i + 1) (j + 1) (by simpa) (by simpa) (by simpa)
+      have sf_tail := ih h_len' hpq_in_X' h_indep'
       by_cases h_split : p ≠ [] ∧ q ≠ []
-      · use ([] :: p :: xs'), ([] :: q :: ys')
-        and_intros
-        · simp [h_len_eq]
-        · simp only [List.length_cons]
-          have h_S_eq : Finset.univ.filter (fun (i : Fin (n' + 1)) => (p :: ps')[i.val] ≠ [] ∧ (q :: qs')[i.val] ≠ []) =
-            insert (0 : Fin (n' + 1)) ((Finset.univ.filter (fun (i : Fin n') => ps'[i.val] ≠ [] ∧ qs'[i.val] ≠ [])).image Fin.succ) := by
-            ext x
-            simp only [Finset.mem_insert, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
-            cases x using Fin.cases with
-            | zero =>
-              simp only [Fin.val_zero, List.getElem_cons_zero]
-              apply iff_of_true h_split
-              left
-              trivial
-            | succ x' =>
-              simp only [Fin.val_succ, List.getElem_cons_succ]
-              have h_ne : Fin.succ x' ≠ 0 := Fin.succ_ne_zero x'
-              simp only [h_ne, false_or]
-              constructor
-              · intro h
-                exact ⟨x', h, rfl⟩
-              · rintro ⟨y, hy, h_eq⟩
-                injection h_eq with h_eq
-                simp only [Nat.add_right_cancel_iff] at h_eq
-                simp_rw [← h_eq]
-                exact hy
-          have h_card : (Finset.univ.filter (fun (i : Fin (n' + 1)) => (p :: ps')[i.val] ≠ [] ∧ (q :: qs')[i.val] ≠ [])).card =
-            (Finset.univ.filter (fun (i : Fin n') => ps'[i.val] ≠ [] ∧ qs'[i.val] ≠ [])).card + 1 := by
-            rw [h_S_eq, Finset.card_insert_of_notMem]
-            · rw [Finset.card_image_of_injective _ (Fin.succ_injective _)]
-            · intro h_mem
-              simp only [Finset.mem_image] at h_mem
-              rcases h_mem with ⟨y, _, hy_eq⟩
-              exact Fin.succ_ne_zero y hy_eq
-          rw [h_card]
-          omega
-        · intro i hi hi'
-          cases i with
-          | zero =>
-            simp only [List.getElem_cons_zero]
-            simp only [Language.nil_mem_kstar, and_self, imp_self, and_true]
-            left
-            simp [Language.nil_mem_kstar]
-          | succ i' =>
-            cases i' with
-            | zero =>
-              simp only [List.getElem_cons_succ]
-              constructor
-              · right
-                exact hpq_in_X 0 (by omega)
-              · intro h_absurd
-                contradiction
-            | succ i'' =>
-              simp only [List.getElem_cons_succ]
-              constructor
-              · exact (h_blocks i'' (by simpa using hi) (by simpa using hi')).left
-              · intro h_absurd
-                contradiction
-        · simp only [List.flatten_cons, List.nil_append]
-          exact TraceEqv.compat (TraceEqv.refl _) h_ps_eqv
-        · simp only [List.flatten_cons, List.nil_append]
-          exact TraceEqv.compat (TraceEqv.refl _) h_qs_eqv
-        · intro i j hi hj hlt
-          cases i with
-          | zero =>
-            simp only [List.getElem_cons_zero]
-            intro a ha b hb
-            cases ha
-          | succ i' =>
-            cases i' with
-            | zero =>
-              cases j with
-              | zero => contradiction
-              | succ j' =>
-                cases j' with
-                | zero => contradiction
-                | succ j'' =>
-                  simp only [List.getElem_cons_succ, List.getElem_cons_zero]
-                  have hq_ps_flat : I.Independent q ps'.flatten := by
-                    intro a ha b hb
-                    simp only [List.mem_flatten] at hb
-                    rcases hb with ⟨p_k, hp_k_in, hb_in⟩
-                    rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
-                    exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a ha b hb_in
-                  have hq_xs_flat : I.Independent q xs'.flatten :=
-                    indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
-                  exact indep_of_indep_flatten_right j'' (by simpa using hj) hq_xs_flat
-            | succ i'' =>
-              cases j with
-              | zero => contradiction
-              | succ j' =>
-                cases j' with
-                | zero => contradiction
-                | succ j'' =>
-                  simp only [List.getElem_cons_succ]
-                  exact h_xs_indep i'' j'' (by simpa using hi) (by simpa using hj) (by omega)
-      · rcases xs' with _ | ⟨x_head, xs_tail⟩
-        · have h_ys_nil : ys' = [] := by
-            cases ys'
-            · rfl
-            · contradiction
-          subst h_ys_nil
-          use [p], [q]
-          and_intros
-          · rfl
-          · simp only [List.length_singleton]; omega
-          · intro i hi hi'
-            cases i with
-            | zero =>
-              simp only [List.getElem_cons_zero]
-              constructor
-              · right
-                exact hpq_in_X 0 (by omega)
-              · simp only [forall_const]
-                rcases (by simpa using not_and_or.mp h_split) with rfl | rfl
-                · have hq := by simpa using hpq_in_X 0 (by omega)
-                  constructor
-                  · apply Language.nil_mem_kstar
-                  · rw [Language.mem_kstar]
-                    exact ⟨[q], by simp [hq]⟩
-                · have hp := by simpa using hpq_in_X 0 (by omega)
-                  constructor
-                  · rw [Language.mem_kstar]
-                    exact ⟨[p], by simp [hp]⟩
-                  · apply Language.nil_mem_kstar
-            | succ i' => contradiction
-          · simp only [List.flatten_cons, List.flatten_nil, List.append_nil]
-            have h1 : TraceEqv I (p ++ ps'.flatten) (p ++ []) := TraceEqv.compat (TraceEqv.refl _) h_ps_eqv
-            rw [List.append_nil] at h1
-            exact h1
-          · simp only [List.flatten_cons, List.flatten_nil, List.append_nil]
-            have h1 : TraceEqv I (q ++ qs'.flatten) (q ++ []) := TraceEqv.compat (TraceEqv.refl _) h_qs_eqv
-            rw [List.append_nil] at h1
-            exact h1
-          · intro i j hi hj hlt
-            simp only [List.length_cons, List.length_nil, zero_add, Nat.lt_one_iff] at hi hj
-            omega
-        rcases ys' with _ | ⟨y_head, ys_tail⟩
-        · simp at h_len_eq
-        use (p ++ x_head) :: xs_tail, (q ++ y_head) :: ys_tail
-        and_intros
-        · simpa using h_len_eq
-        · simp only [List.length_cons]
-          have h_S_eq : Finset.univ.filter (fun (i : Fin (n' + 1)) => (p :: ps')[i.val] ≠ [] ∧ (q :: qs')[i.val] ≠ []) =
-            (Finset.univ.filter (fun (i : Fin n') => ps'[i.val] ≠ [] ∧ qs'[i.val] ≠ [])).image Fin.succ := by
-            ext x
-            simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
-            cases x using Fin.cases with
-            | zero =>
-              simp only [Fin.val_zero, List.getElem_cons_zero]
-              apply iff_of_false
-              · exact h_split
-              · rintro ⟨y, hy, h_eq⟩
-                exact Fin.succ_ne_zero y h_eq
-            | succ x' =>
-              simp only [Fin.val_succ, List.getElem_cons_succ]
-              constructor
-              · intro h
-                exact ⟨x', h, rfl⟩
-              · rintro ⟨y, hy, h_eq⟩
-                injection h_eq with h_eq
-                simp only [Nat.add_right_cancel_iff] at h_eq
-                simp_rw [← h_eq]
-                exact hy
-          have h_card : (Finset.univ.filter (fun (i : Fin (n' + 1)) => (p :: ps')[i.val] ≠ [] ∧ (q :: qs')[i.val] ≠ [])).card =
-            (Finset.univ.filter (fun (i : Fin n') => ps'[i.val] ≠ [] ∧ qs'[i.val] ≠ [])).card := by
-            rw [h_S_eq, Finset.card_image_of_injective _ (Fin.succ_injective _)]
-          rw [h_card]
-          exact h_bound
-        · intro i hi hi'
-          cases i with
-          | zero =>
-            simp only [List.getElem_cons_zero]
-            rcases (by simpa using not_and_or.mp h_split) with rfl | rfl
-            · have hq := by simpa using hpq_in_X 0 (by simp)
-              have h_head := (h_blocks 0 (by simp) (by simp)).right rfl
-              rcases h_head with ⟨hx_head, hy_head⟩
-              simp only [List.getElem_cons_zero] at hx_head hy_head
-              rcases hy_head with ⟨L, rfl, hL⟩
-              constructor
-              · left
-                use hx_head
-                use [q] ++ L
-                simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
-                  forall_eq_or_imp, hq, true_and]
-                exact hL
-              · simp only [List.nil_append, hx_head, true_and, forall_const]
-                use [q] ++ L
-                simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
-                  forall_eq_or_imp, hq, true_and]
-                exact hL
-            · have hp := by simpa using hpq_in_X 0 (by simp)
-              have h_head := (h_blocks 0 (by simp) (by simp)).right rfl
-              rcases h_head with ⟨hx_head, hy_head⟩
-              simp only [List.getElem_cons_zero] at hx_head hy_head
-              rcases hx_head with ⟨L, rfl, hL⟩
-              constructor
-              · left
-                constructor
-                · use [p] ++ L
-                  simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
-                    forall_eq_or_imp, hp, true_and]
-                  exact hL
-                · simp [hy_head]
-              · simp only [List.nil_append, hy_head, and_true, forall_const]
-                use [p] ++ L
-                simp only [List.cons_append, List.nil_append, List.flatten_cons, List.mem_cons,
-                  forall_eq_or_imp, hp, true_and]
-                exact hL
-          | succ i' =>
-            simp only [List.getElem_cons_succ]
-            simpa using h_blocks (i' + 1) (by simpa using hi) (by simpa using hi')
-        · simp only [List.flatten_cons]
-          rw [List.append_assoc]
-          exact TraceEqv.compat (TraceEqv.refl _) h_ps_eqv
-        · simp only [List.flatten_cons]
-          rw [List.append_assoc]
-          exact TraceEqv.compat (TraceEqv.refl _) h_qs_eqv
-        · intro i j hi hj hlt
-          cases i with
-          | zero =>
-            cases j with
-            | zero => contradiction
-            | succ j' =>
-              simp only [List.getElem_cons_zero, List.getElem_cons_succ]
-              intro a ha b hb
-              simp only [List.mem_append] at ha
-              rcases ha with ha | ha
-              · have hq_ps_flat : I.Independent q ps'.flatten := by
-                  intro a' ha' b' hb'
-                  simp only [List.mem_flatten] at hb'
-                  rcases hb' with ⟨p_k, hp_k_in, hb_in⟩
-                  rcases List.mem_iff_getElem.mp hp_k_in with ⟨k, hk_lt, rfl⟩
-                  exact h_indep 0 (k + 1) (by omega) (by omega) (by omega) a' ha' b' hb_in
-                have hq_xs_flat : I.Independent q (x_head :: xs_tail).flatten :=
-                  indep_of_indep_of_eqv hq_ps_flat h_ps_eqv
-                have hq_xstail := indep_of_indep_flatten_right (j' + 1) (by simpa using hj) hq_xs_flat
-                exact hq_xstail a ha b hb
-              · have hy_indep := h_xs_indep 0 (j' + 1) (by simp) (by simpa using hj) (by omega)
-                exact hy_indep a ha b hb
-          | succ i' =>
-            cases j with
-            | zero => contradiction
-            | succ j' =>
-              simp only [List.getElem_cons_succ]
-              exact h_xs_indep (i' + 1) (j' + 1) (by simpa using hi) (by simpa using hj) (by omega)
+      · exact sf_tail.cons_split h_split (hpq_in_X 0 (by simp)) (fun j hj => h_indep 0 (j + 1) (by simp) (by simpa) (by simp))
+      · exact sf_tail.cons_merge h_split (hpq_in_X 0 (by simp)) (fun j hj => h_indep 0 (j + 1) (by simp) (by simpa) (by simp))
 
 lemma flatten_mem_kstar {X : Language α} (L : List (List α)) (h : ∀ w ∈ L, w ∈ X∗) :
     L.flatten ∈ X∗ := by
@@ -804,27 +718,46 @@ lemma zipWith_append_mem_kstar {X : Language α} {xs ys : List (List α)}
   exact block_concat_in_kstar (h_blocks i hi_xs (by simp_all)).left
 
 lemma group_split_factors
-    {x y : List α} {X : Language α} {n : ℕ} {ps qs : List (List α)} [Fintype α] [DecidableEq α]
-    (hps_len : ps.length = n) (hqs_len : qs.length = n)
+    {x y : List α} {X : Language α} {ps qs : List (List α)} [Fintype α] [DecidableEq α]
+    (h_len : ps.length = qs.length)
     (hx_eqv : TraceEqv I x ps.flatten)
     (hy_eqv : TraceEqv I y qs.flatten)
-    (hpq_in_X : ∀ i (hi : i < n), ps[i] ++ qs[i] ∈ X)
-    (h_indep : ∀ i j (hi : i < n) (hj : j < n), i < j → I.Independent qs[i] ps[j])
-    (h_bound : (Finset.univ.filter (fun (i : Fin n) => ps[i.val] ≠ [] ∧ qs[i.val] ≠ [])).card ≤
-      Fintype.card α) :
+    (hpq_in_X : ∀ i (hi : i < ps.length), ps[i] ++ qs[i] ∈ X)
+    (h_indep : ∀ i j (hi : i < qs.length) (hj : j < ps.length), i < j → I.Independent qs[i] ps[j])
+    (h_bound : ((ps.zip qs).filter (fun (p, q) => p ≠ [] ∧ q ≠ [])).length ≤ Fintype.card α) :
     ∃ xs ys : List (List α),
       xs.length ≤ 2 * Fintype.card α + 1 ∧
       IsValidFactorization I X∗ x y xs ys := by
-  have ⟨xs, ys, h_len_eq, h_len_bound, h_blocks, h_ps_eqv, h_qs_eqv, h_xs_indep⟩ :=
-    group_split_factors_aux ps qs hps_len hqs_len hpq_in_X h_indep
-  use xs, ys
+  have sf := group_split_factors_aux h_len hpq_in_X h_indep
+  use (sf.x_star :: sf.xs), (sf.y_star :: sf.ys)
   constructor
-  · omega
-  · unfold IsValidFactorization
-    refine ⟨h_len_eq, ?_, ?_, ?_, h_xs_indep⟩
-    · exact zipWith_append_mem_kstar h_len_eq h_blocks
-    · exact TraceEqv.trans hx_eqv h_ps_eqv
-    · exact TraceEqv.trans hy_eqv h_qs_eqv
+  · have h_sf_bound := sf.bound
+    simp only [List.length_cons]
+    omega
+  · refine ⟨by simp [sf.len_eq], ?_, ?_, ?_, ?_⟩
+    · apply zipWith_append_mem_kstar (by simp [sf.len_eq])
+      intro i hi hi'
+      cases i with
+      | zero =>
+        exact ⟨Or.inl ⟨sf.hx_star, sf.hy_star⟩, fun _ => ⟨sf.hx_star, sf.hy_star⟩⟩
+      | succ i' =>
+        refine ⟨sf.valid_blocks i' (by simp_all) (by simp_all), fun h => by contradiction⟩
+    · exact hx_eqv.trans sf.trace_x
+    · exact hy_eqv.trans sf.trace_y
+    · intro i j hi hj hij
+      cases i with
+      | zero =>
+        cases j with
+        | zero => contradiction
+        | succ j' =>
+          simp only [List.getElem_cons_zero, List.getElem_cons_succ]
+          exact sf.indep_star j' (by simp_all)
+      | succ i' =>
+        cases j with
+        | zero => contradiction
+        | succ j' =>
+          simp only [List.getElem_cons_succ]
+          exact sf.indep_blocks i' j' (by simp_all) (by simp_all) (by simp_all)
 
 theorem star_connected_closed_rank {X : Language α} [Fintype α] [DecidableEq α]
     (hX_closed : IsClosed I X)
@@ -837,30 +770,29 @@ theorem star_connected_closed_rank {X : Language α} [Fintype α] [DecidableEq �
   rcases hw with ⟨ts, rfl, hts⟩
   have ⟨ps, qs, hps_len, hqs_len, hx_eqv, hy_eqv, h_pq_eqv, h_indep⟩ :=
     levi_lemma_gen heqv.symm
-  have hpq_in_X : ∀ i (hi : i < ts.length),
-      ps[i] ++ qs[i] ∈ X := by
+
+  have h_len : ps.length = qs.length := hps_len.trans hqs_len.symm
+
+  have hpq_in_X : ∀ i (hi : i < ps.length), ps[i] ++ qs[i] ∈ X := by
     intro i hi
-    have h_t_in_X : ts[i] ∈ X := hts (ts[i]) (List.getElem_mem hi)
-    have h_eqv_i := h_pq_eqv i hi (by omega) (by omega)
+    have hi_ts : i < ts.length := by omega
+    have h_t_in_X : ts[i] ∈ X := hts (ts[i]) (List.getElem_mem hi_ts)
+    have h_eqv_i := h_pq_eqv i hi_ts hi (by omega)
     rw [← hX_closed]
     exact ⟨ts[i], h_t_in_X, h_eqv_i⟩
-  have hpq_conn : ∀ i (hi : i < ts.length),
-      IsConnected I ⟦ps[i] ++ qs[i]⟧ := by
+
+  have hpq_conn : ∀ i (hi : i < ps.length), IsConnected I ⟦ps[i] ++ qs[i]⟧ := by
     intro i hi
-    have h_t_conn := hX_conn ts[i] (hts ts[i] (List.getElem_mem hi))
-    have h_eqv_i := h_pq_eqv i hi (by omega) (by omega)
-    have h_trace_eq : (⟦ts[i]⟧ : Trace I) = ⟦ps[i] ++ qs[i]⟧ := by
-      apply Quotient.sound
-      exact h_eqv_i
+    have hi_ts : i < ts.length := by omega
+    have h_t_conn := hX_conn ts[i] (hts ts[i] (List.getElem_mem hi_ts))
+    have h_eqv_i := h_pq_eqv i hi_ts hi (by omega)
+    have h_trace_eq : (⟦ts[i]⟧ : Trace I) = ⟦ps[i] ++ qs[i]⟧ := Quotient.sound h_eqv_i
     rw [← h_trace_eq]
     exact h_t_conn
-  have h_indep_adapted : ∀ i j (hi : i < ts.length) (hj : j < ts.length), i < j →
-      I.Independent qs[i] ps[j] := by
-    intro i j hi hj hij
-    exact h_indep i j (by omega) (by omega) hij
-  have h_bound := split_indices_bound hps_len hqs_len hpq_conn h_indep_adapted
-  have ⟨xs, ys, h_len, h_valid⟩ :=
-    group_split_factors hps_len hqs_len hx_eqv hy_eqv hpq_in_X h_indep_adapted h_bound
+
+  have h_bound := split_indices_bound h_len hpq_conn h_indep
+  have ⟨xs, ys, h_len_res, h_valid⟩ :=
+    group_split_factors h_len hx_eqv hy_eqv hpq_in_X h_indep h_bound
   use xs, ys
 
 lemma recognizable_cstar {P : Set (Trace I)} [DecidableEq α] [Fintype α]

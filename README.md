@@ -16,13 +16,13 @@ This repository contains a formalization of Mazurkiewicz trace theory in the Lea
 ### Ochmański's Theorem
 - `Language.lean` contains basic definitions and lemmas for trace languages.
 - `MyhillNerode.lean` supplies a proof of the Myhill-Nerode theorem in the context of monoids.
-- `Hashiguchi.lean` currently contains just the statement of Hashiguchi's theorem on sufficient conditions for a trace language to have finite rank.
+- `Hashiguchi.lean` contains a proof of Hashiguchi's theorem on recognizable trace closures.
 - `RegularExpressions.lean` reinterprets mathlib4's `RegularExpression` on traces.
 - `Ochmanski.lean` contains the proof of Ochmański's theorem on recognizable trace languages and lemmas leading up to it.
 
 ### Misc
 - `List.lean` contains misc. definitions and lemmas for `List` (string) manipulation.
-- `Occurences.lean` formalizes ordering of symbol occurrences.
+- `Occurrence.lean` formalizes ordering of symbol occurrences.
 - `EdgeSubset.lean` is a proof of the negation of a claim in The Book of Traces (Proposition 1.4.2).
 - `Computability.lean` supplies a full proof of Kleene's theorem together with mathlib4.
 
