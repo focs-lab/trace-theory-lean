@@ -33,48 +33,31 @@ lemma exists_starConnected_of_connectedIterativeFactors_aux
   | epsilon => use epsilon, trivial
   | char a => use .char a, trivial
   | plus P Q ihP ihQ =>
-    have condP : ∀ s, IsIterativeFactor P.matches' s → Trace.IsConnected I ⟦s⟧ := by
-      intro s ⟨u, v, h⟩
-      exact hconn s ⟨u, v, fun n => Or.inl (h n)⟩
-    have condQ : ∀ s, IsIterativeFactor Q.matches' s → Trace.IsConnected I ⟦s⟧ := by
-      intro s ⟨u, v, h⟩
-      exact hconn s ⟨u, v, fun n => Or.inr (h n)⟩
-    rcases ihP condP with ⟨P', hP'⟩
-    rcases ihQ condQ with ⟨Q', hQ'⟩
-    use P' + Q'
-    simp [IsStarConnected, hP', hQ']
+    obtain ⟨P', hP'⟩ := ihP fun s ⟨u, v, h⟩ => hconn s ⟨u, v, fun n => .inl (h n)⟩
+    obtain ⟨Q', hQ'⟩ := ihQ fun s ⟨u, v, h⟩ => hconn s ⟨u, v, fun n => .inr (h n)⟩
+    exact ⟨P' + Q', by simp [IsStarConnected, hP', hQ']⟩
   | comp P Q ihP ihQ =>
-    rcases Set.eq_empty_or_nonempty P.matches' with hp_emp | ⟨p, hp⟩
+    rcases P.matches'.eq_empty_or_nonempty with hp | ⟨p, hp⟩
     · use zero
-      simp only [IsStarConnected, matches', hp_emp, true_and]
+      simp only [IsStarConnected, matches', hp, true_and]
       rw [Set.empty_mul]
       rfl
-    rcases Set.eq_empty_or_nonempty Q.matches' with hq_emp | ⟨q, hq⟩
+    rcases Q.matches'.eq_empty_or_nonempty with hq | ⟨q, hq⟩
     · use zero
-      simp only [IsStarConnected, matches', hq_emp, true_and]
+      simp only [IsStarConnected, matches', hq, true_and]
       rw [Set.mul_empty]
       rfl
-    have condP : ∀ s, IsIterativeFactor P.matches' s → Trace.IsConnected I ⟦s⟧ := by
-      intro s ⟨u, v, h⟩
-      exact hconn s ⟨u, v ++ q, fun n => by
-        simp only [matches', Language.mem_mul]
-        exact ⟨u ++ s ^ n ++ v, h n, q, hq, by simp [← List.append_assoc]⟩⟩
-    have condQ : ∀ s, IsIterativeFactor Q.matches' s → Trace.IsConnected I ⟦s⟧ := by
-      intro s ⟨u, v, h⟩
-      exact hconn s ⟨p ++ u, v, fun n => by
-        simp only [matches', Language.mem_mul]
-        exact ⟨p, hp, u ++ s ^ n ++ v, h n, by simp [List.append_assoc]⟩⟩
-    rcases ihP condP with ⟨P', hP'⟩
-    rcases ihQ condQ with ⟨Q', hQ'⟩
-    use P' * Q'
-    simp [IsStarConnected, hP', hQ']
+    obtain ⟨P', hP'⟩ :=
+      ihP fun s ⟨u, v, h⟩ =>
+      hconn s ⟨u, v ++ q, fun n => ⟨_, h n, q, hq, by simp [← List.append_assoc]⟩⟩
+    obtain ⟨Q', hQ'⟩ :=
+      ihQ fun s ⟨u, v, h⟩ =>
+      hconn s ⟨p ++ u, v, fun n => ⟨p, hp, _, h n, by simp [List.append_assoc]⟩⟩
+    exact ⟨P' * Q', by simp [IsStarConnected, hP', hQ']⟩
   | star P ih =>
-    have condP : ∀ s, IsIterativeFactor P.matches' s → Trace.IsConnected I ⟦s⟧ := by
-      intro s ⟨u, v, h⟩
-      exact hconn s ⟨u, v, fun n => by
-        simp only [matches', Language.mem_kstar]
-        exact ⟨[u ++ s ^ n ++ v], by simp_all [List.append_assoc]⟩⟩
-    rcases ih condP with ⟨P', hP'⟩
+    obtain ⟨P', hP'⟩ :=
+      ih fun s ⟨u, v, h⟩ =>
+      hconn s ⟨u, v, fun n => ⟨[u ++ s ^ n ++ v], by simp_all [List.append_assoc]⟩⟩
     use P'.star
     simp [IsStarConnected, hP']
     intro s hs
@@ -85,12 +68,13 @@ lemma exists_starConnected_of_connectedIterativeFactors_aux
     use List.replicate n s
     constructor
     · induction n with
-      | zero => simp; rfl
+      | zero =>
+        simp only [pow_zero, List.replicate_zero, List.flatten_nil]
+        rfl
       | succ n' ih =>
         rw [add_comm, pow_add, List.replicate_add, ih]
         rfl
-    · intro y hy
-      simp_all only [implies_true, forall_const, matches', List.mem_replicate, ne_eq]
+    · simp_all
 
 /-- Theorem 4.1 (ii) => (iii) -/
 theorem exists_starConnected_of_connectedIterativeFactors
@@ -920,35 +904,6 @@ lemma ccDec_aux_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ [
         by_cases hab : List.DepPath I u a b
         all_goals simp [hab]
 
-theorem ccDec_cases {motive : List (List α) → Prop} (u w : List α)
-    (nil : motive [[]])
-    (char : ∀ (a : α), motive [[a]])
-    (cons_conn : ∀ (a : α) (v : List α) (_h_conn : ccDec_aux_conn I u (a :: v)), motive (ccDec_aux I u v) → motive (ccDec_aux I u (a :: v)))
-    (cons_disc : ∀ (a : α) (v : List α) (_h_disc : ¬ ccDec_aux_conn I u (a :: v)), motive (ccDec_aux I u v) → motive (ccDec_aux I u (a :: v))) :
-    motive (ccDec_aux I u w) := by
-  induction w with
-  | nil => simp [ccDec_aux]; exact nil
-  | cons a w ih =>
-    let t := ccDec_aux I u w
-    have ht : ccDec_aux I u w = t := rfl
-    rcases t
-    · exfalso
-      exact (ccDec_aux_nonempty _ _) ht
-    · rename_i c_head c_tail
-      by_cases hw : w = []
-      · simp [hw, ccDec_aux]
-        exact char a
-      cases c_head with
-      | nil =>
-        have := ccDec_aux_nonempty_head I u w hw
-        simp [List.getElem_of_eq ht] at this
-      | cons b c_head =>
-        by_cases hab : List.DepPath I u a b
-        · apply cons_conn _ _ _ ih
-          simp [ccDec_aux_conn, ht, hab]
-        · apply cons_disc _ _ _ ih
-          simp [ccDec_aux_conn, ht, hab]
-
 lemma ccDec_aux_len_C {u w : List α} {a : α} (h : ccDec_aux_conn I u (a :: w)) :
     (ccDec_aux I u (a :: w)).length = (ccDec_aux I u w).length := by
   simp [ccDec_aux_conn] at h
@@ -1113,12 +1068,6 @@ lemma ccDec_aux_flatten (I : Independence α) (u w : List α) :
         by_cases hab : List.DepPath I u a b
         all_goals simp [hab] at ih ⊢; exact ih
 
-lemma List.flatten_prefix (L : List (List α)) (h : L ≠ []) :
-    List.IsPrefix (L[0]'(List.length_pos_iff.mpr h)) L.flatten := by
-  cases L with
-  | nil => simp at h
-  | cons w L => simp
-
 lemma ccDec_flatten_prefix2 (L : List (List α)) (h : 1 < L.length) :
     List.IsPrefix (L[0] ++ L[1]) L.flatten := by
   cases L with
@@ -1165,11 +1114,6 @@ lemma List.flatten_suffix (L : List (List α)) (h : L ≠ []) :
     | cons v L =>
       simp at ih ⊢
       exact List.suffix_append_of_suffix ih
-
-lemma ccDec_aux_prefix (I : Independence α) (u w : List α) :
-    List.IsPrefix ((ccDec_aux I u w)[0]'(ccDec_aux_zero_idx)) w := by
-  nth_rw 3 [← ccDec_aux_flatten I u w]
-  exact List.flatten_prefix _ (ccDec_aux_nonempty u w)
 
 lemma ccDec_aux_infix (I : Independence α) (u w : List α) (i : ℕ) (hi : i < (ccDec_aux I u w).length) :
     List.IsInfix (ccDec_aux I u w)[i] w := by
@@ -1386,22 +1330,6 @@ lemma lexNF_infix_is_lexNF {s t : List α} (hst : List.IsInfix s t) (ht : IsLexN
   simp [← hst, hs] at ht
   exact ht
 
-omit [Fintype α] [LinearOrder α] [DecidableRel I.rel] in
-lemma connected_dep_concat {u v : List α} (hu : List.IsConnected I u) (hv : List.IsConnected I v) (huv : ¬I.Independent u v) :
-    List.IsConnected I (u ++ v) := List.connected_dep_concat hu hv huv
-
-lemma lexNF_sq_is_lexNF {w : List α} (h : w ++ w ∈ lexNFLanguage I) :
-    w ∈ lexNFLanguage I := by
-  apply (mem_lexNFLanguage_iff_factorCondition _ _).mp at h
-  apply (isLexNF_iff_factorCondition _ _).mpr at h
-  apply (mem_lexNFLanguage_iff_factorCondition _ _).mpr
-  apply (isLexNF_iff_factorCondition _ _).mp
-  contrapose h
-  simp [IsLexNF] at h ⊢
-  rcases h with ⟨u, h⟩
-  use w ++ u
-  exact ⟨TraceEqv.compat (TraceEqv.refl w) h.1, List.append_left_lt h.right⟩
-
 omit [Fintype α] [DecidableRel I.rel] in
 lemma lexNF_concat_of_indep {u v : List α} (h_indep : I.Independent u v) (huv : IsLexNF I (u ++ v))
     (hu : u ≠ []) (hv : v ≠ []) :
@@ -1583,11 +1511,6 @@ lemma connected_of_lexNF_sq {w : List α}
     have h_lt := lexNF_ccDec_order hw hz 1 ((ccDec_aux I w w).length - 1) (Nat.lt_sub_of_add_lt h_dec_w_len2)
         (Nat.sub_one_lt_of_lt h_dec_w_len)
     exact LT.lt.asymm h_gt h_lt
-
-lemma connected_of_lexNF_sq' {w : List α}
-    (hww : w ++ w ∈ lexNFLanguage I) :
-    IsConnected I ⟦w⟧ :=
-  connected_of_lexNF_sq (lexNF_sq_is_lexNF hww) hww
 
 omit [LinearOrder α] in
 lemma forbidden_of_subword {u w v : List α} {a b : α}
