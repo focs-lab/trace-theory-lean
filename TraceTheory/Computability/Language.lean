@@ -451,6 +451,15 @@ instance : KStar (Set (Trace I)) where
 def connectedComponents (T : Set (Trace I)) : Set (Trace I) :=
   {u | Trace.IsConnected I u ∧ u ≠ 1 ∧ ∃ v, u * v ∈ T ∧ Trace.Independent u v}
 
+/-- Word language connectedness is equivalent to trace language connectedness under `toTrace`. -/
+theorem isConnected_toTrace_iff (X : Language α) :
+    (∀ w ∈ X, List.IsConnected I w) ↔ (∀ t ∈ toTrace I X, Trace.IsConnected I t) := by
+  constructor
+  · rintro h t ⟨w, hw, rfl⟩
+    exact h w hw
+  · rintro h w hw
+    exact h ⟦w⟧ ⟨w, hw, rfl⟩
+
 set_option backward.isDefEq.respectTransparency false in
 theorem toTrace_kstar_comm (X : Language α) :
     toTrace I (X∗) = (toTrace I X)∗ := by
