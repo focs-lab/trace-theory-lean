@@ -1,4 +1,5 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Group.Pointwise.Set.Basic
 import Mathlib.Data.List.Permutation
 import Mathlib.Data.Set.Finite.Basic
 import TraceTheory.Basic
@@ -320,6 +321,51 @@ def IsIterativeFactor (X : Language α) (t : List α) :=
 
 /-- Maps a word language to a trace language. -/
 def toTrace (I : Independence α) (X : Language α) : Set (Trace I) := Trace.mk' I '' X
+
+@[simp]
+theorem toTrace_singleton (I : Independence α) (x : List α) :
+    toTrace I {x} = {⟦x⟧} := by
+  ext t
+  simp only [toTrace]
+  constructor
+  · rintro ⟨y, rfl, rfl⟩
+    rfl
+  · rintro rfl
+    exact ⟨x, rfl, rfl⟩
+
+open scoped Pointwise
+
+@[simp]
+theorem toTrace_empty (I : Independence α) :
+    toTrace I (0 : Language α) = ∅ := by
+  exact Set.image_empty _
+
+@[simp]
+theorem toTrace_one (I : Independence α) :
+    toTrace I (1 : Language α) = {1} := by
+  ext t
+  simp only [toTrace, Set.mem_image, Language.one_def, Set.mem_singleton_iff]
+  constructor
+  · rintro ⟨y, rfl, rfl⟩
+    rfl
+  · rintro rfl
+    exact ⟨[], rfl, rfl⟩
+
+@[simp]
+theorem toTrace_union (I : Independence α) (X Y : Language α) :
+    toTrace I (X ⊔ Y) = toTrace I X ∪ toTrace I Y := by
+  exact Set.image_union _ X Y
+
+@[simp]
+theorem toTrace_mul (I : Independence α) (X Y : Language α) :
+    toTrace I (X * Y) = toTrace I X * toTrace I Y := by
+  ext t
+  simp only [toTrace, Set.mem_mul]
+  constructor
+  · rintro ⟨w, ⟨u, hu, v, hv, rfl⟩, rfl⟩
+    exact ⟨⟦u⟧, ⟨u, hu, rfl⟩, ⟦v⟧, ⟨v, hv, rfl⟩, rfl⟩
+  · rintro ⟨t1, ⟨u, hu, rfl⟩, t2, ⟨v, hv, rfl⟩, rfl⟩
+    exact ⟨u ++ v, ⟨u, hu, v, hv, rfl⟩, rfl⟩
 
 /-- The `Language` of all strings trace equivalent to strings in language `X`. -/
 def traceClosure (I : Independence α) (X : Language α) : Language α :=

@@ -259,7 +259,7 @@ lemma recognizable_char [DecidableEq α] (a : α) : IsRecognizable ({ ⟦[a]⟧ 
     rw [h]
   · intro h
     rcases w with _ | ⟨b, _ | ⟨c, w'⟩⟩
-    · simp [char_map, char_map_aux] at h
+    · simp [char_map, char_map_aux, -mk_nil] at h
     · simp_all [char_map, char_map_aux]
     · simp [char_map, char_map_aux] at h
       split_ifs at h
