@@ -20,11 +20,12 @@ def epsilon : DFA α (Option Unit) where
   start := some ()
   accept := { some () }
 
+set_option backward.isDefEq.respectTransparency false in
 @[simp]
 theorem accepts_epsilon : epsilon.accepts = (1 : Language α) := by
   ext x
   simp only [accepts, acceptsFrom, evalFrom]
-  rw [Set.mem_setOf_eq]
+  rw [Set.mem_ofPred]
   cases x with
   | nil => simp
   | cons a x' =>
@@ -47,11 +48,12 @@ def char (a : α) [DecidableEq α] : DFA α (Option Bool) where
   start := some false
   accept := { some true }
 
+set_option backward.isDefEq.respectTransparency false in
 @[simp]
 theorem accepts_char {a : α} [DecidableEq α] : (char a).accepts = { [a] } := by
   ext x
   simp only [accepts, acceptsFrom, evalFrom]
-  rw [Set.mem_setOf_eq, Set.mem_singleton_iff]
+  rw [Set.mem_ofPred, Set.mem_singleton_iff]
   cases x with
   | nil => simp
   | cons b x' =>
@@ -488,6 +490,7 @@ theorem IsRegular.matches' (P : RegularExpression α) : Language.IsRegular (P.ma
   | comp _ _ ih₁ ih₂ => simp [Language.IsRegular.mul ih₁ ih₂]
   | star _ ih        => simp [Language.IsRegular.kstar ih]
 
+set_option backward.isDefEq.respectTransparency false in
 theorem matches'_sum_map {α : Type*} (L : List α) (f : α → RegularExpression α) :
     (L.map f).sum.matches' = ⋃ x ∈ L, (f x).matches' := by
   induction L with
@@ -659,6 +662,7 @@ def ExtendedState.equivSum (σ : Type*) : ExtendedState σ ≃ Sum (Fin 2) σ wh
     rcases x with ⟨_ | _ | _⟩ | s
     all_goals first | rfl | contradiction
 
+set_option linter.overlappingInstances false in
 instance [FinEnum σ] : FinEnum (ExtendedState σ) :=
   FinEnum.ofEquiv (Sum (Fin 2) σ) (ExtendedState.equivSum σ)
 
@@ -679,6 +683,7 @@ def directRegex (i j : Fin n) : RegularExpression α :=
     if (e.symm j) ∈ M.step (e.symm i) none ∨ i = j then 1 else 0
   char_transitions + epsilon_transitions
 
+set_option backward.isDefEq.respectTransparency false in
 theorem mem_matches'_directRegex {i j : Fin n} {x : List α} :
     x ∈ (M.directRegex i j).matches' ↔
     (∃ a, x = [a] ∧ e.symm j ∈ M.step (e.symm i) (some a)) ∨

@@ -218,6 +218,7 @@ def emptyGraph (D : Dependence α) : DependenceGraph D where
 def one (D : Dependence α) : DGraph D :=
   Quotient.mk (isomorphicSetoid D) (emptyGraph D)
 
+set_option backward.isDefEq.respectTransparency false in
 theorem compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
     (h₁ : γ₁ ≃g γ₁') (h₂ : γ₂ ≃g γ₂') :
     (compose γ₁ γ₂) ≃g (compose γ₁' γ₂') := by
@@ -227,16 +228,14 @@ theorem compose_congr {γ₁ γ₁' γ₂ γ₂' : DependenceGraph D}
   · intro v
     dsimp [compose]
     cases v with
-    | inl v₁ =>
-      simp only [Sum.elim_inl, Sum.map_inl, h₁.some.preserves_label']
-    | inr v₂ =>
-      simp only [Sum.elim_inr, Sum.map_inr, h₂.some.preserves_label']
+    | inl v₁ => simp [h₁.some.preserves_label']
+    | inr v₂ => simp [h₂.some.preserves_label']
   · intro v₁ v₂
     rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂ <;> dsimp [compose]
-    · rw [h₁.some.preserves_arcs']
-    . rw [h₁.some.preserves_label', h₂.some.preserves_label']
+    · simp [h₁.some.preserves_arcs']
+    . simp [h₁.some.preserves_label', h₂.some.preserves_label']
     · rfl
-    . rw [h₂.some.preserves_arcs']
+    . simp [h₂.some.preserves_arcs']
 
 /-- Multiplication in the `DGraph`, induced by the `compose` operation on dependence graphs. -/
 def mul (D : Dependence α) : DGraph D → DGraph D → DGraph D :=
@@ -248,6 +247,7 @@ def mul (D : Dependence α) : DGraph D → DGraph D → DGraph D :=
       exact compose_congr h h'
     )
 
+set_option backward.isDefEq.respectTransparency false in
 theorem compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
     (compose (compose γ₁ γ₂) γ₃) ≃g (compose γ₁ (compose γ₂ γ₃)) := by
   apply Nonempty.intro
@@ -276,6 +276,7 @@ theorem compose_assoc_iso (γ₁ γ₂ γ₃ : DependenceGraph D) :
     · dsimp [compose]
       rfl
 
+set_option backward.isDefEq.respectTransparency false in
 theorem empty_compose_iso (γ : DependenceGraph D) :
     compose (emptyGraph D) γ ≃g γ := by
   apply Nonempty.intro
@@ -296,6 +297,7 @@ theorem empty_compose_iso (γ : DependenceGraph D) :
     · dsimp [compose, emptyGraph]
       rfl
 
+set_option backward.isDefEq.respectTransparency false in
 theorem compose_empty_iso (γ : DependenceGraph D) :
     compose γ (emptyGraph D) ≃g γ := by
   apply Nonempty.intro
@@ -419,6 +421,7 @@ theorem fromString_concat (w : List α) (a : α) :
   dsimp [fromString]
   rw [foldl_concat]
 
+set_option backward.isDefEq.respectTransparency false in
 theorem fromString_surjective :
     ∀ (γ : DependenceGraph D), ∃ (w : List α), fromString D w ≃g γ := by
   intro γ
@@ -462,21 +465,12 @@ theorem fromString_surjective :
       refine ⟨e, ?_, ?_⟩
       · intro v
         dsimp [compose, singletonGraph, γ', removeVertex, e]
-        cases v with
-        | inl v₁ =>
-          rw [Sum.elim_inl, Sum.map_inl, id_eq, Sum.swap_inl, Equiv.sumCompl_apply_inr]
-        | inr v₂ =>
-          rw [Sum.elim_inr, Sum.map_inr, Equiv.ofUnique_apply, Sum.swap_inr]
-          rw [Equiv.sumCompl_apply_inl]
-          rfl
+        cases v <;> rfl
       · intro v₁ v₂
         dsimp [compose, singletonGraph, γ', removeVertex, e]
         rcases v₁ with v₁ | v₁ <;> rcases v₂ with v₂ | v₂
-        · simp only [Sum.map_inl, id_eq, Sum.swap_inl]
-          rw [Equiv.sumCompl_apply_inr, Equiv.sumCompl_apply_inr]
-        · simp only [Sum.map_inl, id_eq, Sum.swap_inl, Sum.map_inr,
-                     Equiv.ofUnique_apply, Sum.swap_inr]
-          rw [Equiv.sumCompl_apply_inr, Equiv.sumCompl_apply_inl, Pi.default_apply]
+        · rfl
+        · simp
           constructor
           · intro h
             rcases (γ.d_conn v₁.1 a).mpr h with h₁ | h₂ | h₃
@@ -487,12 +481,9 @@ theorem fromString_surjective :
               exact v₁.property h₃
           · intro h
             exact (γ.d_conn v₁.1 a).mp (Or.inl h)
-        · simp only [Sum.map_inr, Equiv.ofUnique_apply, Pi.default_def, Sum.swap_inr, Sum.map_inl,
-                     id_eq, Sum.swap_inl, false_iff]
-          rw [Equiv.sumCompl_apply_inl, Equiv.sumCompl_apply_inr]
+        · simp
           exact ha v₂.1
-        · simp only [Sum.map_inr, Equiv.ofUnique_apply, Pi.default_def, Sum.swap_inr, false_iff]
-          rw [Equiv.sumCompl_apply_inl]
+        · simp
           intro h
           exact γ.acyclic a (Relation.TransGen.single h)
 
@@ -518,6 +509,7 @@ theorem card_compose_eq_sum (γ₁ γ₂ : DependenceGraph D) :
   dsimp [compose]
   exact Fintype.card_sum
 
+set_option backward.isDefEq.respectTransparency false in
 theorem card_fromString_eq_length (w : List α) :
     Fintype.card (fromString D w).V = w.length := by
   induction w using reverseRecOn with
@@ -584,6 +576,7 @@ theorem remove_singleton_iso_self (w : List α) (a : α) :
   · intro v₁ v₂
     rfl
 
+set_option backward.isDefEq.respectTransparency false in
 theorem removeVertex_iso_congr {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g γ₂) (v : γ₁.V) :
     removeVertex γ₁ v ≃g removeVertex γ₂ (h.some.toEquiv v) := by
   apply Nonempty.intro
@@ -592,10 +585,10 @@ theorem removeVertex_iso_congr {γ₁ γ₂ : DependenceGraph D} (h : γ₁ ≃g
     intro u
     rw [@not_iff_not, Equiv.apply_eq_iff_eq]
   · intro u
-    dsimp [removeVertex]
+    simp only [removeVertex, ne_eq, Equiv.subtypeEquiv_apply]
     rw [h.some.preserves_label']
   · intro u₁ u₂
-    dsimp [removeVertex]
+    simp only [removeVertex, ne_eq, Equiv.subtypeEquiv_apply]
     rw [h.some.preserves_arcs']
 
 theorem removeVertex_compose_inl_iso {γ₁ γ₂ : DependenceGraph D} (v : γ₁.V) :

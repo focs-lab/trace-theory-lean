@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Group.PUnit
-import TraceTheory.Hashiguchi
-import TraceTheory.RegularExpressions
+import TraceTheory.Computability.Hashiguchi
+import TraceTheory.Computability.RegularExpressions
 
 namespace TraceTheory
 
@@ -9,6 +9,8 @@ open scoped Pointwise
 open Computability Dependence RegularExpression Trace Independence
 
 variable {α : Type} {I : Independence α}
+
+set_option backward.isDefEq.respectTransparency false
 
 /-
   Main component of Theorem 4.1 (ii) => (iii).
@@ -421,7 +423,7 @@ lemma dependent_letters_of_connected [DecidableEq α] {u v : List α}
     (hu : u ≠ []) (hv : v ≠ []) :
     ∃ a ∈ u, ∃ b ∈ v, ¬ I.rel a b := by
   by_contra h_all_indep
-  push_neg at h_all_indep
+  push Not at h_all_indep
   have h_indep_trace : Independent (I := I) ⟦u⟧ ⟦v⟧ := by
     intro a ha b hb
     exact h_all_indep a ha b hb
@@ -813,7 +815,7 @@ lemma recognizable_cstar {P : Set (Trace I)} [DecidableEq α] [Fintype α]
   have hL_C_conn : ∀ w ∈ L_C, IsConnected I ⟦w⟧ := by
     intro w hw
     simp only [L_C, C, connectedComponents] at hw
-    rw [Set.preimage_setOf_eq, Set.mem_setOf] at hw
+    rw [Set.preimage_ofPred_eq, Set.mem_ofPred] at hw
     exact hw.left
   have h_star_reg : (L_C∗).IsRegular := Language.IsRegular.kstar hL_C_reg
   have h_rank : HasFiniteRank I (L_C∗) := star_connected_closed_rank hL_C_closed hL_C_conn
@@ -1732,7 +1734,7 @@ theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
     classical
     have ⟨σ, h_fin, M, hL⟩ : ∃ (σ : Type) (_ : Fintype σ) (M : DFA α σ), M.accepts = L :=
       Language.isRegular_iff.mp hL_reg
-    haveI : FinEnum σ := FinEnum.ofEquiv (Fin (Fintype.card σ)) (Fintype.equivFin σ)
+    have : FinEnum σ := FinEnum.ofEquiv (Fin (Fintype.card σ)) (Fintype.equivFin σ)
     use M.toNFA.toεNFA.toRegex
     rw [← hL, εNFA.accepts_toRegex, NFA.toεNFA_correct, DFA.toNFA_correct]
   use R

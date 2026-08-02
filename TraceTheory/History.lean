@@ -105,10 +105,12 @@ def SigmaDependence (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ S i
     intro a b ⟨i, ha, hb⟩
     use i, hb, ha
 
+set_option backward.isDefEq.respectTransparency false in
 theorem proj_append (S : Fin n → Finset α) (i : Fin n) (x y : List α) :
     proj S i (x ++ y) = (proj S i x) ++ (proj S i y) := by
   simp [proj]
 
+set_option backward.isDefEq.respectTransparency false in
 theorem proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (x : List α) (a : α) :
     proj S i (x ÷ a) =
       if h : a ∈ S i then (proj S i x) ÷ ⟨a, h⟩ else proj S i x := by
@@ -133,6 +135,7 @@ theorem proj_cancelRight (S : Fin n → Finset α) (i : Fin n) (x : List α) (a 
       simp [heq]
       simp only [proj_append, ih]
 
+set_option backward.isDefEq.respectTransparency false in
 /-- Distribution is a dependence morphism. -/
 def historyDependenceMorphism (S : Fin n → Finset α) (h_cover : ∀ a, ∃ i, a ∈ S i) :
     DependenceMorphism

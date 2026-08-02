@@ -1,5 +1,5 @@
 import Mathlib.Algebra.Group.Pointwise.Set.Basic
-import TraceTheory.Language
+import TraceTheory.Computability.Language
 
 open scoped Pointwise
 
@@ -37,6 +37,7 @@ def cRatMatches (I : Independence α) : RegularExpression α → Set (Trace I)
   | comp P Q => cRatMatches I P * cRatMatches I Q
   | star P => (connectedComponents (cRatMatches I P))∗
 
+set_option backward.isDefEq.respectTransparency false in
 /-- Interpreting this RegularExpression as operating on trace languages gives the same matching set
   as projecting the language it matches to traces. -/
 theorem traceMatches_toTrace (P : RegularExpression α) :

@@ -1,5 +1,6 @@
-import TraceTheory.Language
-import TraceTheory.MyhillNerode
+import Mathlib.Data.SetLike.Basic
+import TraceTheory.Computability.Language
+import TraceTheory.Computability.MyhillNerode
 
 namespace Language
 
@@ -11,6 +12,7 @@ def leftQuotient {α : Type} (L : Language α) (u : List α) : Language α :=
 @[simp]
 lemma leftQuotient_nil {α : Type} {L : Language α} : leftQuotient L [] = L := rfl
 
+set_option backward.isDefEq.respectTransparency false in
 lemma leftQuotient_append {α : Type} (L : Language α) (u v : List α) :
     leftQuotient L (u ++ v) = leftQuotient (leftQuotient L u) v := by
   simp [leftQuotient, Language]
@@ -38,6 +40,7 @@ def HashiguchiBucket.equiv : HashiguchiBucket α σ ≃ (σ → σ) × Finset α
   left_inv _ := rfl
   right_inv _ := rfl
 
+set_option linter.overlappingInstances false in
 instance [Fintype α] [Fintype σ] : Fintype (HashiguchiBucket α σ) :=
   Fintype.ofEquiv _ HashiguchiBucket.equiv.symm
 
@@ -62,7 +65,7 @@ lemma toPi_injective : Function.Injective (toPi (α := α) (σ := σ) (k := k)) 
   intro i
   by_cases hi : i < k + 1
   · exact congr_fun heq ⟨i, hi⟩
-  · push_neg at hi
+  · push Not at hi
     have h_out₁ : l₁[i]? = none := List.getElem?_eq_none (by omega)
     have h_out₂ : l₂[i]? = none := List.getElem?_eq_none (by omega)
     rw [h_out₁, h_out₂]
@@ -84,12 +87,25 @@ noncomputable def hashiguchiProfile (I : Independence α) (M : DFA α σ) (k : �
       TraceEqv I u xs.flatten ∧
       β = xs.map (fun x => { trans := fun q => x.foldl M.step q, alph := x.toFinset })))
 
+instance : SetLike (HashiguchiState α σ k) (BucketSeq α σ k) where
+  coe := by
+    unfold HashiguchiState
+    exact fun s => (s : Set (BucketSeq α σ k))
+  coe_injective := Finset.coe_injective
+
 instance {k : ℕ} : Membership (BucketSeq α σ k) (HashiguchiState α σ k) :=
-  Finset.instMembership
+  inferInstance
 
-instance {k : ℕ} : HasSubset (HashiguchiState α σ k) := Finset.instHasSubset
+instance {k : ℕ} : LE (HashiguchiState α σ k) :=
+  inferInstanceAs (LE (Finset (BucketSeq α σ k)))
 
-instance : HasSubset (Language α) := Set.instHasSubset
+instance : IsConcreteLE (HashiguchiState α σ k) (BucketSeq α σ k) :=
+  inferInstanceAs (IsConcreteLE (Finset (BucketSeq α σ k)) (BucketSeq α σ k))
+
+instance {k : ℕ} : UsesSetNotationForOrder (HashiguchiState α σ k) :=
+  inferInstanceAs (UsesSetNotationForOrder (Finset (BucketSeq α σ k)))
+
+instance : HasSubset (Language α) := HasSubset.mk LE.le
 
 noncomputable instance : Fintype (HashiguchiState α σ k) := by
   unfold HashiguchiState
@@ -166,13 +182,14 @@ lemma traceEqv_flatten_append_interleaved_list {α : Type*}
       simp only [List.append_eq, ← List.append_assoc]
       exact TraceEqv.trans h_swap h_ih_compat
 
+set_option backward.isDefEq.respectTransparency false in
 lemma leftQuotient_subset_of_profile_subset {X : Language α}
     (I : Independence α) (M : DFA α σ) (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) (u u' : List α)
     (h_sub : hashiguchiProfile I M k u ⊆ hashiguchiProfile I M k u') :
     (traceClosure I X).leftQuotient u ⊆ (traceClosure I X).leftQuotient u' := by
   intro v hv
-  rw [leftQuotient, Set.mem_setOf] at hv ⊢
+  rw [leftQuotient, Set.mem_ofPred] at hv ⊢
 
   have ⟨xs, ys, h_len_le, h_valid⟩ := h_rank u v hv
   rcases h_valid with ⟨h_len_eq, h_in_X, h_u_eqv, h_v_eqv, h_indep⟩
@@ -185,7 +202,8 @@ lemma leftQuotient_subset_of_profile_subset {X : Language α}
   have hβ_in_u : β ∈ hashiguchiProfile I M k u := by
     rw [hashiguchiProfile, Finset.mem_filter]
     exact ⟨Finset.mem_univ _, xs, h_u_eqv, rfl⟩
-  have hβ_in_u' : β ∈ hashiguchiProfile I M k u' := h_sub hβ_in_u
+  have hβ_in_u' : β ∈ hashiguchiProfile I M k u' :=
+    mem_of_le_of_mem h_sub hβ_in_u
   rw [hashiguchiProfile, Finset.mem_filter] at hβ_in_u'
   rcases hβ_in_u'.right with ⟨xs', h_xs'_eqv, h_map_eq⟩
 
@@ -221,7 +239,7 @@ lemma leftQuotient_subset_of_profile_subset {X : Language α}
   let interleaved' := (List.zipWith (· ++ ·) xs' ys).flatten
   use interleaved'
   constructor
-  · rw [← h_acc, DFA.accepts, DFA.acceptsFrom, Set.mem_setOf] at h_in_X ⊢
+  · rw [← h_acc, DFA.accepts, DFA.acceptsFrom, Set.mem_ofPred] at h_in_X ⊢
     have h_eval_eq := eval_interleaved_eq M xs xs' ys h_len_eq h_len_xs' h_trans_match M.start
     unfold interleaved'
     rwa [DFA.evalFrom, ← h_eval_eq]
@@ -244,6 +262,8 @@ lemma leftQuotient_eq_of_profile_eq (I : Independence α) (M : DFA α σ) {X : L
 def QuotientState (I : Independence α) (X : Language α) :=
   { L : Language α // ∃ u : List α, L = (traceClosure I X).leftQuotient u }
 
+set_option backward.isDefEq.respectTransparency false
+set_option warn.classDefReducibility false in
 /-- The finiteness of `QuotientState` via a surjection from `HashiguchiState`. -/
 noncomputable def quotientStateFintype (M : DFA α σ) {X : Language α} (k : ℕ)
     (h_acc : M.accepts = X) (h_rank : HasRankAtMost I X k) :
@@ -288,8 +308,8 @@ omit [DecidableEq α] [Fintype α] in
 lemma quotientDFMA_accepts (I : Independence α) (X : Language α) :
     (quotientDFMA I X).accepts = traceClosure I X := by
   ext w
-  simp only [DFMA.accepts, DFMA.eval, quotientDFMA, leftQuotient, List.nil_append, Set.mem_setOf_eq]
-  rw [Set.mem_setOf_eq, Set.mem_setOf_eq, List.append_nil]
+  simp only [DFMA.accepts, DFMA.eval, quotientDFMA, leftQuotient, List.nil_append, Set.mem_ofPred_eq]
+  rw [Set.mem_ofPred_eq, Set.mem_ofPred_eq, List.append_nil]
 
 omit [DecidableEq α] in
 theorem recognizable_image_of_regular_finite_rank {I : Independence α} {X : Language α}
