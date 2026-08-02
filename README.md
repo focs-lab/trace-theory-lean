@@ -23,8 +23,7 @@ This repository contains a formalization of Mazurkiewicz trace theory in the Lea
 ### Misc
 - `List.lean` contains misc. definitions and lemmas for `List` (string) manipulation.
 - `Occurrence.lean` formalizes ordering of symbol occurrences.
-- `EdgeSubset.lean` is a proof of the negation of a claim in The Book of Traces (Proposition 1.4.2).
-- `Computability.lean` supplies a full proof of Kleene's theorem together with mathlib4.
+- `Kleene.lean` supplies a full proof of Kleene's theorem together with mathlib4.
 
 ## Naming Convention
 
