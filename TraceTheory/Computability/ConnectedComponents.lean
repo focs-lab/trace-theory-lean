@@ -36,15 +36,21 @@ noncomputable def ccDec_aux (I : Independence α) (w₀ w : List α) : List (Lis
 -/
 noncomputable def ccDec (I : Independence α) (w : List α) : List (List α) := ccDec_aux I w w
 
+/-
+  True iff the first two letters of `w` are transitively connected (wrt. `w₀`).
+
+  Implemented as a check of the first two letters of `w`'s CC decomposition
+  for ease of use in subsequent theorems.
+-/
 noncomputable def ccDec_aux_conn (I : Independence α) (w₀ w : List α) : Prop :=
   match w with
-  | [] => True -- by convention
+  | [] => True -- arbitrary convention
   | a :: w =>
     match ccDec_aux I w₀ w with
-    | [] => False
+    | [] => False -- unreachable
     | v :: _ =>
       match v with
-      | [] => True -- by convention to make casework easier (first char is inserted as `[[·]]` and not `[·] :: _`)
+      | [] => True -- arbitrary, makes casework easier (first char is inserted as `[[·]]` and not `[·] :: _`)
       | b :: _ => List.DepPath I w₀ a b
 
 lemma ccDec_aux_nonempty (w₀ w : List α) : (ccDec_aux I w₀ w) ≠ [] := by
@@ -64,6 +70,42 @@ lemma ccDec_aux_nonempty (w₀ w : List α) : (ccDec_aux I w₀ w) ≠ [] := by
         all_goals simp [hab]
 
 lemma ccDec_aux_zero_idx {w₀ w : List α} : 0 < (ccDec_aux I w₀ w).length := List.length_pos_iff.mpr (ccDec_aux_nonempty _ _)
+
+def ccDec_aux_tac (u w : List α) {motive : List (List α) → Sort*} (nil : w = [] → motive (ccDec_aux I u w))
+    (ext : (∃ x y z, ccDec_aux I u w = (x :: y) :: z) → motive (ccDec_aux I u w)) :
+    motive (ccDec_aux I u w) := by
+  induction w with
+  | nil =>
+    apply nil
+    simp
+  | cons a w ih =>
+    apply ext
+    use a
+    let t := ccDec_aux I u w
+    have ht : ccDec_aux I u w = t := rfl
+    rcases t
+    · exfalso
+      exact (ccDec_aux_nonempty _ _) ht
+    · rename_i c_head c_tail
+      simp [ccDec_aux, ht]
+      cases c_head with
+      | nil => simp
+      | cons b c_head =>
+        by_cases h : List.DepPath I u a b
+        all_goals simp [h]
+
+/- lemma ccDec_aux_nonempty_head_2 (I : Independence α) (u w : List α) (h : w ≠ []) :
+    (ccDec_aux I u w)[0]'(ccDec_aux_zero_idx) ≠ [] := by
+  have h1 : w = [] → (ccDec_aux I u w)[0]'(ccDec_aux_zero_idx) ≠ [] := by simp [h]
+  induction w with
+  | nil => simp at h
+  | cons a w ih =>
+    have h2 : (∃ _1 _2 _3, (ccDec_aux I u (a :: w)) = (_1 ::_2) :: _3) → (ccDec_aux I u (a :: w))[0]'(ccDec_aux_zero_idx) ≠ [] := by
+      intro hs_dec
+      replace ⟨_1, _2, _3, hs_dec⟩ := hs_dec
+      rw [List.getElem_of_eq hs_dec]
+      simp
+    exact ccDec_aux_tac u (a :: w) h1 h2 -/
 
 lemma ccDec_aux_nonempty_head (I : Independence α) (u w : List α) (h : w ≠ []) :
     (ccDec_aux I u w)[0]'(ccDec_aux_zero_idx) ≠ [] := by
