@@ -760,6 +760,87 @@ theorem mem_mul_iff {a : α} {s t : Trace I} : a ∈ s * t ↔ a ∈ s ∨ a ∈
   rcases t
   exact List.mem_append
 
+namespace List
+
+/-- Predicate for dependence of symbols `a` and `b` in word `w`. -/
+def DepEdge (I : Independence α) (w : List α) (a b : α) : Prop :=
+  I.inducedDependence.rel a b ∧ a ∈ w ∧ b ∈ w
+
+/-- Predicate for transitive dependence of symbols `a` and `b` in word `w`. -/
+def DepPath (I : Independence α) (w : List α) (a b : α) : Prop :=
+  Relation.TransGen (List.DepEdge I w) a b
+
+/-- A word `w` is connected if all its symbols are transitively dependent. -/
+def IsConnected (I : Independence α) (w : List α) : Prop :=
+  ∀ a ∈ w, ∀ b ∈ w, List.DepPath I w a b
+
+lemma depPath_refl {w : List α} {a : α} (h : a ∈ w) : List.DepPath I w a a :=
+  Relation.TransGen.single ⟨Dependence.refl _ a, h, h⟩
+
+lemma depEdge_symm {w : List α} {a b : α} : List.DepEdge I w a b ↔ List.DepEdge I w b a := by
+  simp [List.DepEdge, inducedDependence]
+  constructor
+  · exact fun ⟨h, ha, hb⟩ => ⟨(by contrapose h; exact I.symm b a h), hb, ha⟩
+  · exact fun ⟨h, hb, ha⟩ => ⟨(by contrapose h; exact I.symm a b h), ha, hb⟩
+
+lemma depPath_symm {w : List α} {a b : α} : List.DepPath I w a b ↔ List.DepPath I w b a := by
+  unfold List.DepPath
+  rw [Relation.transGen_swap]
+  have h_symm : (fun x y => List.DepEdge I w y x) = List.DepEdge I w := by
+    ext a' b'
+    rw [depEdge_symm]
+  rw [h_symm]
+
+lemma depEdge_sub {u w : List α} {a b : α} (huw : u ⊆ w) :
+    List.DepEdge I u a b → List.DepEdge I w a b := by
+  intro ⟨hab, ha, hb⟩
+  exact ⟨hab, huw ha, huw hb⟩
+
+lemma depPath_sub {u w : List α} {a b : α} (huw : u ⊆ w) :
+    List.DepPath I u a b → List.DepPath I w a b := by
+  intro h
+  induction h with
+  | single hab => exact Relation.TransGen.single (depEdge_sub huw hab)
+  | tail hac hcb ih => exact Relation.TransGen.tail ih (depEdge_sub huw hcb)
+
+lemma connected_dep_concat {u v : List α} (hu : List.IsConnected I u) (hv : List.IsConnected I v) (huv : ¬I.Independent u v) :
+    List.IsConnected I (u ++ v) := by
+  intro a ha b hb
+  simp at ha hb
+  cases ha with
+  | inl ha =>
+    cases hb with
+    | inl hb => exact depPath_sub (List.subset_append_of_subset_left v (by simp)) (hu a ha b hb)
+    | inr hb =>
+      simp [Independence.Independent] at huv
+      have ⟨a', ha', b', hb', hab⟩ := huv
+      have haa' : List.DepPath I (u ++ v) a a' :=
+        depPath_sub (List.subset_append_of_subset_left v (by simp)) (hu a ha a' ha')
+      have hb'b : List.DepPath I (u ++ v) b' b :=
+        depPath_sub (List.subset_append_of_subset_right u (by simp)) (hv b' hb' b hb)
+      have ha'b' : List.DepPath I (u ++ v) a' b' := by
+        apply Relation.TransGen.single
+        simp [List.DepEdge, inducedDependence]
+        exact ⟨hab, Or.inl ha', Or.inr hb'⟩
+      exact Relation.TransGen.trans haa' (Relation.TransGen.trans ha'b' hb'b)
+  | inr ha =>
+    cases hb with
+    | inl hb =>
+      simp [Independence.Independent] at huv
+      have ⟨b', hb', a', ha', hab⟩ := huv
+      have haa' : List.DepPath I (u ++ v) a a' :=
+        depPath_sub (List.subset_append_of_subset_right u (by simp)) (hv a ha a' ha')
+      have hb'b : List.DepPath I (u ++ v) b' b :=
+        depPath_sub (List.subset_append_of_subset_left v (by simp)) (hu b' hb' b hb)
+      have ha'b' : List.DepPath I (u ++ v) a' b' := by
+        apply Relation.TransGen.single
+        simp [List.DepEdge, inducedDependence]
+        exact ⟨fun h => hab (I.symm _ _ h), Or.inr ha', Or.inl hb'⟩
+      exact Relation.TransGen.trans haa' (Relation.TransGen.trans ha'b' hb'b)
+    | inr hb => exact depPath_sub (List.subset_append_of_subset_right u (by simp)) (hv a ha b hb)
+
+end List
+
 /-- Predicate for dependence of symbols `a` and `b` in trace `t`. -/
 def DepEdge (t : Trace I) (a b : α) := I.inducedDependence.rel a b ∧ a ∈ t ∧ b ∈ t
 
@@ -768,6 +849,8 @@ def DepPath (t : Trace I) (a b : α) := Relation.TransGen t.DepEdge a b
 
 /-- A trace `t` is connected if all its symbols are transitively dependent. -/
 def IsConnected (I : Independence α) (t : Trace I) := ∀ a ∈ t, ∀ b ∈ t, t.DepPath a b
+
+theorem isConnected_eq (w : List α) : List.IsConnected I w = Trace.IsConnected I ⟦w⟧ := rfl
 
 /-- Traces `u` and `v` are independent if every symbol in `u` is independent of
   every symbol in `v`. -/

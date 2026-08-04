@@ -91,7 +91,6 @@ noncomputable def ord_trace (t : Trace I) : Finset ((α × ℕ) × (α × ℕ)) 
     (fun w => (ord w).filter (trace_intersect I w))
     (by
       intro a b hab
-      simp
       apply Finset.ext_iff.mpr
       intro p
       apply Iff.intro

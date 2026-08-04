@@ -1,5 +1,4 @@
-import Mathlib.Algebra.Group.Pointwise.Set.Basic
-import TraceTheory.Language
+import TraceTheory.Computability.Language
 
 open scoped Pointwise
 
@@ -42,22 +41,11 @@ def cRatMatches (I : Independence α) : RegularExpression α → Set (Trace I)
 theorem traceMatches_toTrace (P : RegularExpression α) :
     traceMatches I P = toTrace I P.matches' := by
   induction P with
-  | zero => simp [toTrace, traceMatches, Language.zero_def]
-  | epsilon => simp [toTrace, traceMatches, Language.one_def]
-  | char a =>
-    unfold traceMatches matches' toTrace
-    rw [Set.image_singleton]
-    rfl
-  | plus P Q ihP ihQ =>
-    unfold traceMatches matches' toTrace
-    rw [ihP, ihQ, Language.add_def, Set.image_union]
-    rfl
-  | comp P Q ihP ihQ =>
-    unfold traceMatches matches' toTrace
-    rw [ihP, ihQ, Set.image_mul]
-    rfl
-  | star P ih =>
-    unfold traceMatches matches'
-    rw [toTrace_kstar_comm, ih]
+  | zero => simp [traceMatches, matches']
+  | epsilon => simp [traceMatches, matches']
+  | char a => simp [traceMatches, matches']
+  | plus P Q ihP ihQ => simp [traceMatches, matches', ihP, ihQ]
+  | comp P Q ihP ihQ => simp [traceMatches, matches', ihP, ihQ]
+  | star P ih => simp [traceMatches, matches', ih, toTrace_kstar_comm]
 
 end RegularExpression

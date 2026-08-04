@@ -1,8 +1,9 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Group.Pointwise.Set.Basic
 import Mathlib.Data.List.Permutation
 import Mathlib.Data.Set.Finite.Basic
 import TraceTheory.Basic
-import TraceTheory.Computability
+import TraceTheory.Computability.Kleene
 
 namespace TraceTheory
 
@@ -34,7 +35,7 @@ lemma factorCondition_of_lexNF (x : List α) (h : IsLexNF I x) :
   intro y u z a b hx h_indep hlt
   contrapose! h
   unfold IsLexNF
-  push_neg
+  push Not
   use y ++ [a] ++ [b] ++ u ++ z
   rw [hx]
   constructor
@@ -67,7 +68,7 @@ lemma lexNF_of_factorCondition (x : List α) (h : SatisfiesFactorCondition I x) 
   replace h_equiv := (append_cancel_left h_equiv).symm
   have ⟨h_indep, u, v, hx', hu⟩ := indep_and_exists_of_equiv_of_head_ne I h_equiv (ne_of_lt hlt')
   unfold SatisfiesFactorCondition
-  push_neg
+  push Not
   simp only [hx', ← append_assoc] at hx
   use p, u, v, a, b
   apply And.intro hx
@@ -172,6 +173,7 @@ lemma mem_sum_language
       · right
         exact ⟨j, hj, hxj⟩
 
+set_option backward.isDefEq.respectTransparency false in
 lemma mem_forbiddenPattern_iff {x : List α} {a b : α} :
     x ∈ forbiddenPattern I a b ↔
     ∃ y u z : List α, x = y ++ [b] ++ u ++ [a] ++ z ∧ (∀ c ∈ u, I.rel a c) := by
@@ -239,16 +241,17 @@ lemma mem_allForbiddenPatterns_iff {x : List α} :
   rw [mem_sum_language]
   simp only [Finset.mem_filter, Finset.mem_univ, true_and, Prod.exists, and_assoc]
 
+set_option backward.isDefEq.respectTransparency false in
 /-- The language LexNFLanguage contains exactly the strings satisfying the factor condition. -/
 theorem mem_lexNFLanguage_iff_factorCondition (x : List α) :
     x ∈ lexNFLanguage I ↔ SatisfiesFactorCondition I x := by
   unfold lexNFLanguage SatisfiesFactorCondition
   rw [Set.mem_compl_iff, mem_allForbiddenPatterns_iff]
-  push_neg
+  push Not
   constructor
   · intro h y u z a b hx h_indep hlt
     by_contra h_all_indep
-    push_neg at h_all_indep
+    push Not at h_all_indep
     have h_in_pattern : x ∈ forbiddenPattern I a b := by
       rw [mem_forbiddenPattern_iff]
       exact ⟨y, u, z, hx, h_all_indep⟩
@@ -278,7 +281,7 @@ omit [LinearOrder α] [Fintype α] [DecidableRel I.rel] in
 lemma finite_traceEqv_class (w : List α) : {x : List α | TraceEqv I w x}.Finite := by
   have h_sub : {x : List α | TraceEqv I w x} ⊆ {x : List α | x ∈ w.permutations} := by
     intro x hx
-    rw [Set.mem_setOf] at hx ⊢
+    rw [Set.mem_ofPred] at hx ⊢
     rw [mem_permutations, perm_comm]
     exact perm_of_traceEqv I hx
   exact Set.Finite.subset w.permutations.finite_toSet h_sub
@@ -289,7 +292,7 @@ theorem exists_lexNF_rep (t : Trace I) : ∃ s : List α, ⟦s⟧ = t ∧ s ∈ 
   let S : Set (List α) := {x | TraceEqv I u x}
   have h_fin : S.Finite := finite_traceEqv_class I u
   have h_nonempty : S.Nonempty := ⟨u, TraceEqv.refl u⟩
-  haveI : Fintype S := h_fin.fintype
+  have : Fintype S := h_fin.fintype
   let S_finset := S.toFinset
   have h_finset_nonempty : S_finset.Nonempty := Set.toFinset_nonempty.mpr h_nonempty
   let s := S_finset.min' h_finset_nonempty
@@ -318,6 +321,51 @@ def IsIterativeFactor (X : Language α) (t : List α) :=
 
 /-- Maps a word language to a trace language. -/
 def toTrace (I : Independence α) (X : Language α) : Set (Trace I) := Trace.mk' I '' X
+
+@[simp]
+theorem toTrace_singleton (I : Independence α) (x : List α) :
+    toTrace I {x} = {⟦x⟧} := by
+  ext t
+  simp only [toTrace]
+  constructor
+  · rintro ⟨y, rfl, rfl⟩
+    rfl
+  · rintro rfl
+    exact ⟨x, rfl, rfl⟩
+
+open scoped Pointwise
+
+@[simp]
+theorem toTrace_empty (I : Independence α) :
+    toTrace I (0 : Language α) = ∅ := by
+  exact Set.image_empty _
+
+@[simp]
+theorem toTrace_one (I : Independence α) :
+    toTrace I (1 : Language α) = {1} := by
+  ext t
+  simp only [toTrace, Set.mem_image, Language.one_def, Set.mem_singleton_iff]
+  constructor
+  · rintro ⟨y, rfl, rfl⟩
+    rfl
+  · rintro rfl
+    exact ⟨[], rfl, rfl⟩
+
+@[simp]
+theorem toTrace_union (I : Independence α) (X Y : Language α) :
+    toTrace I (X ⊔ Y) = toTrace I X ∪ toTrace I Y := by
+  exact Set.image_union _ X Y
+
+@[simp]
+theorem toTrace_mul (I : Independence α) (X Y : Language α) :
+    toTrace I (X * Y) = toTrace I X * toTrace I Y := by
+  ext t
+  simp only [toTrace, Set.mem_mul]
+  constructor
+  · rintro ⟨w, ⟨u, hu, v, hv, rfl⟩, rfl⟩
+    exact ⟨⟦u⟧, ⟨u, hu, rfl⟩, ⟦v⟧, ⟨v, hv, rfl⟩, rfl⟩
+  · rintro ⟨t1, ⟨u, hu, rfl⟩, t2, ⟨v, hv, rfl⟩, rfl⟩
+    exact ⟨u ++ v, ⟨u, hu, v, hv, rfl⟩, rfl⟩
 
 /-- The `Language` of all strings trace equivalent to strings in language `X`. -/
 def traceClosure (I : Independence α) (X : Language α) : Language α :=
@@ -349,7 +397,7 @@ theorem traceClosure.idem {X : Language α} :
 theorem preimage_mk_image_eq_traceClosure {X : Language α} :
     Trace.mk' I ⁻¹' (Trace.mk' I '' X) = traceClosure I X := by
   ext w
-  simp only [Set.mem_preimage, Set.mem_image]
+  simp only [Set.mem_preimage]
   constructor
   · rintro ⟨x, hx, heq⟩
     exact ⟨x, hx, Quotient.exact heq⟩
@@ -362,14 +410,14 @@ theorem kstar_diff_one {X : Language α} : (X \ {[]})∗ = X∗ := by
   · intro ⟨ls, hx, hls⟩
     use ls
     simp [hx]
-    exact fun y hy => Set.diff_subset (hls y hy)
+    exact fun y hy => Set.sdiff_subset (hls y hy)
   · intro ⟨ls, hls, ht⟩
     use ls.filter (!·.isEmpty)
     simp
     apply And.intro
     · simp [hls, List.flatten_filter_not_isEmpty]
     · intro y hy hyz
-      exact Set.mem_diff_singleton.mpr ⟨ht y hy, hyz⟩
+      exact Set.mem_sdiff_singleton.mpr ⟨ht y hy, hyz⟩
 
 /-- Helper to define rank. -/
 def IsValidFactorization
@@ -392,6 +440,7 @@ def HasRankAtMost (I : Independence α) (X : Language α) (k : ℕ) : Prop :=
 def HasFiniteRank (I : Independence α) (X : Language α) : Prop :=
   ∃ k : ℕ, HasRankAtMost I X k
 
+set_option backward.isDefEq.respectTransparency false in
 theorem concat_closed_rank [DecidableEq α]
     (X₁ X₂ : Language α) (h₁ : IsClosed I X₁) (h₂ : IsClosed I X₂) :
     HasRankAtMost I (X₁ * X₂) 1 := by
@@ -411,7 +460,7 @@ theorem concat_closed_rank [DecidableEq α]
   · simp only [zipWith_cons_cons, zipWith_self, map_nil, flatten_cons,flatten_nil, append_nil]
     replace h₁ := h₁ (z₁ ++ z₃)
     replace h₂ := h₂ (z₂ ++ z₄)
-    rw [Set.mem_setOf] at h₁ h₂
+    rw [Set.mem_ofPred] at h₁ h₂
     use z₁ ++ z₃
     constructor
     · exact h₁.mp ⟨x₁, hx₁, hx₁_eqv⟩
@@ -448,6 +497,16 @@ instance : KStar (Set (Trace I)) where
 def connectedComponents (T : Set (Trace I)) : Set (Trace I) :=
   {u | Trace.IsConnected I u ∧ u ≠ 1 ∧ ∃ v, u * v ∈ T ∧ Trace.Independent u v}
 
+/-- Word language connectedness is equivalent to trace language connectedness under `toTrace`. -/
+theorem isConnected_toTrace_iff (X : Language α) :
+    (∀ w ∈ X, List.IsConnected I w) ↔ (∀ t ∈ toTrace I X, Trace.IsConnected I t) := by
+  constructor
+  · rintro h t ⟨w, hw, rfl⟩
+    exact h w hw
+  · rintro h w hw
+    exact h ⟦w⟧ ⟨w, hw, rfl⟩
+
+set_option backward.isDefEq.respectTransparency false in
 theorem toTrace_kstar_comm (X : Language α) :
     toTrace I (X∗) = (toTrace I X)∗ := by
   simp [Language.kstar_def, Set.image, toTrace]
@@ -507,7 +566,7 @@ theorem kstar_diff_one' (T : Set (Trace I)) : (T \ {1})∗ = T∗ := by
   · intro ⟨ls, hls, ht⟩
     use ls
     simp [ht]
-    exact fun y hy => Set.diff_subset (hls y hy)
+    exact fun y hy => Set.sdiff_subset (hls y hy)
   · intro ⟨ls, hls, ht⟩
     use ls.filter (!Trace.isEmpty ·)
     simp

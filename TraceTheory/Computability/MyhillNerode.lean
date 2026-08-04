@@ -1,5 +1,5 @@
 import TraceTheory.Basic
-import TraceTheory.Computability
+import TraceTheory.Computability.Kleene
 import Mathlib.Data.Finset.Pi
 import Mathlib.Data.Fintype.EquivFin
 import Mathlib.Data.Fintype.Pi
@@ -53,10 +53,10 @@ theorem recognizable_is_recognizableDFMA (S : Set M) :
   intro x
   constructor
   · intro hx
-    apply Set.mem_setOf.mpr
+    apply Set.mem_ofPred.mpr
     use x
   · intro hx
-    apply Set.mem_setOf.mp at hx
+    apply Set.mem_ofPred.mp at hx
     rcases hx with ⟨y, hy, hy_eq⟩
     rw [h, Set.mem_preimage, ← hy_eq]
     exact ⟨y, hy, rfl⟩
@@ -90,13 +90,13 @@ theorem recognizableDFMA_is_recognizable (S : Set M) :
   intro m
   apply Iff.intro
   · intro hm
-    apply Set.mem_setOf.mp at hm
-    apply Set.mem_setOf.mpr
+    apply Set.mem_ofPred.mp at hm
+    apply Set.mem_ofPred.mpr
     simp
     use m
   · intro hm
-    apply Set.mem_setOf.mpr
-    apply Set.mem_setOf.mp at hm
+    apply Set.mem_ofPred.mpr
+    apply Set.mem_ofPred.mp at hm
     simp at hm
     rcases hm with ⟨m', hm', hm_eq⟩
     replace hm_eq : (fun x => A.step x m') A.start = (fun x => A.step x m) A.start := by rw [hm_eq]
@@ -165,6 +165,7 @@ instance : Monoid (SyntacticMonoid T) where
     intro u v
     rfl
 
+set_option backward.isDefEq.respectTransparency false in
 /-- Prop 4.1 (ii) => (i) -/
 theorem finSyntacticIndex_is_recognizable :
     Finite (SyntacticMonoid T) → IsRecognizable T := by
@@ -252,7 +253,6 @@ noncomputable def preImage_syntacticMonoid_iso {L : Type} [Monoid L]
   · refine ⟨?_, ?_, ?_, ?_⟩
     · exact Quotient.lift (fun l => ⟦φ l⟧) (by
         intro a b hab
-        simp
         apply Quotient.sound
         intro u v
         have ⟨u', hu'⟩ := hφ u
@@ -264,7 +264,6 @@ noncomputable def preImage_syntacticMonoid_iso {L : Type} [Monoid L]
       )
     · exact Quotient.lift (fun m => ⟦Classical.choose (hφ m)⟧) (by
         intro a b hab
-        simp
         apply Quotient.sound
         intro u v
         simp [Set.mem_preimage]
@@ -274,7 +273,6 @@ noncomputable def preImage_syntacticMonoid_iso {L : Type} [Monoid L]
     · intro x
       rcases x
       rename_i l
-      simp
       apply Quotient.sound
       intro u v
       simp [Set.mem_preimage]
@@ -282,7 +280,6 @@ noncomputable def preImage_syntacticMonoid_iso {L : Type} [Monoid L]
     · intro x
       rcases x
       rename_i m
-      simp
       apply Quotient.sound
       intro u v
       rw [Classical.choose_spec (hφ m)]
@@ -304,6 +301,7 @@ theorem recognizablePreImage_is_recognizable {L : Type} [Monoid L]
   have ψ := @preImage_syntacticMonoid_iso M _ T L _ φ hφ
   exact ψ.finite_iff.mp h
 
+set_option backward.isDefEq.respectTransparency false in
 theorem isRegular_of_recognizable {α : Type} {L : Language α} (h : IsRecognizable L) :
     L.IsRegular := by
   rcases recognizable_is_recognizableDFMA L h with ⟨σ, h_fin, h_decide, M, hM⟩
@@ -317,7 +315,7 @@ theorem isRegular_of_recognizable {α : Type} {L : Language α} (h : IsRecogniza
   rw [hM]
   ext w
   simp only [DFA.accepts, DFA.acceptsFrom, DFA.evalFrom, DFMA.accepts, DFMA.eval, M_DFA]
-  rw [Set.mem_setOf, Set.mem_setOf]
+  rw [Set.mem_ofPred, Set.mem_ofPred]
   have h_eval (q : σ) : List.foldl M_DFA.step q w = M.step q w := by
     induction w generalizing q with
     | nil =>

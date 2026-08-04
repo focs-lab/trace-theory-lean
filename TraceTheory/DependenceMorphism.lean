@@ -47,8 +47,8 @@ def traceDependenceMorphism : DependenceMorphism I (Trace I) where
   A3 := by
     intro x y a heq
     apply Quotient.sound
-    have h_cancel : TraceEqv I (x ++ [a] ÷ a) (y ÷ a) := cancelRight_congr a (Quotient.exact heq)
-    simpa using h_cancel
+    have h_cancel := by simpa using cancelRight_congr a (Quotient.exact heq)
+    exact h_cancel
   A4 := by
     rintro x y a b ⟨heq, hne⟩
     exact (indep_and_exists_of_eqv_of_tail_ne (Quotient.exact heq) hne).left

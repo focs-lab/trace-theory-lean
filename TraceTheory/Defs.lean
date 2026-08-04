@@ -154,7 +154,15 @@ def mk' (I : Independence α) : List α →* Trace I where
 
 omit [DecidableEq α] in
 @[simp]
+theorem mk'_apply (x : List α) : mk' I x = ⟦x⟧ := rfl
+
+omit [DecidableEq α] in
+@[simp]
 theorem mk'_nil : mk' I [] = 1 := map_one _
+
+omit [DecidableEq α] in
+@[simp]
+theorem mk_nil : ⟦([] : List α)⟧ = (1 : Trace I) := rfl
 
 /-- The prefix relation on traces. A trace `u` is a prefix of `w` if there exists
   a trace `v` such that `u` concatenated with `v` equals `w`. -/
