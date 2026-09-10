@@ -930,4 +930,39 @@ theorem connectedIterativeFactors_of_recognizable {T : Set (Trace I)}
         exact ht
       · exact hs_lex
 
+/-- Theorem 4.1 (i) <=> (iii) -/
+theorem traceRegularity_starConnected {T : Set (Trace I)} :
+    IsRecognizable T ↔ (∃ X : RegularExpression α, T = X.traceMatches I ∧ X.IsStarConnected I) := by
+  apply Iff.intro
+  · intro h
+    replace ⟨Y, hconn, h⟩ := connectedIterativeFactors_of_recognizable h
+    replace ⟨X, hconn, h⟩ := exists_starConnected_of_connectedIterativeFactors T Y (Eq.symm h) hconn
+    exact ⟨X, h, hconn⟩
+  · intro ⟨X, h, hconn⟩
+    rw [h, cRational_of_isStarConnected X hconn]
+    exact recognizable_of_cRational X
+
+/-- Theorem 4.1 (i) <=> (iv) -/
+theorem traceRegularity_cRational {T : Set (Trace I)} :
+    IsRecognizable T ↔ (∃ X : RegularExpression α, T = X.cRatMatches I) := by
+  apply Iff.intro
+  · intro h
+    replace ⟨X, h, hconn⟩ := traceRegularity_starConnected.mp h
+    use X
+    rw [h, cRational_of_isStarConnected X hconn]
+  · intro ⟨X, h⟩
+    rw [h]
+    exact recognizable_of_cRational X
+
+/-- Theorem 4.1 (i) <=> (ii) -/
+theorem traceRegularity_connectedIterativeFactors {T : Set (Trace I)} :
+    IsRecognizable T ↔ (∃ X : RegularExpression α,
+      (∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) ∧
+      toTrace I X.matches' = T) := by
+  apply Iff.intro
+  · exact connectedIterativeFactors_of_recognizable
+  · intro ⟨Y, hconn, h⟩
+    replace ⟨X, hconn, h⟩ := exists_starConnected_of_connectedIterativeFactors T Y (Eq.symm h) hconn
+    exact traceRegularity_starConnected.mpr ⟨X, h, hconn⟩
+
 end TraceTheory
