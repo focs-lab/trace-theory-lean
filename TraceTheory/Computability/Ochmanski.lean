@@ -965,4 +965,18 @@ theorem traceRegularity_connectedIterativeFactors {T : Set (Trace I)} :
     replace ⟨X, hconn, h⟩ := exists_starConnected_of_connectedIterativeFactors T Y (Eq.symm h) hconn
     exact traceRegularity_starConnected.mpr ⟨X, h, hconn⟩
 
+/-- Ochmański's theorem (Theorem 4.1). For a trace language `T`, the following are equivalent:
+(i) `T` is recognizable;
+(ii) `T` is the image of a rational language all of whose iterative factors are connected;
+(iii) `T` is denoted by a star-connected rational expression;
+(iv) `T` is denoted by a c-rational expression. -/
+theorem ochmanski {T : Set (Trace I)} :
+    (IsRecognizable T ↔ (∃ X : RegularExpression α,
+      (∀ s, IsIterativeFactor X.matches' s → IsConnected I ⟦s⟧) ∧
+      toTrace I X.matches' = T)) ∧
+    (IsRecognizable T ↔ (∃ X : RegularExpression α, T = X.traceMatches I ∧ X.IsStarConnected I)) ∧
+    (IsRecognizable T ↔ (∃ X : RegularExpression α, T = X.cRatMatches I)) :=
+  ⟨traceRegularity_connectedIterativeFactors, traceRegularity_starConnected,
+    traceRegularity_cRational⟩
+
 end TraceTheory
