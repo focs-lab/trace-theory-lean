@@ -1,4 +1,6 @@
 import TraceTheory.Basic
 import TraceTheory.Computability.Ochmanski
+import TraceTheory.Computability.Zielonka
 import TraceTheory.DependenceGraph
 import TraceTheory.History
+import TraceTheory.Zielonka.EventGraph

@@ -25,6 +25,11 @@ This repository contains a formalization of Mazurkiewicz trace theory in the Lea
 - `Occurrence.lean` formalizes ordering of symbol occurrences.
 - `Kleene.lean` supplies a full proof of Kleene's theorem together with mathlib4.
 
+### Zielonka's Theorem
+- `Computability/AsyncAutomata.lean` defines distributions and deterministic asynchronous automata with transitions restricted to participating processes.
+- `Computability/Zielonka.lean` proves `zielonka` and `recognizable_iff_async` for every compatible finite distribution.
+- `Zielonka/` develops causal views, finite gossip, primary residues, and the automaton construction. The proof follows Mukund's *Automata on Distributed Alphabets*, Sections 1.7–1.8 (Theorem 1.36), using finite recognizing-monoid values for residue effects. `EventGraph.lean` relates indexed events to the existing dependence graphs; `Examples.lean` checks boundary cases and simple distributions.
+
 ## Naming Convention
 
 General guideline:
